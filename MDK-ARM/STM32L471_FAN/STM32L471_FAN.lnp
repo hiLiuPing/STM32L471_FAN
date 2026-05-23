@@ -3,6 +3,7 @@
 "stm32l471_fan\main.o"
 "stm32l471_fan\gpio.o"
 "stm32l471_fan\dac.o"
+"stm32l471_fan\tim.o"
 "stm32l471_fan\usart.o"
 "stm32l471_fan\stm32l4xx_it.o"
 "stm32l471_fan\stm32l4xx_hal_msp.o"
@@ -23,10 +24,12 @@
 "stm32l471_fan\stm32l4xx_hal_pwr_ex.o"
 "stm32l471_fan\stm32l4xx_hal_cortex.o"
 "stm32l471_fan\stm32l4xx_hal_exti.o"
+"stm32l471_fan\stm32l4xx_hal_tim.o"
+"stm32l471_fan\stm32l4xx_hal_tim_ex.o"
 "stm32l471_fan\stm32l4xx_hal_uart.o"
 "stm32l471_fan\stm32l4xx_hal_uart_ex.o"
 "stm32l471_fan\system_stm32l4xx.o"
---strict --scatter "STM32L471_FAN\STM32L471_FAN.sct"
+--library_type=microlib --strict --scatter "STM32L471_FAN\STM32L471_FAN.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers
 --list "STM32L471_FAN.map" -o STM32L471_FAN\STM32L471_FAN.axf

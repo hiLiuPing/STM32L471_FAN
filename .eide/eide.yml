@@ -3,7 +3,9 @@ name: STM32L471_FAN
 type: ARM
 deviceName: null
 packDir: null
-srcDirs: []
+srcDirs:
+  - APP
+  - BSP
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -23,6 +25,7 @@ virtualFolder:
                 - path: Core/Src/main.c
                 - path: Core/Src/gpio.c
                 - path: Core/Src/dac.c
+                - path: Core/Src/tim.c
                 - path: Core/Src/usart.c
                 - path: Core/Src/stm32l4xx_it.c
                 - path: Core/Src/stm32l4xx_hal_msp.c
@@ -49,6 +52,8 @@ virtualFolder:
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_pwr_ex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_cortex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_exti.c
+            - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim.c
+            - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim_ex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart_ex.c
           folders: []
@@ -62,7 +67,7 @@ virtualFolder:
 dependenceList: []
 outDir: build
 miscInfo:
-  uid: cf6f78a5ed9a92d85adea40df77b8124
+  uid: 6abc259e91e75367966e11e83c9af176
 targets:
   STM32L471_FAN:
     cppPreprocessAttrs:
@@ -77,6 +82,7 @@ targets:
         - Drivers/CMSIS/Include
         - .cmsis/include
         - MDK-ARM/RTE/_STM32L471_FAN
+        - BSP
       libList: []
     excludeList: []
     settings: {}
@@ -101,7 +107,7 @@ targets:
             warnings: all-warnings
           global:
             output-debug-info: enable
-            use-microLIB: false
+            use-microLIB: true
           linker:
             $outputTaskExcludes:
               - .bin
@@ -194,4 +200,14 @@ targets:
         otherCmds: ""
         proType: 1
         speed: 8000
-    uploader: JLink
+      STLink:
+        address: "0x8000000"
+        bin: ""
+        elFile: None
+        optionBytes: .eide/stm32l471_fan.st.option.bytes.ini
+        otherCmds: ""
+        proType: SWD
+        resetMode: default
+        runAfterProgram: true
+        speed: 4000
+    uploader: STLink

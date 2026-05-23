@@ -19,12 +19,13 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dac.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "log.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,8 +93,11 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
-
+ log_init(&huart1);
+ 
+log_printf("system start");
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -101,7 +105,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+log_printf("running\n");
+HAL_Delay(1000);  
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

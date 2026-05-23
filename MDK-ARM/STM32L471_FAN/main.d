@@ -30,8 +30,11 @@ stm32l471_fan\main.o: ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_flash_ex
 stm32l471_fan\main.o: ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_flash_ramfunc.h
 stm32l471_fan\main.o: ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_pwr.h
 stm32l471_fan\main.o: ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_pwr_ex.h
+stm32l471_fan\main.o: ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_tim.h
+stm32l471_fan\main.o: ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_tim_ex.h
 stm32l471_fan\main.o: ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_uart.h
 stm32l471_fan\main.o: ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_uart_ex.h
 stm32l471_fan\main.o: ../Core/Inc/dac.h
+stm32l471_fan\main.o: ../Core/Inc/tim.h
 stm32l471_fan\main.o: ../Core/Inc/usart.h
 stm32l471_fan\main.o: ../Core/Inc/gpio.h
