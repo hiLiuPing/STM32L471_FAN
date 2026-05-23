@@ -6,6 +6,7 @@ packDir: null
 srcDirs:
   - APP
   - BSP
+  - Core
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -25,6 +26,7 @@ virtualFolder:
                 - path: Core/Src/main.c
                 - path: Core/Src/gpio.c
                 - path: Core/Src/dac.c
+                - path: Core/Src/spi.c
                 - path: Core/Src/tim.c
                 - path: Core/Src/usart.c
                 - path: Core/Src/stm32l4xx_it.c
@@ -52,6 +54,8 @@ virtualFolder:
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_pwr_ex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_cortex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_exti.c
+            - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_spi.c
+            - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_spi_ex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim_ex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart.c

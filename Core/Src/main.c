@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dac.h"
+#include "spi.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -26,6 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "log.h"
+#include "nv3007.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,11 +95,17 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
+  MX_SPI1_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
  log_init(&huart1);
  
 log_printf("system start");
+
+NV3007_Init();
+NV3007_SetRotation(NV3007_ROTATION);
+// HAL_GPIO_WritePin(SPI1_PWM_GPIO_Port, SPI1_PWM_Pin, GPIO_PIN_SET); // 打开背光
+    // NV3007_Fill(RED);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -105,9 +113,30 @@ log_printf("system start");
   while (1)
   {
     /* USER CODE END WHILE */
-log_printf("running\n");
-HAL_Delay(1000);  
+
     /* USER CODE BEGIN 3 */
+    // // 2. 全屏刷红色，并等待 1 秒
+    // NV3007_Fill(RED);
+    // HAL_Delay(2000);
+    
+    // // 3. 全屏刷绿色，并等待 1 秒
+    // NV3007_Fill(GREEN);
+    // HAL_Delay(2000);
+    
+    // // 4. 全屏刷蓝色，并等待 1 秒
+    // NV3007_Fill(BLUE);
+    // HAL_Delay(2000);
+
+NV3007_Fill(0xF800); // 红
+log_printf("red\r\n");
+    HAL_Delay(2000);
+
+NV3007_Fill(0x001F); // 蓝
+log_printf("blue\r\n");
+    HAL_Delay(2000);
+
+
+
   }
   /* USER CODE END 3 */
 }
