@@ -6,7 +6,7 @@
 /* ================= 寄存器地址（保留最小集合） ================= */
 
 #define LIS3DH_WHO_AM_I      0x0F
-#define LIS3DH_ADDR          0x19 << 1
+#define LIS3DH_ADDR          0x19 
 #define LIS3DH_CTRL_REG1     0x20
 #define LIS3DH_CTRL_REG4     0x23
 
@@ -19,10 +19,25 @@
 /* 自动增量标志位 (I2C) */
 #define LIS3DH_ADDR_INC      0x80 
 
+
+
 typedef struct {
     void *handle;
-    int32_t (*write_reg)(void *handle, uint8_t reg, const uint8_t *data, uint16_t len);
-    int32_t (*read_reg)(void *handle, uint8_t reg, uint8_t *data, uint16_t len);
+    uint16_t dev_addr;
+
+
+
+    int32_t (*write_reg)(
+        void *handle,
+        uint8_t reg,
+        const uint8_t *data,
+        uint16_t len);
+
+    int32_t (*read_reg)(
+        void *handle,
+        uint8_t reg,
+        uint8_t *data,
+        uint16_t len);
 } lis3dh_ctx_t;
 
 int32_t lis3dh_acceleration_raw_get(lis3dh_ctx_t *ctx, int16_t raw[3]);

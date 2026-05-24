@@ -99,6 +99,7 @@ targets:
         - BSP/IN226
         - BSP/BQ24295
         - BSP/MAX17048
+        - APP
       libList: []
     excludeList: []
     settings: {}

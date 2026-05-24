@@ -33,8 +33,8 @@
 #include "lcd_init.h"
 
 
-#include "i2c_bus.h"
-#include "i2c_driver.h"
+#include "app_sensors.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -67,10 +67,8 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 // 定义上下文
-sht40_ctx_t sht40_ctx;
-lis3dh_ctx_t lis3dh_ctx;
-I2C_Bus_t i2c_bus_1 = { .hi2c = &hi2c1 }; // 假设都在 hi2c2 上
-I2C_Bus_t i2c_bus_2 = { .hi2c = &hi2c2 }; // 假设都在 hi2c2 上
+void Print_AllSensors(void);
+
 /* USER CODE END 0 */
 
 /**
@@ -112,12 +110,15 @@ int main(void)
   MX_I2C2_Init();
   MX_I2C1_Init();
   MX_TIM3_Init();
+  MX_TIM17_Init();
   /* USER CODE BEGIN 2 */
  log_init(&huart1);
  
 log_printf("system start");
-HAL_TIM_Base_Start_IT(&htim6); // 启动定时器 6 的中断
+HAL_TIM_Base_Start_IT(&htim6); // 启动定时器 6 的中断驱动led
     LED_Driver_System_Init();
+
+
 
 LED_Object_t led_blue;  // PE3 -> TIM3_CH1
 LED_Object_t led_green; // PE4 -> TIM3_CH2
@@ -138,6 +139,12 @@ LED_Object_t led2_red;   // PE5 -> TIM3_CH3
     LED_Driver_SendCmd(&led2_blue, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
     LED_Driver_SendCmd(&led2_green, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
     LED_Driver_SendCmd(&led2_red, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
+
+
+HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);//启动风扇
+HAL_Delay(10);
+/* 初始 35% */
+__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 1120);
 
 
 LCD_Init();
@@ -163,20 +170,13 @@ LCD_Init();
 HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_SET); // 打开风扇
 
 
-
-I2C_Bus_Init(&i2c_bus_1);
-I2C_Bus_Init(&i2c_bus_2);
-    // 2. 绑定 SHT40
-    sht40_ctx.handle = &i2c_bus_2;
-    sht40_ctx.write_reg = sht40_i2c_write;
-    sht40_ctx.read_reg = sht40_i2c_read;
-
-    // 3. 绑定 LIS3DH
-    lis3dh_ctx.handle = &i2c_bus_1;
-    lis3dh_ctx.write_reg = lis3dh_i2c_write;
-    lis3dh_ctx.read_reg = lis3dh_i2c_read;
-
-
+// 2. 传感器系统初始化
+    if (APP_Sensors_Init() == 0) {
+        log_printf("All sensors initialized successfully!\n");
+    } else {
+        log_printf("Sensor initialization failed!\n");
+    }
+APP_Sensors_Init();
 
   /* USER CODE END 2 */
 
@@ -187,27 +187,25 @@ I2C_Bus_Init(&i2c_bus_2);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+APP_Sensors_Update();  // 更新传感器数据
+Print_AllSensors();
+    HAL_Delay(2000);
 
 
-// 测试 SHT40
-    SHT40_Data_t s_data;
-    if (sht40_read_data(&sht40_ctx, &s_data) == 0) {
-        // 读取成功
-        log_printf("SHT40: Temp=%.2f, Hum=%.2f\n", s_data.temperature, s_data.humidity);
-    } else {
-        log_printf("SHT40: Read Failed!\n");
-    }
-
-    // 测试 LIS3DH
-    int16_t accel[3];
-    if (lis3dh_acceleration_raw_get(&lis3dh_ctx, accel) == 0) {
-        // 读取成功
-        log_printf("LIS3DH: X=%d, Y=%d, Z=%d\n", accel[0], accel[1], accel[2]);
-    } else {
-        log_printf("LIS3DH: Read Failed!\n");
-    }
-HAL_Delay(4000);
-
+    __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 1600); // 50%
+    HAL_Delay(2000);
+    __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 2000); // 50%
+    HAL_Delay(2000);
+        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 2400); // 50%
+    HAL_Delay(2000);
+    __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 2800); // 90%
+    HAL_Delay(2000);
+    __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 2400); // 50%
+    HAL_Delay(2000);
+    __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 2000); // 50%
+    HAL_Delay(2000);
+        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 1600); // 50%
+    HAL_Delay(2000);
   }
   /* USER CODE END 3 */
 }
@@ -276,6 +274,104 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         }
 
     }
+}
+
+
+/* =========================
+ * Charger 状态解析
+ * ========================= */
+static const char* bq_state_str(bq24295_state_t s)
+{
+    switch (s)
+    {
+        case BQ_CHG_IDLE:         return "IDLE";
+        case BQ_CHG_PRECHARGE:    return "PRECHG";
+        case BQ_CHG_FAST_CHARGE:  return "FAST_CHG";
+        case BQ_CHG_DONE:         return "DONE";
+        case BQ_CHG_SUSPEND:      return "SUSPEND";
+        case BQ_CHG_FAULT:        return "FAULT";
+        default:                  return "UNKNOWN";
+    }
+}
+
+/* =========================
+ * Charger 打印
+ * ========================= */
+void Print_Charger(bq24295_module_t *m)
+{
+    log_printf("\r\n[CHARGER]\r\n");
+
+    log_printf("REG08 Status : 0x%02X\r\n", m->reg_status);
+    log_printf("REG09 Fault  : 0x%02X\r\n", m->reg_fault);
+
+    log_printf("State        : %s\r\n", bq_state_str(m->state));
+
+    log_printf("Charging     : %s\r\n", m->charging ? "YES" : "NO");
+    log_printf("PowerGood    : %s\r\n", m->power_good ? "YES" : "NO");
+    log_printf("InputPresent : %s\r\n", m->input_present ? "YES" : "NO");
+
+    log_printf("I_LIMIT      : %d mA\r\n", m->vin_limit_mA);
+    log_printf("I_CHG        : %d mA\r\n", m->ichg_mA);
+    log_printf("V_REG        : %d mV\r\n", m->vreg_mV);
+
+    log_printf("Fault(Therm) : %s\r\n", m->fault_thermal ? "YES" : "NO");
+    log_printf("Fault(Timer) : %s\r\n", m->fault_timer ? "YES" : "NO");
+    log_printf("Fault(WD)    : %s\r\n", m->fault_watchdog ? "YES" : "NO");
+    log_printf("Fault(Input) : %s\r\n", m->fault_input ? "YES" : "NO");
+}
+
+/* =========================
+ * INA226
+ * ========================= */
+void Print_INA226(ina226_module_t *m)
+{
+    log_printf("\r\n[INA226]\r\n");
+    log_printf("Voltage : %.2f mV\r\n", m->voltage);
+    log_printf("Current : %.2f mA\r\n", m->current);
+    log_printf("Power   : %.2f mW\r\n", m->power);
+}
+
+/* =========================
+ * Battery
+ * ========================= */
+void Print_Battery(battery_module_t *m)
+{
+    log_printf("\r\n[BATTERY]\r\n");
+    log_printf("SOC     : %.1f %%\r\n", m->soc);
+    log_printf("Voltage : %.2f V\r\n", m->voltage);
+}
+
+/* =========================
+ * ENV
+ * ========================= */
+void Print_Env(env_module_t *m)
+{
+    log_printf("\r\n[ENV]\r\n");
+    log_printf("Temp : %.2f C\r\n", m->temp);
+    log_printf("Hum  : %.2f %%\r\n", m->hum);
+}
+
+/* =========================
+ * Motion
+ * ========================= */
+void Print_Motion(motion_module_t *m)
+{
+    log_printf("\r\n[MOTION]\r\n");
+    log_printf("X:%d Y:%d Z:%d\r\n", m->x, m->y, m->z);
+}
+
+/* =========================
+ * 一键总打印
+ * ========================= */
+void Print_AllSensors(void)
+{
+    Print_Env(&g_sensors_environment);
+    Print_Motion(&g_sensors_motion);
+    Print_Battery(&g_sensors_battery);
+    Print_INA226(&g_sensors_ina226);
+    Print_Charger(&g_sensors_charger);
+
+    log_printf("\r\n----------------------\r\n");
 }
 /* USER CODE END 4 */
 
