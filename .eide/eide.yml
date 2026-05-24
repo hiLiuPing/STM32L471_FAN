@@ -26,6 +26,7 @@ virtualFolder:
                 - path: Core/Src/main.c
                 - path: Core/Src/gpio.c
                 - path: Core/Src/dac.c
+                - path: Core/Src/i2c.c
                 - path: Core/Src/spi.c
                 - path: Core/Src/tim.c
                 - path: Core/Src/usart.c
@@ -86,7 +87,9 @@ targets:
         - Drivers/CMSIS/Include
         - .cmsis/include
         - MDK-ARM/RTE/_STM32L471_FAN
-        - BSP
+        - BSP/LED
+        - BSP/OLED
+        - BSP/LOG
       libList: []
     excludeList: []
     settings: {}

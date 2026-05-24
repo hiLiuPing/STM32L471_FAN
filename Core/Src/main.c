@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dac.h"
+#include "i2c.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -27,9 +28,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "log.h"
-#include "nv3007.h"
 #include "multi_led.h"
-
+#include "lcd.h"
+#include "lcd_init.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -100,6 +101,7 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM6_Init();
   MX_TIM4_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
  log_init(&huart1);
  
@@ -124,10 +126,33 @@ LED_Object_t led_red;   // PE5 -> TIM3_CH3
     LED_Driver_SendCmd(&led_red, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
 
 
-NV3007_Init();
-// NV3007_SetRotation(NV3007_ROTATION);
-// HAL_GPIO_WritePin(SPI1_PWM_GPIO_Port, SPI1_PWM_Pin, GPIO_PIN_SET); // 打开背光
-    // NV3007_Fill(RED);
+LCD_Init();
+// 1. 设置背景色为黑色，清屏（可选）
+    LCD_Fill(0, 0, LCD_W, LCD_H, BLACK);
+
+    // 2. 定义显示参数
+    uint16_t x = 10;      // 起始 X 坐标
+    uint16_t y = 10;      // 起始 Y 坐标
+    uint16_t font_color = WHITE;  // 字体颜色
+    uint16_t bg_color = BLACK;    // 背景颜色
+    uint16_t font_size = 16;      // 字体大小（对应 ASCII 字模库）
+    uint8_t mode = 0;             // 模式（通常 0 为覆盖模式，1 为叠加模式）
+
+    // 3. 显示英文字符串
+    // 注意：确保 LCD_ShowChar 内部正确支持你传入的 sizey
+    LCD_ShowString(x, y, "Hello World!", font_color, bg_color, font_size, mode);
+    
+    // 4. 显示下一行
+    LCD_ShowString(x, y + 20, "STM32 Driver", font_color, bg_color, font_size, mode);
+// 在屏幕中间画一个 100x60 的蓝色边框，线宽 2 像素
+    // uint16_t rect_w = 100;
+    // uint16_t rect_h = 60;
+    // uint16_t start_x = (LCD_W - rect_w) / 2;
+    // uint16_t start_y = (LCD_H - rect_h) / 2;
+    
+    // LCD_DrawRect(start_x, start_y, rect_w, rect_h, BLUE, 2);
+    //     LCD_ShowString(10, 10, "ABC", WHITE);
+    // LCD_ShowString(10, 30, "A1B0C", GREEN);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -150,14 +175,7 @@ NV3007_Init();
     // HAL_Delay(2000);
 
 // NV3007_Fill(0xF800); // 红
-  NV3007_Fill(RED);
-HAL_Delay(2000);
-// 填充红色矩形：x=10,y=20,宽50,高100
-NV3007_Fill(GREEN);
-HAL_Delay(2000);
-// 填充绿色矩形：x=60,y=120,宽60,高80
 
-  NV3007_Fill(BLACK);
 HAL_Delay(2000);
 
   }
