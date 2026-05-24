@@ -7,6 +7,7 @@ srcDirs:
   - APP
   - BSP
   - Core
+  - Middle
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -90,6 +91,14 @@ targets:
         - BSP/LED
         - BSP/OLED
         - BSP/LOG
+        - BSP/LIS3DH
+        - Middle/I2CBUS
+        - BSP/SHT40
+        - Middle/DRIVER
+        - BSP/EE24
+        - BSP/IN226
+        - BSP/BQ24295
+        - BSP/MAX17048
       libList: []
     excludeList: []
     settings: {}

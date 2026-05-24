@@ -31,6 +31,10 @@
 #include "multi_led.h"
 #include "lcd.h"
 #include "lcd_init.h"
+
+
+#include "i2c_bus.h"
+#include "i2c_driver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,7 +66,11 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+// 定义上下文
+sht40_ctx_t sht40_ctx;
+lis3dh_ctx_t lis3dh_ctx;
+I2C_Bus_t i2c_bus_1 = { .hi2c = &hi2c1 }; // 假设都在 hi2c2 上
+I2C_Bus_t i2c_bus_2 = { .hi2c = &hi2c2 }; // 假设都在 hi2c2 上
 /* USER CODE END 0 */
 
 /**
@@ -102,28 +110,34 @@ int main(void)
   MX_TIM6_Init();
   MX_TIM4_Init();
   MX_I2C2_Init();
+  MX_I2C1_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
  log_init(&huart1);
  
 log_printf("system start");
 HAL_TIM_Base_Start_IT(&htim6); // 启动定时器 6 的中断
     LED_Driver_System_Init();
-// #define LED1_G_Pin GPIO_PIN_12
-// #define LED1_G_GPIO_Port GPIOD
-// #define LED1_R_Pin GPIO_PIN_13
-// #define LED1_R_GPIO_Port GPIOD
-// #define LED1_B_Pin GPIO_PIN_14
-// #define LED1_B_GPIO_Port GPIOD
+
 LED_Object_t led_blue;  // PE3 -> TIM3_CH1
 LED_Object_t led_green; // PE4 -> TIM3_CH2
 LED_Object_t led_red;   // PE5 -> TIM3_CH3
     LED_Driver_Init(&led_green, LED1_G_GPIO_Port, LED1_G_Pin, &htim4, TIM_CHANNEL_2, 1);
     LED_Driver_Init(&led_blue, LED1_B_GPIO_Port, LED1_B_Pin, &htim4, TIM_CHANNEL_1, 1);
     LED_Driver_Init(&led_red, LED1_R_GPIO_Port, LED1_R_Pin, &htim4, TIM_CHANNEL_3, 1);
-    LED_Driver_SendCmd(&led_blue, LED_MODE_PWM, LED_Off_Handler, 0, 0, NULL);
-    LED_Driver_SendCmd(&led_green, LED_MODE_PWM, LED_Off_Handler, 0, 0, NULL);
-
+    LED_Driver_SendCmd(&led_blue, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
+    LED_Driver_SendCmd(&led_green, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
     LED_Driver_SendCmd(&led_red, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
+
+LED_Object_t led2_blue;  // PE3 -> TIM3_CH1
+LED_Object_t led2_green; // PE4 -> TIM3_CH2
+LED_Object_t led2_red;   // PE5 -> TIM3_CH3
+    LED_Driver_Init(&led2_green, LED2_G_GPIO_Port, LED2_G_Pin, &htim3, TIM_CHANNEL_2, 1);
+    LED_Driver_Init(&led2_blue, LED2_B_GPIO_Port, LED2_B_Pin, &htim3, TIM_CHANNEL_1, 1);
+    LED_Driver_Init(&led2_red, LED2_R_GPIO_Port, LED2_R_Pin, &htim3, TIM_CHANNEL_3, 1);
+    LED_Driver_SendCmd(&led2_blue, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
+    LED_Driver_SendCmd(&led2_green, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
+    LED_Driver_SendCmd(&led2_red, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
 
 
 LCD_Init();
@@ -144,15 +158,26 @@ LCD_Init();
     
     // 4. 显示下一行
     LCD_ShowString(x, y + 20, "STM32 Driver", font_color, bg_color, font_size, mode);
-// 在屏幕中间画一个 100x60 的蓝色边框，线宽 2 像素
-    // uint16_t rect_w = 100;
-    // uint16_t rect_h = 60;
-    // uint16_t start_x = (LCD_W - rect_w) / 2;
-    // uint16_t start_y = (LCD_H - rect_h) / 2;
-    
-    // LCD_DrawRect(start_x, start_y, rect_w, rect_h, BLUE, 2);
-    //     LCD_ShowString(10, 10, "ABC", WHITE);
-    // LCD_ShowString(10, 30, "A1B0C", GREEN);
+
+
+HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_SET); // 打开风扇
+
+
+
+I2C_Bus_Init(&i2c_bus_1);
+I2C_Bus_Init(&i2c_bus_2);
+    // 2. 绑定 SHT40
+    sht40_ctx.handle = &i2c_bus_2;
+    sht40_ctx.write_reg = sht40_i2c_write;
+    sht40_ctx.read_reg = sht40_i2c_read;
+
+    // 3. 绑定 LIS3DH
+    lis3dh_ctx.handle = &i2c_bus_1;
+    lis3dh_ctx.write_reg = lis3dh_i2c_write;
+    lis3dh_ctx.read_reg = lis3dh_i2c_read;
+
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -162,21 +187,26 @@ LCD_Init();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // // 2. 全屏刷红色，并等待 1 秒
-    // NV3007_Fill(RED);
-    // HAL_Delay(2000);
-    
-    // // 3. 全屏刷绿色，并等待 1 秒
-    // NV3007_Fill(GREEN);
-    // HAL_Delay(2000);
-    
-    // // 4. 全屏刷蓝色，并等待 1 秒
-    // NV3007_Fill(BLUE);
-    // HAL_Delay(2000);
 
-// NV3007_Fill(0xF800); // 红
 
-HAL_Delay(2000);
+// 测试 SHT40
+    SHT40_Data_t s_data;
+    if (sht40_read_data(&sht40_ctx, &s_data) == 0) {
+        // 读取成功
+        log_printf("SHT40: Temp=%.2f, Hum=%.2f\n", s_data.temperature, s_data.humidity);
+    } else {
+        log_printf("SHT40: Read Failed!\n");
+    }
+
+    // 测试 LIS3DH
+    int16_t accel[3];
+    if (lis3dh_acceleration_raw_get(&lis3dh_ctx, accel) == 0) {
+        // 读取成功
+        log_printf("LIS3DH: X=%d, Y=%d, Z=%d\n", accel[0], accel[1], accel[2]);
+    } else {
+        log_printf("LIS3DH: Read Failed!\n");
+    }
+HAL_Delay(4000);
 
   }
   /* USER CODE END 3 */
