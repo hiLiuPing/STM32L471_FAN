@@ -28,6 +28,8 @@
 /* USER CODE BEGIN Includes */
 #include "log.h"
 #include "nv3007.h"
+#include "multi_led.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,13 +99,33 @@ int main(void)
   MX_USART3_UART_Init();
   MX_SPI1_Init();
   MX_TIM6_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
  log_init(&huart1);
  
 log_printf("system start");
+HAL_TIM_Base_Start_IT(&htim6); // 启动定时器 6 的中断
+    LED_Driver_System_Init();
+// #define LED1_G_Pin GPIO_PIN_12
+// #define LED1_G_GPIO_Port GPIOD
+// #define LED1_R_Pin GPIO_PIN_13
+// #define LED1_R_GPIO_Port GPIOD
+// #define LED1_B_Pin GPIO_PIN_14
+// #define LED1_B_GPIO_Port GPIOD
+LED_Object_t led_blue;  // PE3 -> TIM3_CH1
+LED_Object_t led_green; // PE4 -> TIM3_CH2
+LED_Object_t led_red;   // PE5 -> TIM3_CH3
+    LED_Driver_Init(&led_green, LED1_G_GPIO_Port, LED1_G_Pin, &htim4, TIM_CHANNEL_2, 1);
+    LED_Driver_Init(&led_blue, LED1_B_GPIO_Port, LED1_B_Pin, &htim4, TIM_CHANNEL_1, 1);
+    LED_Driver_Init(&led_red, LED1_R_GPIO_Port, LED1_R_Pin, &htim4, TIM_CHANNEL_3, 1);
+    LED_Driver_SendCmd(&led_blue, LED_MODE_PWM, LED_Off_Handler, 0, 0, NULL);
+    LED_Driver_SendCmd(&led_green, LED_MODE_PWM, LED_Off_Handler, 0, 0, NULL);
+
+    LED_Driver_SendCmd(&led_red, LED_MODE_PWM, LED_Heartbeat_Handler, 2000, 0, NULL);
+
 
 NV3007_Init();
-NV3007_SetRotation(NV3007_ROTATION);
+// NV3007_SetRotation(NV3007_ROTATION);
 // HAL_GPIO_WritePin(SPI1_PWM_GPIO_Port, SPI1_PWM_Pin, GPIO_PIN_SET); // 打开背光
     // NV3007_Fill(RED);
   /* USER CODE END 2 */
@@ -127,15 +149,16 @@ NV3007_SetRotation(NV3007_ROTATION);
     // NV3007_Fill(BLUE);
     // HAL_Delay(2000);
 
-NV3007_Fill(0xF800); // 红
-log_printf("red\r\n");
-    HAL_Delay(2000);
+// NV3007_Fill(0xF800); // 红
+  NV3007_Fill(RED);
+HAL_Delay(2000);
+// 填充红色矩形：x=10,y=20,宽50,高100
+NV3007_Fill(GREEN);
+HAL_Delay(2000);
+// 填充绿色矩形：x=60,y=120,宽60,高80
 
-NV3007_Fill(0x001F); // 蓝
-log_printf("blue\r\n");
-    HAL_Delay(2000);
-
-
+  NV3007_Fill(BLACK);
+HAL_Delay(2000);
 
   }
   /* USER CODE END 3 */
@@ -190,7 +213,22 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM6)
+    {
 
+        static uint16_t cnt = 0;
+        cnt++;
+        if(cnt >= 10)  // 每 10ms 执行一次
+        {
+            cnt = 0;
+
+           LED_Driver_Update();;   
+        }
+
+    }
+}
 /* USER CODE END 4 */
 
 /**

@@ -1,6 +1,6 @@
 #include "nv3007.h"
 
-/* 屏幕缓存 */
+/* 屏幕显示尺寸暂存 */
 static uint16_t width = NV3007_WIDTH;
 static uint16_t height = NV3007_HEIGHT;
 
@@ -22,7 +22,7 @@ static void LCD_WriteData(uint8_t data)
     CS_HIGH();
 }
 
-/* 批量写数据（关键优化点） */
+/* 批量写数据 */
 static void LCD_WriteBuf(uint8_t *buf, uint32_t len)
 {
     CS_LOW();
@@ -31,8 +31,8 @@ static void LCD_WriteBuf(uint8_t *buf, uint32_t len)
     CS_HIGH();
 }
 
-/* 设置窗口 */
-void NV3007_SetAddressWindow(uint16_t x0,uint16_t y0,uint16_t x1,uint16_t y1)
+/* 设置窗口（带入12像素的物理偏移） */
+void NV3007_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 {
     uint8_t buf[4];
 
@@ -43,53 +43,155 @@ void NV3007_SetAddressWindow(uint16_t x0,uint16_t y0,uint16_t x1,uint16_t y1)
     buf[1] = x0 & 0xFF;
     buf[2] = x1 >> 8;
     buf[3] = x1 & 0xFF;
-    LCD_WriteCmd(CMD_CASET);
-    LCD_WriteBuf(buf,4);
+    LCD_WriteCmd(0x2A); // CASET
+    LCD_WriteBuf(buf, 4);
 
     buf[0] = y0 >> 8;
     buf[1] = y0 & 0xFF;
     buf[2] = y1 >> 8;
     buf[3] = y1 & 0xFF;
-    LCD_WriteCmd(CMD_RASET);
-    LCD_WriteBuf(buf,4);
+    LCD_WriteCmd(0x2B); // RASET
+    LCD_WriteBuf(buf, 4);
 
-    LCD_WriteCmd(CMD_RAMWR);
+    LCD_WriteCmd(0x2C); // RAMWR
 }
-void NV3007_SetRotation(uint8_t m)
+
+/* 硬件初始化函数（完全保留原厂参数，显式关闭硬件反相） */
+void NV3007_Init(void)
 {
-    LCD_WriteCmd(CMD_MADCTL);
+    /* =========================
+     * 1. Reset
+     * ========================= */
+    RST_LOW();
+    HAL_Delay(100);
+    RST_HIGH();
+    HAL_Delay(120);
 
-    switch(m)
-    {
-        case 0:
-            LCD_WriteData(0x00); // RGB
-            width = NV3007_WIDTH;
-            height = NV3007_HEIGHT;
-            break;
+    /* =========================
+     * 2. Unlock / vendor page
+     * ========================= */
+    LCD_WriteCmd(0xFF);
+    LCD_WriteData(0xA5);
 
-        case 1:
-            LCD_WriteData(0x60);
-            width = NV3007_HEIGHT;
-            height = NV3007_WIDTH;
-            break;
+    /* =========================
+     * 3. 基础校准（保留原厂）
+     * ========================= */
+    LCD_WriteCmd(0x9A); LCD_WriteData(0x08);
+    LCD_WriteCmd(0x9B); LCD_WriteData(0x08);
+    LCD_WriteCmd(0x9C); LCD_WriteData(0xB0);
+    LCD_WriteCmd(0x9D); LCD_WriteData(0x16);
+    LCD_WriteCmd(0x9E); LCD_WriteData(0xC4);
 
-        case 2:
-            LCD_WriteData(0xC0);
-            width = NV3007_WIDTH;
-            height = NV3007_HEIGHT;
-            break;
+    LCD_WriteCmd(0x8F);
+    LCD_WriteData(0x55);
+    LCD_WriteData(0x04);
 
-        case 3:
-            LCD_WriteData(0xA0);
-            width = NV3007_HEIGHT;
-            height = NV3007_WIDTH;
-            break;
-    }
+    LCD_WriteCmd(0x84); LCD_WriteData(0x90);
+    LCD_WriteCmd(0x83); LCD_WriteData(0x7B);
+    LCD_WriteCmd(0x85); LCD_WriteData(0x33);
+
+    /* =========================
+     * 4. Power / timing group
+     * ========================= */
+    LCD_WriteCmd(0x60); LCD_WriteData(0x00);
+    LCD_WriteCmd(0x70); LCD_WriteData(0x00);
+
+    LCD_WriteCmd(0x61); LCD_WriteData(0x02);
+    LCD_WriteCmd(0x71); LCD_WriteData(0x02);
+
+    LCD_WriteCmd(0x62); LCD_WriteData(0x04);
+    LCD_WriteCmd(0x72); LCD_WriteData(0x04);
+
+    /* =========================
+     * 5. GOA / scan timing
+     * ========================= */
+    LCD_WriteCmd(0xA0);
+    LCD_WriteData(0x2B);
+    LCD_WriteData(0x24);
+    LCD_WriteData(0x00);
+
+    LCD_WriteCmd(0xA1); LCD_WriteData(0x87);
+    LCD_WriteCmd(0xA2); LCD_WriteData(0x86);
+
+    LCD_WriteCmd(0xA8); LCD_WriteData(0x36);
+    LCD_WriteCmd(0xA9); LCD_WriteData(0x7E);
+    LCD_WriteCmd(0xAA); LCD_WriteData(0x7E);
+
+    /* =========================
+     * 6. Driver timing（核心稳定区）
+     * ========================= */
+    LCD_WriteCmd(0xB2);
+    LCD_WriteData(0x2C);
+    LCD_WriteData(0x1B);
+    LCD_WriteData(0x0B);
+    LCD_WriteData(0x20);
+
+    /* =========================
+     * 7. Gamma（影响颜色的关键）
+     * ========================= */
+    LCD_WriteCmd(0xE0);
+    LCD_WriteData(0x00);
+    LCD_WriteCmd(0xE1);
+    LCD_WriteData(0x03);
+    LCD_WriteData(0x0F);
+
+    LCD_WriteCmd(0xE2);
+    LCD_WriteData(0x04);
+
+    LCD_WriteCmd(0xE3);
+    LCD_WriteData(0x01);
+
+    LCD_WriteCmd(0xE4);
+    LCD_WriteData(0x0E);
+
+    LCD_WriteCmd(0xE5);
+    LCD_WriteData(0x01);
+
+    LCD_WriteCmd(0xE6);
+    LCD_WriteData(0x19);
+
+    LCD_WriteCmd(0xE7);
+    LCD_WriteData(0x10);
+
+    LCD_WriteCmd(0xE8);
+    LCD_WriteData(0x10);
+
+    /* =========================
+     * 8. Frame / inversion
+     * ========================= */
+    LCD_WriteCmd(0x35);
+    LCD_WriteData(0x00);   // TE off/normal
+
+    /* =========================
+     * 9. Pixel format（关键）
+     * ========================= */
+    LCD_WriteCmd(0x3A);
+    LCD_WriteData(0x05);   // 16bit RGB565
+
+    /* =======================================================
+     * 🌟 软件取反模式配置区
+     * ======================================================= */
+    LCD_WriteCmd(0x36);
+    LCD_WriteData(0x08);   // 保持 BGR 格式
+
+    LCD_WriteCmd(0x20);   // 🚀 关键修改：关闭硬件反相(INVOFF)。把取反操作留给软件处理！
+
+    /* =========================
+     * 10. Sleep out + display on
+     * ========================= */
+    LCD_WriteCmd(0x11);
+    HAL_Delay(220);
+
+    LCD_WriteCmd(0x29);
+    HAL_Delay(50);
+
+    /* ===== 10. 背光 ===== */
+    BL_ON();
+
+    /* ===== 11. 清屏 ===== */
+    NV3007_Fill(0x0000);   // 刷黑
 }
-void NV3007_Fill(uint16_t color)
-{
-    NV3007_FillRect(0,0,width,height,color);
-}
+
 /* 🚀 高效批量刷屏函数（带内存软件自动反向） */
 void NV3007_FillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
@@ -125,141 +227,22 @@ void NV3007_FillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t co
     CS_HIGH();
 }
 
-
-void NV3007_Init(void)
+/* 全屏填充 */
+void NV3007_Fill(uint16_t color)
 {
-    /* =========================
-     * 1. Reset
-     * ========================= */
-    RST_LOW();
-    HAL_Delay(100);
-    RST_HIGH();
-    HAL_Delay(120);
+    NV3007_FillRect(0, 0, width, height, color);
+}
 
-    /* =========================
-     * 2. Unlock
-     * ========================= */
-    LCD_WriteCmd(0xFF);
-    LCD_WriteData(0xA5);
+/* 基础单点画点（同样带软件取反） */
+void NV3007_DrawPixel(uint16_t x, uint16_t y, uint16_t color)
+{
+    if ((x >= width) || (y >= height)) return;
+    
+    uint16_t inverted_color = ~color;
+    uint8_t data[2];
+    data[0] = inverted_color >> 8;
+    data[1] = inverted_color & 0xFF;
 
-    /* =========================
-     * 3. 基础电源/时序（保留原厂）
-     * ========================= */
-    LCD_WriteCmd(0x9A); LCD_WriteData(0x08);
-    LCD_WriteCmd(0x9B); LCD_WriteData(0x08);
-    LCD_WriteCmd(0x9C); LCD_WriteData(0xB0);
-    LCD_WriteCmd(0x9D); LCD_WriteData(0x16);
-    LCD_WriteCmd(0x9E); LCD_WriteData(0xC4);
-
-    LCD_WriteCmd(0x8F);
-    LCD_WriteData(0x55);
-    LCD_WriteData(0x04);
-
-    LCD_WriteCmd(0x84); LCD_WriteData(0x90);
-    LCD_WriteCmd(0x83); LCD_WriteData(0x7B);
-    LCD_WriteCmd(0x85); LCD_WriteData(0x33);
-
-    /* =========================
-     * 4. Power timing
-     * ========================= */
-    LCD_WriteCmd(0x60); LCD_WriteData(0x00);
-    LCD_WriteCmd(0x70); LCD_WriteData(0x00);
-
-    LCD_WriteCmd(0x61); LCD_WriteData(0x02);
-    LCD_WriteCmd(0x71); LCD_WriteData(0x02);
-
-    LCD_WriteCmd(0x62); LCD_WriteData(0x04);
-    LCD_WriteCmd(0x72); LCD_WriteData(0x04);
-
-    /* =========================
-     * 5. GOA scan
-     * ========================= */
-    LCD_WriteCmd(0xA0);
-    LCD_WriteData(0x2B);
-    LCD_WriteData(0x24);
-    LCD_WriteData(0x00);
-
-    LCD_WriteCmd(0xA1); LCD_WriteData(0x87);
-    LCD_WriteCmd(0xA2); LCD_WriteData(0x86);
-
-    LCD_WriteCmd(0xA8); LCD_WriteData(0x36);
-    LCD_WriteCmd(0xA9); LCD_WriteData(0x7E);
-    LCD_WriteCmd(0xAA); LCD_WriteData(0x7E);
-
-    /* =========================
-     * 6. Frame timing
-     * ========================= */
-    LCD_WriteCmd(0xB2);
-    LCD_WriteData(0x2C);
-    LCD_WriteData(0x1B);
-    LCD_WriteData(0x0B);
-    LCD_WriteData(0x20);
-
-    /* =========================
-     * 7. Gamma（保留原厂）
-     * ========================= */
-    LCD_WriteCmd(0xE0);
-    LCD_WriteData(0x00);
-
-    LCD_WriteCmd(0xE1);
-    LCD_WriteData(0x03);
-    LCD_WriteData(0x0F);
-
-    LCD_WriteCmd(0xE2);
-    LCD_WriteData(0x04);
-
-    LCD_WriteCmd(0xE3);
-    LCD_WriteData(0x01);
-
-    LCD_WriteCmd(0xE4);
-    LCD_WriteData(0x0E);
-
-    LCD_WriteCmd(0xE5);
-    LCD_WriteData(0x01);
-
-    LCD_WriteCmd(0xE6);
-    LCD_WriteData(0x19);
-
-    LCD_WriteCmd(0xE7);
-    LCD_WriteData(0x10);
-
-    LCD_WriteCmd(0xE8);
-    LCD_WriteData(0x10);
-
-    /* =========================
-     * 8. TE control
-     * ========================= */
-    LCD_WriteCmd(0x35);
-    LCD_WriteData(0x00);
-
-    /* =========================
-     * 9. Pixel format（关键）
-     * ========================= */
-    LCD_WriteCmd(0x3A);
-    LCD_WriteData(0x05);   // RGB565
-
-    /* =========================
-     * 10. ⚠ 关键：不再乱动颜色控制
-     * ========================= */
-    // ❌ 不使用 0x36
-    // ❌ 不使用 0x21
-
-    /* =========================
-     * 11. Sleep out / display on
-     * ========================= */
-    LCD_WriteCmd(0x11);
-    HAL_Delay(220);
-
-    LCD_WriteCmd(0x29);
-    HAL_Delay(50);
-
-    /* =========================
-     * 12. Backlight
-     * ========================= */
-    BL_ON();
-
-    /* =========================
-     * 13. Clear screen
-     * ========================= */
-    NV3007_Fill(0x0000);
+    NV3007_SetAddressWindow(x, y, x, y);
+    LCD_WriteBuf(data, 2);
 }
