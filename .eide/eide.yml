@@ -4,10 +4,9 @@ type: ARM
 deviceName: null
 packDir: null
 srcDirs:
-  - APP
   - BSP
   - Core
-  - Middle
+  - USER
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -26,6 +25,7 @@ virtualFolder:
               files:
                 - path: Core/Src/main.c
                 - path: Core/Src/gpio.c
+                - path: Core/Src/freertos.c
                 - path: Core/Src/dac.c
                 - path: Core/Src/i2c.c
                 - path: Core/Src/spi.c
@@ -33,12 +33,15 @@ virtualFolder:
                 - path: Core/Src/usart.c
                 - path: Core/Src/stm32l4xx_it.c
                 - path: Core/Src/stm32l4xx_hal_msp.c
+                - path: Core/Src/stm32l4xx_hal_timebase_tim.c
               folders: []
     - name: Drivers
       files: []
       folders:
         - name: STM32L4xx_HAL_Driver
           files:
+            - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim.c
+            - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim_ex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_dac.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_dac_ex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal.c
@@ -58,8 +61,6 @@ virtualFolder:
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_exti.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_spi.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_spi_ex.c
-            - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim.c
-            - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim_ex.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart.c
             - path: Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart_ex.c
           folders: []
@@ -70,6 +71,22 @@ virtualFolder:
     - name: ::CMSIS
       files: []
       folders: []
+    - name: Middlewares
+      files: []
+      folders:
+        - name: FreeRTOS
+          files:
+            - path: Middlewares/Third_Party/FreeRTOS/Source/croutine.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/list.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/queue.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/tasks.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/timers.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/port.c
+          folders: []
 dependenceList: []
 outDir: build
 miscInfo:
@@ -86,20 +103,25 @@ targets:
         - Drivers/STM32L4xx_HAL_Driver/Inc/Legacy
         - Drivers/CMSIS/Device/ST/STM32L4xx/Include
         - Drivers/CMSIS/Include
+        - Middlewares/Third_Party/FreeRTOS/Source/include
+        - Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
+        - Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
         - .cmsis/include
         - MDK-ARM/RTE/_STM32L471_FAN
-        - BSP/LED
-        - BSP/OLED
-        - BSP/LOG
-        - BSP/LIS3DH
-        - Middle/I2CBUS
-        - BSP/SHT40
-        - Middle/DRIVER
-        - BSP/EE24
-        - BSP/IN226
         - BSP/BQ24295
+        - BSP/EE24
+        - BSP/FLASH
+        - BSP/IN226
+        - BSP/LIS3DH
+        - BSP/LOG
         - BSP/MAX17048
-        - APP
+        - BSP/OLED
+        - BSP/SHT40
+        - USER/GUI
+        - USER/Middle
+        - USER/TASK
+        - BSP/LED
+        - BSP/KEY
       libList: []
     excludeList: []
     settings: {}

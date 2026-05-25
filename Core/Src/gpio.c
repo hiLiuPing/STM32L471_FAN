@@ -64,12 +64,30 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, SPI1_RST_Pin|SPI1_CS_Pin, GPIO_PIN_SET);
 
+  /*Configure GPIO pin : SW_DOWN_Pin */
+  GPIO_InitStruct.Pin = SW_DOWN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(SW_DOWN_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : SW_UP_Pin SW_MIDLE_Pin */
+  GPIO_InitStruct.Pin = SW_UP_Pin|SW_MIDLE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
   /*Configure GPIO pin : FAN_EN_Pin */
   GPIO_InitStruct.Pin = FAN_EN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(FAN_EN_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PWR_SW_Pin */
+  GPIO_InitStruct.Pin = PWR_SW_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(PWR_SW_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SPI1_PWM_Pin */
   GPIO_InitStruct.Pin = SPI1_PWM_Pin;

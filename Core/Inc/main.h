@@ -63,8 +63,14 @@ void Error_Handler(void);
 #define LED2_G_GPIO_Port GPIOE
 #define LED2_B_Pin GPIO_PIN_5
 #define LED2_B_GPIO_Port GPIOE
+#define SW_DOWN_Pin GPIO_PIN_6
+#define SW_DOWN_GPIO_Port GPIOE
+#define SW_UP_Pin GPIO_PIN_13
+#define SW_UP_GPIO_Port GPIOC
 #define FAN_EN_Pin GPIO_PIN_3
 #define FAN_EN_GPIO_Port GPIOC
+#define PWR_SW_Pin GPIO_PIN_2
+#define PWR_SW_GPIO_Port GPIOA
 #define SPI1_PWM_Pin GPIO_PIN_6
 #define SPI1_PWM_GPIO_Port GPIOA
 #define SPI1_DC_Pin GPIO_PIN_4
@@ -79,6 +85,8 @@ void Error_Handler(void);
 #define LED1_R_GPIO_Port GPIOD
 #define LED1_B_Pin GPIO_PIN_14
 #define LED1_B_GPIO_Port GPIOD
+#define SW_MIDLE_Pin GPIO_PIN_6
+#define SW_MIDLE_GPIO_Port GPIOC
 #define FAN_PWM_Pin GPIO_PIN_9
 #define FAN_PWM_GPIO_Port GPIOB
 
