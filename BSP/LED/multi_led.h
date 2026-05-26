@@ -4,7 +4,7 @@
 #include "main.h"
 
 
-// #define USE_FREERTOS 0   
+#define USE_FREERTOS 1   
 
 /* ================= Time Macro ================= */
 #ifdef USE_FREERTOS
@@ -74,7 +74,7 @@ void LED_Driver_GPIO_Write(LED_Object_t *obj, uint8_t level);
 void LED_Driver_GPIO_Toggle(LED_Object_t *obj);
 void LED_Driver_PWM_SetDuty(LED_Object_t *obj, uint16_t duty);
 
-void LED_Driver_System_Init(void);
+// void LED_Driver_System_Init(void);
 void LED_Driver_Refresh(uint32_t dt);
 
 void LED_On_Handler(LED_Object_t *obj);

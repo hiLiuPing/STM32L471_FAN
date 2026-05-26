@@ -7,8 +7,10 @@
 #include "queue.h"      // 必须加
 // #include "beep.h"
 // #include "BL24C02.h" // settings
+ #include "multi_led.h"
+  #include "rgb_led.h"
 #include "log.h"
-
+extern RGB_Object_t rgb;
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
@@ -23,6 +25,7 @@
   * @param  argument: Not used
   * @retval None
   */
+//  按键和led合二为一了
 void KeyTask(void *argument)
 {
 	key_event_t key_event;
@@ -43,6 +46,8 @@ void KeyTask(void *argument)
 			// 	// beep_close();
 			// }
 		}
+		LED_Driver_Update();
+		RGB_Update(&rgb, 10);
 		vTaskDelay(10);  // 原生延时
 	}
 }

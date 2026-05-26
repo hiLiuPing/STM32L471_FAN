@@ -3,6 +3,7 @@
 
 static LED_Object_t* g_led_head = NULL;
 static uint32_t g_led_last_tick = 0;
+static uint8_t g_led_driver_init = 0;
 
 /* ================= GPIO (PWM模拟优先) ================= */
 void LED_Driver_GPIO_Write(LED_Object_t *obj, uint8_t level)
@@ -63,6 +64,15 @@ void LED_Driver_Init(LED_Object_t *obj,
                      uint8_t active_high)
 {
     if (!obj) return;
+
+    if (!g_led_driver_init)
+    {
+        g_led_driver_init = 1;
+
+        g_led_head = NULL;
+
+        g_led_last_tick = LED_GET_TICK_MS();
+    }
 
     memset(obj, 0, sizeof(LED_Object_t));
 
@@ -160,11 +170,11 @@ void LED_Driver_Refresh(uint32_t dt)
 }
 
 /* ================= System Init ================= */
-void LED_Driver_System_Init(void)
-{
-    g_led_head = NULL;
-    g_led_last_tick = LED_GET_TICK_MS();
-}
+// void LED_Driver_System_Init(void)
+// {
+//     g_led_head = NULL;
+//     g_led_last_tick = LED_GET_TICK_MS();
+// }
 
 /* ================= Update ================= */
 void LED_Driver_Update(void)
