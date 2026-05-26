@@ -54,10 +54,10 @@ void HardwareInitTask(void *argument)
 	// vTaskSuspendAll();
     log_init(&huart1);
 
-
-    LED_Driver_Init(&led_green, LED1_G_GPIO_Port, LED1_G_Pin, &htim4, TIM_CHANNEL_2, 1);
-    LED_Driver_Init(&led_blue, LED1_B_GPIO_Port, LED1_B_Pin, &htim4, TIM_CHANNEL_1, 1);
-    LED_Driver_Init(&led_red, LED1_R_GPIO_Port, LED1_R_Pin, &htim4, TIM_CHANNEL_3, 1);
+// LED init
+    LED_Driver_Init(&led_blue, LED1_B_GPIO_Port, LED1_B_Pin, &htim4, TIM_CHANNEL_2, 1);
+    LED_Driver_Init(&led_red, LED1_R_GPIO_Port, LED1_R_Pin, &htim4, TIM_CHANNEL_1, 1);
+    LED_Driver_Init(&led_green, LED1_G_GPIO_Port, LED1_G_Pin, &htim4, TIM_CHANNEL_3, 1);
 
     LED_Driver_Init(&led2_green, LED2_G_GPIO_Port, LED2_G_Pin, &htim3, TIM_CHANNEL_2, 1);
     LED_Driver_Init(&led2_blue, LED2_B_GPIO_Port, LED2_B_Pin, &htim3, TIM_CHANNEL_1, 1);
@@ -78,6 +78,26 @@ RGB_SendCmd(&rgb,
             0,
             0,
             0);
+
+// // RGB_SendCmd(&rgb,
+// //             RGB_EFFECT_HEARTBEAT,
+// //             1000,
+// //             0,
+// //             RGB_COLOR_GREEN,
+// //             0);
+// // RGB_SendCmd(&rgb,
+// //             RGB_EFFECT_BREATH,
+// //             2000,
+// //             0,
+// //             RGB_COLOR_BLUE,
+// //             0);
+// RGB_SendCmd(&rgb,
+//             RGB_EFFECT_BLINK,
+//             500,
+//             0,
+//             RGB_COLOR_RED,
+//             0);									
+
 	// gate, for current flow route selection, high current by default
 	// Gate_Port_Init();
 	// flow_route_selection(HIGH_CUR);
