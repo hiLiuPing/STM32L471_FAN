@@ -81,6 +81,14 @@ void Error_Handler(void);
 #define SPI1_RST_GPIO_Port GPIOB
 #define SPI1_CS_Pin GPIO_PIN_2
 #define SPI1_CS_GPIO_Port GPIOB
+#define ARM_RST_Pin GPIO_PIN_7
+#define ARM_RST_GPIO_Port GPIOE
+#define SPI2_CS_Pin GPIO_PIN_12
+#define SPI2_CS_GPIO_Port GPIOB
+#define CHAG_EN_Pin GPIO_PIN_10
+#define CHAG_EN_GPIO_Port GPIOD
+#define CHAG_INT_Pin GPIO_PIN_11
+#define CHAG_INT_GPIO_Port GPIOD
 #define LED1_B_Pin GPIO_PIN_12
 #define LED1_B_GPIO_Port GPIOD
 #define LED1_G_Pin GPIO_PIN_13

@@ -1,8 +1,0 @@
-#ifndef UI_VERSION_H
-#define UI_VERSION_H
-
-#define UI_VERSION_MAJOR 1U
-#define UI_VERSION_MINOR 0U
-#define UI_VERSION_PATCH 0U
-
-#endif /* UI_VERSION_H */

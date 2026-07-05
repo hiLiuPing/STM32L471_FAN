@@ -7,7 +7,7 @@
 #include "multi_led.h"
 #include "rgb_led.h"
 #include "tim.h"
-#include "ui_task.h"
+
 #include "usart.h"
 #include "user_TasksInit.h"
 
@@ -44,12 +44,15 @@ void HardwareInitTask(void *argument)
 
     log_init(&huart1);
 
-    HardwareInitTask_InitLeds();
-    Key_Init();
-    (void)APP_Sensors_Init();
-
-    configASSERT(UI_Task_Create() == pdPASS);
-
-    User_Tasks_SetHardwareReady();
-    vTaskDelete(NULL);
+    log_printf("start app");
+log_printf("step1: init leds...");
+HardwareInitTask_InitLeds();
+log_printf("step2: key init...");
+Key_Init();
+log_printf("step3: ui task create...");
+// configASSERT(UI_Task_Create() == pdPASS);
+// log_printf("step4: hw ready");
+User_Tasks_SetHardwareReady();
+log_printf("step5: delete self");
+vTaskDelete(NULL);
 }
