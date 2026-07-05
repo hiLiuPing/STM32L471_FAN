@@ -560,7 +560,7 @@ void UI_RendererAdapter_EndFrame(void)
       UI_RendererAdapter_DrawCommand(g_lvgl_canvas, &g_render_commands[command_index], (int16_t)y);
     }
 
-    LCD_DrawRGB565Buffer(0U, y, LCD_W, stripe_height, (const uint16_t *)g_render_stripe);
+    UI_Hal_FlushRGB565(0U, y, LCD_W, stripe_height, (const uint16_t *)g_render_stripe);
   }
 }
 

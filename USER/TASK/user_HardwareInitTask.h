@@ -11,5 +11,4 @@ void HardwareInitTask(void *argument);
 }
 #endif
 
-#endif
-
+#endif /* __USER_HARDWAREINITTASK_H__ */

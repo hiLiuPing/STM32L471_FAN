@@ -10,17 +10,23 @@
 
 #include "../event/ui_event_type.h"
 #include "../event/ui_event_bus.h"
+#include "../datastore/ui_model.h"
 #include "../effects/effect_marquee.h"
 #include "../widget/advanced/ui_virtual_list.h"
 
 #include "../hal/backend_lvgl/ui_renderer_adapter.h"
 #include "../core/ui_types.h"
 
-#define UI_APP_PAGE_HOME_ID       1U
-#define UI_APP_PAGE_CONTROLS_ID   2U
-#define UI_APP_PAGE_LIST_ID       3U
-#define UI_APP_PAGE_DATA_ID       4U
-#define UI_APP_PAGE_SETTINGS_ID   5U
+#define UI_APP_PAGE_HOME_ID           1U
+#define UI_APP_PAGE_TRAVEL_CLOCK_ID   2U
+#define UI_APP_PAGE_FAN_STATUS_ID     3U
+#define UI_APP_PAGE_CLOCK_SETTINGS_ID 4U
+#define UI_APP_PAGE_FAN_SETTINGS_ID   5U
+
+#define UI_APP_PAGE_CONTROLS_ID UI_APP_PAGE_TRAVEL_CLOCK_ID
+#define UI_APP_PAGE_LIST_ID     UI_APP_PAGE_FAN_STATUS_ID
+#define UI_APP_PAGE_DATA_ID     UI_APP_PAGE_CLOCK_SETTINGS_ID
+#define UI_APP_PAGE_SETTINGS_ID UI_APP_PAGE_FAN_SETTINGS_ID
 
 #define UI_APP_PROP_TITLE_ID      1U
 #define UI_APP_PROP_HEARTBEAT_ID  2U
@@ -68,5 +74,6 @@ void UI_AppState_DrawFooter(void);
 void UI_AppState_OnFrame(void);
 void UI_AppState_OnMessage(const ui_msg_t *msg);
 void UI_AppState_OnEvent(const ui_event_t *event);
+uint16_t UI_AppState_GetActivePageId(void);
 
 #endif /* UI_APP_STATE_H */

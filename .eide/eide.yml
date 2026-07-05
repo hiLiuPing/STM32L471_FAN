@@ -4,8 +4,6 @@ type: ARM
 deviceName: null
 packDir: null
 srcDirs:
-  - BSP
-  - Core
   - USER
 virtualFolder:
   name: <virtual_root>
@@ -25,7 +23,6 @@ virtualFolder:
               files:
                 - path: Core/Src/main.c
                 - path: Core/Src/gpio.c
-                - path: Core/Src/freertos.c
                 - path: Core/Src/dac.c
                 - path: Core/Src/i2c.c
                 - path: Core/Src/spi.c
@@ -71,22 +68,6 @@ virtualFolder:
     - name: ::CMSIS
       files: []
       folders: []
-    - name: Middlewares
-      files: []
-      folders:
-        - name: FreeRTOS
-          files:
-            - path: Middlewares/Third_Party/FreeRTOS/Source/croutine.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/list.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/queue.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/tasks.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/timers.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
-            - path: Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/port.c
-          folders: []
 dependenceList: []
 outDir: build
 miscInfo:
@@ -103,53 +84,130 @@ targets:
         - Drivers/STM32L4xx_HAL_Driver/Inc/Legacy
         - Drivers/CMSIS/Device/ST/STM32L4xx/Include
         - Drivers/CMSIS/Include
-        - Middlewares/Third_Party/FreeRTOS/Source/include
-        - Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
-        - Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
         - .cmsis/include
         - MDK-ARM/RTE/_STM32L471_FAN
-        - BSP/BQ24295
-        - BSP/EE24
-        - BSP/FLASH
-        - BSP/IN226
-        - BSP/LIS3DH
-        - BSP/LOG
-        - BSP/MAX17048
-        - BSP/OLED
-        - BSP/SHT40
+        - USER/APP
+        - USER/BSP
         - USER/GUI
-        - USER/Middle
         - USER/TASK
-        - BSP/LED
-        - BSP/KEY
+        - USER/Middle/FreeRTOS/Source/include
+        - USER/Middle/FreeRTOS/Source/portable/GCC/ARM_CM4F
+        - USER/Middle/Transfer
+        - USER/Middle/lvgl/lvgl/examples/porting
+        - USER/Middle/lvgl/lvgl
       libList: []
     excludeList: []
-    settings: {}
-    toolchain: AC5
+    settings:
+      debugger: cortex-debug
+    toolchain: AC6
     toolchainConfigMap:
       AC5:
         archExtensions: ""
         cpuType: Cortex-M4
         floatingPointHardware: single
+        options: ""
+        scatterFilePath: ""
+        storageLayout:
+          RAM:
+            - id: 1
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 2
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 3
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 1
+              isChecked: true
+              mem:
+                size: "0x18000"
+                startAddr: "0x20000000"
+              noInit: false
+              tag: IRAM
+            - id: 2
+              isChecked: true
+              mem:
+                size: "0x8000"
+                startAddr: "0x10000000"
+              noInit: false
+              tag: IRAM
+          ROM:
+            - id: 1
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
+            - id: 2
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
+            - id: 3
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
+            - id: 1
+              isChecked: true
+              isStartup: true
+              mem:
+                size: "0x100000"
+                startAddr: "0x8000000"
+              tag: IROM
+            - id: 2
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: IROM
+        useCustomScatterFile: false
+      AC6:
+        archExtensions: ""
+        cpuType: Cortex-M4
+        floatingPointHardware: single
         options:
-          version: 4
+          version: 3
           afterBuildTasks: []
           asm-compiler:
+            $use: asm-auto
             defines: []
+            misc-controls: ""
           beforeBuildTasks: []
           c/cpp-compiler:
-            CXX_FLAGS: --diag_suppress=1 --diag_suppress=1295
-            C_FLAGS: --diag_suppress=1 --diag_suppress=1295
-            c99-mode: true
+            language-c: c11
+            language-cpp: c++11
+            link-time-optimization: false
             one-elf-section-per-function: true
             optimization: level-1
-            warnings: all-warnings
+            short-enums#wchar: true
+            warnings: ac5-like-warnings
           global:
             output-debug-info: enable
             use-microLIB: true
           linker:
             $outputTaskExcludes:
               - .bin
+            misc-controls: --diag_suppress=L6329
             output-format: elf
             ro-base: ""
             rw-base: ""

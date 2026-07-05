@@ -1,53 +1,47 @@
-/* Private includes -----------------------------------------------------------*/
-//includes
-#include "user_TasksInit.h"
-#include "main.h"
+#include "user_KeyTask.h"
+
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "task.h"
+
 #include "key.h"
-#include "FreeRTOS.h"   // 必须加
-#include "queue.h"      // 必须加
-// #include "beep.h"
-// #include "BL24C02.h" // settings
- #include "multi_led.h"
-  #include "rgb_led.h"
 #include "log.h"
-extern RGB_Object_t rgb;
-/* Private typedef -----------------------------------------------------------*/
+#include "user_TasksInit.h"
 
-/* Private define ------------------------------------------------------------*/
+static void KeyTask_SendEvent(const key_event_t *event)
+{
+    static uint32_t s_key_drop_count = 0U;
 
-/* Private variables ---------------------------------------------------------*/
+    if ((Key_Power_queue == NULL) || (event == NULL))
+    {
+        return;
+    }
 
-/* Private function prototypes -----------------------------------------------*/
+    if (xQueueSend(Key_Power_queue, event, 0U) != pdPASS)
+    {
+        s_key_drop_count++;
+        if ((s_key_drop_count & 0x07U) == 0U)
+        {
+            log_printf("[KeyQ] dropped=%lu\r\n", (unsigned long)s_key_drop_count);
+        }
+    }
+}
 
-
-/**
-  * @brief  Key press check task
-  * @param  argument: Not used
-  * @retval None
-  */
-//  按键和led合二为一了
 void KeyTask(void *argument)
 {
-	key_event_t key_event;
-	while(1)
-	{
-		if(Key_Scan(&key_event))
-		{
-			// 原生队列发送
-			xQueueSend(Key_MessageQueue, &key_event, 1);
+    key_event_t key_event;
 
-			log_printf("key: %d\n", key_event.id);
-			
-			// beep
-			// if(Sys_Get_KeySoundEnable())
-			// {
-			// 	// beep_open();
-			// 	vTaskDelay(50);  // 原生延时
-			// 	// beep_close();
-			// }
-		}
-		LED_Driver_Update();
-		RGB_Update(&rgb, 10);
-		vTaskDelay(10);  // 原生延时
-	}
+    (void)argument;
+
+    User_Tasks_WaitForHardwareReady();
+
+    for (;;)
+    {
+        if (Key_Scan(&key_event))
+        {
+            KeyTask_SendEvent(&key_event);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10U));
+    }
 }

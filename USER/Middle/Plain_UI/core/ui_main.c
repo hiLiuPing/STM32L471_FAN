@@ -15,6 +15,7 @@
 #include "../effects/ui_fx_emitter.h"
 #include "../layer/ui_layer_manager.h"
 #include "../hal/backend_lvgl/ui_renderer_adapter.h"
+#include "../style/ui_style.h"
 
 #include "task.h"
 
@@ -31,9 +32,9 @@ static void UI_Main_TaskRun(void *argument)
   /* 固定帧率主循环：先收事件，再做状态更新，最后推进系统时基。 */
   for (;;)
   {
+    UI_Tick_Advance(UI_FRAME_TICK_MS);
     UI_EventBridge_Pump();
     UI_Update_RunFrame();
-    UI_Tick_Advance(UI_FRAME_TICK_MS);
     vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(UI_FRAME_TICK_MS));
   }
 }
@@ -64,9 +65,8 @@ BaseType_t UI_Main_Init(void)
   UI_Binding_Init();
   UI_DirtyRegion_Init();
   UI_RendererAdapter_Init();
+  UI_Style_Init();
   UI_AnimationScheduler_Init();
-  UI_FXEmitter_Init();
-  UI_LayerManager_Init();
   UI_Update_Init();
 
   if (UI_ProductApp_Init() != pdPASS)

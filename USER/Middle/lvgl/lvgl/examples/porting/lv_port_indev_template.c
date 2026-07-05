@@ -1,7 +1,7 @@
 /**
  * @file lv_port_indev.c
  */
-#if 1 
+#if 0 
 
 #include "lv_port_indev_template.h"
 #include "../../lvgl.h"

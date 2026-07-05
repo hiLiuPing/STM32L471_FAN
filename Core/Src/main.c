@@ -27,10 +27,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "user_TasksInit.h"
 // #include "log.h"
 // #include "multi_led.h"
-#include "lcd.h"
-#include "lcd_init.h"
+// #include "lcd.h"
+// #include "lcd_init.h"
 // #include "app_sensors.h"
 
 /* USER CODE END Includes */
@@ -109,6 +112,11 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM17_Init();
   /* USER CODE BEGIN 2 */
+  User_Tasks_Init();
+  vTaskStartScheduler();
+  Error_Handler();
+
+#if 0
 
  
 // log_printf("system start");
@@ -172,6 +180,7 @@ LCD_Init();
 //     }
 // APP_Sensors_Init();
 
+#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */

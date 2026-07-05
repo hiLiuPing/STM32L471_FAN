@@ -270,7 +270,7 @@ static void prvTaskExitError( void )
 }
 /*-----------------------------------------------------------*/
 
-__attribute__((naked)) void SVC_Handler( void )
+__attribute__((naked)) void vPortSVCHandler( void )
 {
 	__asm volatile (
 					"	ldr	r3, pxCurrentTCBConst2		\n" /* Restore the context. */
@@ -432,7 +432,7 @@ void vPortExitCritical( void )
 }
 /*-----------------------------------------------------------*/
 
-__attribute__((naked)) void PendSV_Handler( void )
+__attribute__((naked)) void xPortPendSVHandler( void )
 {
 	/* This is a naked function. */
 
@@ -490,7 +490,7 @@ __attribute__((naked)) void PendSV_Handler( void )
 }
 /*-----------------------------------------------------------*/
 
-void SysTick_Handler( void )
+void xPortSysTickHandler( void )
 {
 	/* The SysTick runs at the lowest interrupt priority, so when this interrupt
 	executes all interrupts must be unmasked.  There is therefore no need to

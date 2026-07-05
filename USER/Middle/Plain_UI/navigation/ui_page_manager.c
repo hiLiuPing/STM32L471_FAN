@@ -21,6 +21,26 @@ void UI_PageManager_Init(ui_page_factory_fn factory)
   UI_ModalManager_Init();
 }
 
+BaseType_t UI_PageManager_Open(uint16_t page_id)
+{
+  return UI_PageManager_Replace(page_id);
+}
+
+BaseType_t UI_PageManager_Back(void)
+{
+  return UI_PageManager_Pop();
+}
+
+void UI_PageManager_Update(void)
+{
+  UI_PageManager_ProcessActivePage();
+}
+
+void UI_PageManager_HandleEvent(const ui_event_t *event)
+{
+  UI_PageManager_DispatchEvent(event);
+}
+
 BaseType_t UI_PageManager_OpenRoot(uint16_t page_id)
 {
   ui_page_context_t *page;

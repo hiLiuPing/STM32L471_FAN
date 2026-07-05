@@ -7,10 +7,8 @@ extern "C" {
 
 void KeyTask(void *argument);
 
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif
-
+#endif /* __USER_KEYTASK_H__ */

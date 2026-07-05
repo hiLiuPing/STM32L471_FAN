@@ -1,102 +1,91 @@
-/* Private includes -----------------------------------------------------------*/
-//includes
 #include "user_TasksInit.h"
-//sys
-// #include "sys.h"
-#include "stdio.h"
 
-//bsp
+#include "main.h"
+#include "user_HardwareInitTask.h"
+#include "user_KeyManllegeTask.h"
+#include "user_KeyTask.h"
+#include "user_LEDTask.h"
+
 #include "key.h"
 
-//gui
-// #include "lvgl.h"
-// #include "lv_lib_pm.h"
+TaskHandle_t HardwareInitTaskHandle = NULL;
+TaskHandle_t KeyTaskHandle = NULL;
+TaskHandle_t KeyManllegeTaskHandle = NULL;
+TaskHandle_t LEDTaskHandle = NULL;
 
-//tasks
-#include "user_HardwareInitTask.h"
-// #include "user_LVGLTask.h"
-// #include "user_PDUFPTask.h"
-#include "user_KeyTask.h"
-// #include "user_MessageTask.h"
+QueueHandle_t Key_Power_queue = NULL;
 
-/* Private typedef -----------------------------------------------------------*/
+SemaphoreHandle_t xKeyScanTaskWakeSemaphore = NULL;
+SemaphoreHandle_t xLedTaskWakeSemaphore = NULL;
 
-/* Private define ------------------------------------------------------------*/
+volatile uint8_t g_system_hw_ready = 0U;
 
-/* Private variables ---------------------------------------------------------*/
+static void User_Tasks_RequireHandle(const void *handle)
+{
+    if (handle == NULL)
+    {
+        Error_Handler();
+    }
+}
 
-/* Timers --------------------------------------------------------------------*/
-// TimerHandle_t IdleTimerHandle;
+static void User_Tasks_RequireStatus(BaseType_t status)
+{
+    if (status != pdPASS)
+    {
+        Error_Handler();
+    }
+}
 
-/* Tasks ---------------------------------------------------------------------*/
-// Hardwares initialization
-TaskHandle_t HardwareInitTaskHandle;
+void User_Tasks_SetHardwareReady(void)
+{
+    g_system_hw_ready = 1U;
+}
 
-// // message receive task
-// TaskHandle_t MessageReceiveTaskHandle;
+void User_Tasks_WaitForHardwareReady(void)
+{
+    while (g_system_hw_ready == 0U)
+    {
+        vTaskDelay(pdMS_TO_TICKS(10U));
+    }
+}
 
-// message send task
-// TaskHandle_t MessageSendTaskHandle;
-
-// Key task
-TaskHandle_t KeyTaskHandle;
-
-// PDUFP task
-// TaskHandle_t PDUFPTaskHandle;
-
-// // LVGL Handler task
-// TaskHandle_t LvHandlerTaskHandle;
-
-/* Message queues ------------------------------------------------------------*/
-
-// Key task 中发送出的按键信息的消息队列
-// 流向为 KeyTask -> LVGLtask
-QueueHandle_t Key_MessageQueue;
-
-// UI layer发送给PDUFPTask任务的命令消息队列
-// // 流向为 LVGLtask -> PDUFPTask
-// QueueHandle_t PD_cmd_MessageQueue;
-
-// // PDUFPTask任务发送给UI层的通知处理情况的消息队列
-// // 流向为 PDUFPTask -> LVGLtask
-// QueueHandle_t PD_handle_event_MsgQueue;
-
-// // 数据处理Task任务发送给UI层的电压电流数据的消息队列
-// // 流向为 MessageSendTask -> LVGLtask
-// QueueHandle_t PowerDataQueue;
-
-/* Private function prototypes -----------------------------------------------*/
-// void LvHandlerTask(void *argument);
-
-/**
-  * @brief  FreeRTOS initialization
-  * @param  None
-  * @retval None
-  */
 void User_Tasks_Init(void)
 {
-  /* add mutexes, ... */
+    g_system_hw_ready = 0U;
 
-  /* add semaphores, ... */
+    xKeyScanTaskWakeSemaphore = xSemaphoreCreateBinary();
+    xLedTaskWakeSemaphore = xSemaphoreCreateBinary();
+    User_Tasks_RequireHandle(xKeyScanTaskWakeSemaphore);
+    User_Tasks_RequireHandle(xLedTaskWakeSemaphore);
 
-  /* start timers, add new ones, ... */
+    Key_Power_queue = xQueueCreate(8U, sizeof(key_event_t));
+    User_Tasks_RequireHandle(Key_Power_queue);
 
-  /* add queues, ... */
-	Key_MessageQueue  = xQueueCreate(4, sizeof(key_event_t));
+    User_Tasks_RequireStatus(xTaskCreate(HardwareInitTask,
+                                         "HwInitTask",
+                                         128U * 10U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 5U,
+                                         &HardwareInitTaskHandle));
 
-  // PD_cmd_MessageQueue = xQueueCreate(4, sizeof(PD_command_msg_t));
-  // PD_handle_event_MsgQueue = xQueueCreate(4, 1); // uint8_t message
-  // PowerDataQueue = xQueueCreate(8, sizeof(PowerData_t));
+    User_Tasks_RequireStatus(xTaskCreate(KeyTask,
+                                         "KeyTask",
+                                         128U * 2U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 2U,
+                                         &KeyTaskHandle));
 
-	/* add threads, ... */
-  xTaskCreate(HardwareInitTask, "HwInitTask", 128*10, NULL, tskIDLE_PRIORITY + 5, &HardwareInitTaskHandle);
-  // xTaskCreate(PDUFPTask, "PDUFPTask", 128*5, NULL, tskIDLE_PRIORITY + 1, &PDUFPTaskHandle);
-  xTaskCreate(KeyTask, "KeyTask", 128*2, NULL, tskIDLE_PRIORITY + 2, &KeyTaskHandle);
-  // xTaskCreate(MessageReceiveTask, "MsgRecTask", 128*2, NULL, tskIDLE_PRIORITY + 2, &MessageReceiveTaskHandle);
-  // xTaskCreate(MessageSendTask, "MsgSendTask", 128*8, NULL, tskIDLE_PRIORITY + 3, &MessageSendTaskHandle);
-  // xTaskCreate(LvHandlerTask, "LvHandlerTask", 128*32, NULL, tskIDLE_PRIORITY + 2, &LvHandlerTaskHandle);
+    User_Tasks_RequireStatus(xTaskCreate(LEDTask,
+                                         "LEDTask",
+                                         128U * 2U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 2U,
+                                         &LEDTaskHandle));
 
-  /* add events, ... */
-
-	/* add  others ... */
+    User_Tasks_RequireStatus(xTaskCreate(KeyManllegeTask,
+                                         "KeyMgrTask",
+                                         128U * 2U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 2U,
+                                         &KeyManllegeTaskHandle));
 }

@@ -3,8 +3,15 @@
 
 #include "../ui_app_state.h"
 #include "../../datastore/ui_property_store.h"
+#include "../../datastore/ui_model.h"
+#include "../../effects/ui_weather_effect.h"
 
 #include <stdio.h>
+
+static ui_obj_t *g_home_root;
+static ui_obj_t *g_home_clock_label;
+static ui_obj_t *g_home_fan_label;
+static ui_obj_t *g_home_weather_label;
 
 static void UI_PageHome_DrawTile(const ui_viewport_t *viewport,
                                  int16_t x,
@@ -66,4 +73,69 @@ void UI_PageHome_Draw(void)
   UI_PageHome_DrawTile(&state->viewport, tile0.x, tile0.y, tile0.width, tile0.height, "CTRL", "Controls", "actions", &blue);
   UI_PageHome_DrawTile(&state->viewport, tile1.x, tile1.y, tile1.width, tile1.height, "LIST", "Services", "provider", &green);
   UI_PageHome_DrawTile(&state->viewport, tile2.x, tile2.y, tile2.width, tile2.height, "DATA", "Telemetry", "charts", &amber);
+}
+
+ui_obj_t *UI_PageHome_Create(ui_obj_t *parent)
+{
+  g_home_root = UI_Widget_CreatePage(parent);
+  (void)UI_Widget_CreateLabel(g_home_root, "PLAIN UI", 12, 6);
+  (void)UI_Widget_CreateTile(g_home_root, "Travel Clock", "time / weather", 12, 32, 130, 54, UI_WIDGET_VARIANT_ACCENT);
+  (void)UI_Widget_CreateTile(g_home_root, "Fan", "status monitor", 150, 32, 130, 54, UI_WIDGET_VARIANT_SURFACE);
+  (void)UI_Widget_CreateTile(g_home_root, "Menus", "settings", 288, 32, 126, 54, UI_WIDGET_VARIANT_MUTED);
+  g_home_clock_label = UI_Widget_CreateLabel(g_home_root, "--:--", 24, 96);
+  g_home_fan_label = UI_Widget_CreateLabel(g_home_root, "fan --%", 150, 96);
+  g_home_weather_label = UI_Widget_CreateLabel(g_home_root, "clear", 288, 96);
+  UI_WeatherEffect_Init(g_home_root);
+  UI_Widget_SetHidden(g_home_root, 1U);
+  return g_home_root;
+}
+
+void UI_PageHome_Enter(void)
+{
+  UI_Widget_SetHidden(g_home_root, 0U);
+  UI_WeatherEffect_Init(g_home_root);
+  UI_WeatherEffect_SetMode(UI_Model_GetWeatherMode());
+  UI_WeatherEffect_Start();
+}
+
+void UI_PageHome_Exit(void)
+{
+  UI_WeatherEffect_Stop();
+  UI_Widget_SetHidden(g_home_root, 1U);
+}
+
+void UI_PageHome_Update(uint32_t elapsed_ms)
+{
+  char line[24];
+  ui_clock_state_t clock_state;
+  ui_fan_state_t fan_state;
+  const char *weather_text = "clear";
+
+  (void)elapsed_ms;
+  UI_Model_GetClockState(&clock_state);
+  UI_Model_GetFanState(&fan_state);
+
+  (void)snprintf(line, sizeof(line), "%02u:%02u:%02u", clock_state.hour, clock_state.minute, clock_state.second);
+  UI_Widget_SetText(g_home_clock_label, line);
+  (void)snprintf(line, sizeof(line), "fan %u%% %urpm", fan_state.speed_percent, (unsigned int)fan_state.rpm);
+  UI_Widget_SetText(g_home_fan_label, line);
+
+  if (UI_Model_GetWeatherMode() == UI_WEATHER_RAIN)
+  {
+    weather_text = "rain";
+  }
+  else if (UI_Model_GetWeatherMode() == UI_WEATHER_SNOW)
+  {
+    weather_text = "snow";
+  }
+  else if (UI_Model_GetWeatherMode() == UI_WEATHER_CLOUD)
+  {
+    weather_text = "cloud";
+  }
+  UI_Widget_SetText(g_home_weather_label, weather_text);
+}
+
+void UI_PageHome_HandleEvent(const ui_event_t *event)
+{
+  (void)event;
 }

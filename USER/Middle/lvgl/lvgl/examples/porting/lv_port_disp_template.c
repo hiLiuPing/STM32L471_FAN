@@ -4,7 +4,7 @@
  */
 
 /*Copy this file as "lv_port_disp.c" and set this value to "1" to enable content*/
-#if 1
+#if 0
 
 /*********************
  *      INCLUDES
@@ -13,10 +13,10 @@
 #include <stdbool.h>
 #include "lcd.h"
 #include "lcd_init.h"
-#include "st7789.h"
+// #include "st7789.h"
 
-#define MY_DISP_HOR_RES    320
-#define MY_DISP_VER_RES    240
+#define MY_DISP_HOR_RES    428
+#define MY_DISP_VER_RES    142
 /*********************
  *      DEFINES
  *********************/
@@ -144,8 +144,8 @@ void lv_port_disp_init(void)
 static void disp_init(void)
 {
     /*You code here*/
-    ST7789_Init();
-// LCD_Init();
+    // ST7789_Init();
+LCD_Init();
 }
 
 volatile bool disp_flush_enabled = true;

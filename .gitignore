@@ -1,15 +1,55 @@
-# dot files
-/.vscode/launch.json
-/.settings
-/.eide/log
-/.eide.usr.ctx.json
+# ===================== Keil MDK =====================
+# 工程临时配置（每次打开/编译自动变，无版本价值）
+*.uvopt
+*.uvoptx
+# Keil 编译输出目录
+Objects/
+Listings/
+Debug/
+Release/
+RVMDK/
+# Keil 本地缓存
+*.dep
+*.crf
+*.o
+*.d
+*.axf
+*.hex
+*.bin
+*.elf
+*.map
+*.htm
+*.sct.bak
 
-# project out
-/build
-/bin
-/obj
-/out
+# ===================== STM32CubeMX =====================
+# ioc 备份、生成缓存
+*.ioc.backup
+*.ioc.lock
+.mxproject/
+# CubeMX 生成的备份头文件
+Drivers/**/*.bak
+Middlewares/**/*.bak
+Core/**/*.bak
 
-# eide template
+# ===================== EIDE 插件（VSCode Keil） =====================
+# EIDE 用户私有配置（每个人路径不一样，不能提交）
+/.eide/
 *.ept
 *.eide-template
+.eide.usr.ctx.json
+# EIDE 编译输出
+/build/
+/bin/
+/obj/
+/out/
+
+# ===================== VSCode 本地配置（仅本机生效） =====================
+# 全局 .vscode 只屏蔽本机调试文件，工作区配置可保留
+.vscode/launch.json
+.vscode/c_cpp_properties.json
+.vscode/settings.json
+.vscode/extensions.json
+# 其他IDE缓存
+/.settings/
+.project
+.cproject
