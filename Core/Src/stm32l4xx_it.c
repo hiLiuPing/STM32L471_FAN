@@ -51,11 +51,16 @@
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
+void vPortSVCHandler(void);
+void xPortPendSVHandler(void);
+void xPortSysTickHandler(void);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define SVC_Handler __attribute__((naked)) SVC_Handler
+#define PendSV_Handler __attribute__((naked)) PendSV_Handler
 
 /* USER CODE END 0 */
 
@@ -157,6 +162,7 @@ void UsageFault_Handler(void)
 void SVC_Handler(void)
 {
   /* USER CODE BEGIN SVCall_IRQn 0 */
+  __asm volatile ("b vPortSVCHandler");
 
   /* USER CODE END SVCall_IRQn 0 */
   /* USER CODE BEGIN SVCall_IRQn 1 */
@@ -183,6 +189,7 @@ void DebugMon_Handler(void)
 void PendSV_Handler(void)
 {
   /* USER CODE BEGIN PendSV_IRQn 0 */
+  __asm volatile ("b xPortPendSVHandler");
 
   /* USER CODE END PendSV_IRQn 0 */
   /* USER CODE BEGIN PendSV_IRQn 1 */
@@ -196,6 +203,7 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
+  xPortSysTickHandler();
 
   /* USER CODE END SysTick_IRQn 0 */
 

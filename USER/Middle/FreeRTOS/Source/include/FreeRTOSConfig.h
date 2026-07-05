@@ -103,9 +103,7 @@
 #define INCLUDE_xTaskGetHandle                  1
 #define INCLUDE_xTaskResumeFromISR              1
 
-#define vPortSVCHandler                         SVC_Handler
-#define xPortPendSVHandler                      PendSV_Handler
-#define xPortSysTickHandler                     SysTick_Handler
+/* Cortex exception handlers are dispatched from Core/Src/stm32l4xx_it.c. */
 
 
 void My_PreSleep_Function(uint32_t *x);

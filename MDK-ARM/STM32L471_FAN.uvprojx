@@ -1485,6 +1485,11 @@
               <FileType>1</FileType>
               <FilePath>../USER/APP/led_app.c</FilePath>
             </File>
+            <File>
+              <FileName>poetry_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/poetry_app.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "rtc.h"
+#include "task.h"
 
 #define DATA_APP_TIME_BUF_NUM 2U
 
