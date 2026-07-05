@@ -87,7 +87,7 @@ void HAL_DAC_MspInit(DAC_HandleTypeDef* dacHandle)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /* DAC1 interrupt Init */
-    HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 5, 0);
+    HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 15, 0);
     HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
   /* USER CODE BEGIN DAC1_MspInit 1 */
 
@@ -112,14 +112,7 @@ void HAL_DAC_MspDeInit(DAC_HandleTypeDef* dacHandle)
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_4);
 
     /* DAC1 interrupt Deinit */
-  /* USER CODE BEGIN DAC1:TIM6_DAC_IRQn disable */
-    /**
-    * Uncomment the line below to disable the "TIM6_DAC_IRQn" interrupt
-    * Be aware, disabling shared interrupt may affect other IPs
-    */
-    /* HAL_NVIC_DisableIRQ(TIM6_DAC_IRQn); */
-  /* USER CODE END DAC1:TIM6_DAC_IRQn disable */
-
+    HAL_NVIC_DisableIRQ(TIM6_DAC_IRQn);
   /* USER CODE BEGIN DAC1_MspDeInit 1 */
 
   /* USER CODE END DAC1_MspDeInit 1 */

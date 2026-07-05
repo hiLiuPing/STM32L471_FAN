@@ -67,6 +67,8 @@ void Error_Handler(void);
 #define SW_DOWN_GPIO_Port GPIOE
 #define SW_UP_Pin GPIO_PIN_13
 #define SW_UP_GPIO_Port GPIOC
+#define ESP32_EN_Pin GPIO_PIN_2
+#define ESP32_EN_GPIO_Port GPIOC
 #define FAN_EN_Pin GPIO_PIN_3
 #define FAN_EN_GPIO_Port GPIOC
 #define PWR_SW_Pin GPIO_PIN_2

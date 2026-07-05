@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
 #include "dac.h"
 #include "i2c.h"
 #include "spi.h"
@@ -30,8 +29,8 @@
 /* USER CODE BEGIN Includes */
 // #include "log.h"
 // #include "multi_led.h"
-// #include "lcd.h"
-// #include "lcd_init.h"
+#include "lcd.h"
+#include "lcd_init.h"
 // #include "app_sensors.h"
 
 /* USER CODE END Includes */
@@ -59,7 +58,6 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -105,7 +103,6 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   MX_SPI1_Init();
-  MX_TIM6_Init();
   MX_TIM4_Init();
   MX_I2C2_Init();
   MX_I2C1_Init();
@@ -144,24 +141,24 @@ int main(void)
 // __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 1120);
 
 
-// LCD_Init();
+LCD_Init();
 // 1. 设置背景色为黑色，清屏（可选）
-//     LCD_Fill(0, 0, LCD_W, LCD_H, BLACK);
+    LCD_Fill(0, 0, LCD_W, LCD_H, BLACK);
 
-//     // 2. 定义显示参数
-//     uint16_t x = 10;      // 起始 X 坐标
-//     uint16_t y = 10;      // 起始 Y 坐标
-//     uint16_t font_color = WHITE;  // 字体颜色
-//     uint16_t bg_color = BLACK;    // 背景颜色
-//     uint16_t font_size = 16;      // 字体大小（对应 ASCII 字模库）
-//     uint8_t mode = 0;             // 模式（通常 0 为覆盖模式，1 为叠加模式）
+    // 2. 定义显示参数
+    uint16_t x = 10;      // 起始 X 坐标
+    uint16_t y = 10;      // 起始 Y 坐标
+    uint16_t font_color = WHITE;  // 字体颜色
+    uint16_t bg_color = BLACK;    // 背景颜色
+    uint16_t font_size = 16;      // 字体大小（对应 ASCII 字模库）
+    uint8_t mode = 0;             // 模式（通常 0 为覆盖模式，1 为叠加模式）
 
-//     // 3. 显示英文字符串
-//     // 注意：确保 LCD_ShowChar 内部正确支持你传入的 sizey
-//     LCD_ShowString(x, y, "Hello World!", font_color, bg_color, font_size, mode);
+    // 3. 显示英文字符串
+    // 注意：确保 LCD_ShowChar 内部正确支持你传入的 sizey
+    LCD_ShowString(x, y, "Hello World!", font_color, bg_color, font_size, mode);
     
-//     // 4. 显示下一行
-//     LCD_ShowString(x, y + 20, "STM32 Driver", font_color, bg_color, font_size, mode);
+    // 4. 显示下一行
+    LCD_ShowString(x, y + 20, "STM32 Driver", font_color, bg_color, font_size, mode);
 
 
 // HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_SET); // 打开风扇
@@ -176,15 +173,6 @@ int main(void)
 // APP_Sensors_Init();
 
   /* USER CODE END 2 */
-
-  /* Init scheduler */
-  osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
-  MX_FREERTOS_Init();
-
-  /* Start scheduler */
-  osKernelStart();
-
-  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -368,7 +356,7 @@ void SystemClock_Config(void)
 
 /**
   * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM7 interrupt took place, inside
+  * @note   This function is called  when TIM6 interrupt took place, inside
   * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
   * a global variable "uwTick" used as application time base.
   * @param  htim : TIM handle
@@ -391,7 +379,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     // }
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM7)
+  if (htim->Instance == TIM6)
   {
     HAL_IncTick();
   }
