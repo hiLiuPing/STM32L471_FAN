@@ -16,6 +16,7 @@ extern TaskHandle_t HardwareInitTaskHandle;
 extern TaskHandle_t KeyTaskHandle;
 extern TaskHandle_t KeyManllegeTaskHandle;
 extern TaskHandle_t LEDTaskHandle;
+extern TaskHandle_t LvHandlerTaskHandle;
 
 extern QueueHandle_t Key_Power_queue;
 

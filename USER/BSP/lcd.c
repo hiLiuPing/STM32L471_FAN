@@ -19,6 +19,43 @@ void LCD_DrawPoint(uint16_t x, uint16_t y, uint16_t color)
     LCD_WR_DATA(color);
 }
 
+void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const uint16_t *color_p)
+{
+    uint32_t pixel_count;
+    uint32_t byte_count;
+    const uint8_t *data;
+    const uint32_t max_chunk = 0xFFFFU;
+
+    if ((color_p == NULL) || (xe < xs) || (ye < ys))
+    {
+        return;
+    }
+
+    pixel_count = ((uint32_t)xe - xs + 1U) * ((uint32_t)ye - ys + 1U);
+    byte_count = pixel_count * 2U;
+    data = (const uint8_t *)color_p;
+
+    LCD_Address_Set(xs, ys, xe, ye);
+
+    LCD_DC_Set();
+    LCD_CS_Clr();
+
+    while (byte_count > 0U)
+    {
+        uint16_t chunk = (byte_count > max_chunk) ? (uint16_t)max_chunk : (uint16_t)byte_count;
+
+        if (HAL_SPI_Transmit(&hspi1, (uint8_t *)data, chunk, HAL_MAX_DELAY) != HAL_OK)
+        {
+            break;
+        }
+
+        data += chunk;
+        byte_count -= chunk;
+    }
+
+    LCD_CS_Set();
+}
+
 /**
  * @brief       Á½µãÖ®¼ä»­Ïßº¯Êý
  * @param       xs:¾ØÐÎµÄÆðÊ¼ÁÐ×ø±ê

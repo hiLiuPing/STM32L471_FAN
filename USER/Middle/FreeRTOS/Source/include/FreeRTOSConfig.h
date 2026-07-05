@@ -51,7 +51,7 @@
 
 /* Hook function related definitions. */
 #define configUSE_IDLE_HOOK                     0
-#define configUSE_TICK_HOOK                     0
+#define configUSE_TICK_HOOK                     1
 #define configCHECK_FOR_STACK_OVERFLOW          2
 #define configUSE_MALLOC_FAILED_HOOK            1
 #define configUSE_DAEMON_TASK_STARTUP_HOOK      0
@@ -102,6 +102,10 @@
 #define INCLUDE_xTaskAbortDelay                 1
 #define INCLUDE_xTaskGetHandle                  1
 #define INCLUDE_xTaskResumeFromISR              1
+
+#define vPortSVCHandler                         SVC_Handler
+#define xPortPendSVHandler                      PendSV_Handler
+#define xPortSysTickHandler                     SysTick_Handler
 
 
 void My_PreSleep_Function(uint32_t *x);

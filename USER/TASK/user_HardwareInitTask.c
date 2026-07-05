@@ -8,6 +8,8 @@
 #include "rgb_led.h"
 #include "tim.h"
 
+#include "lv_port_disp.h"
+#include "lvgl.h"
 #include "usart.h"
 #include "user_TasksInit.h"
 
@@ -45,14 +47,20 @@ void HardwareInitTask(void *argument)
     log_init(&huart1);
 
     log_printf("start app");
-log_printf("step1: init leds...");
-HardwareInitTask_InitLeds();
-log_printf("step2: key init...");
-Key_Init();
-log_printf("step3: ui task create...");
-// configASSERT(UI_Task_Create() == pdPASS);
-// log_printf("step4: hw ready");
-User_Tasks_SetHardwareReady();
-log_printf("step5: delete self");
-vTaskDelete(NULL);
+    log_printf("step1: init leds...");
+    HardwareInitTask_InitLeds();
+    log_printf("step2: key init...");
+    Key_Init();
+    log_printf("step3: lvgl init...");
+    lv_init();
+    lv_port_disp_init();
+
+    lv_obj_t *label = lv_label_create(lv_scr_act());
+    lv_label_set_text(label, "STM32L471 FAN");
+    lv_obj_center(label);
+
+    log_printf("step4: hw ready");
+    User_Tasks_SetHardwareReady();
+    log_printf("step5: delete self");
+    vTaskDelete(NULL);
 }

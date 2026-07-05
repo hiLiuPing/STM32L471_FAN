@@ -5,6 +5,7 @@
 #include "user_KeyManllegeTask.h"
 #include "user_KeyTask.h"
 #include "user_LEDTask.h"
+#include "user_LVGLTask.h"
 
 #include "key.h"
 
@@ -12,6 +13,7 @@ TaskHandle_t HardwareInitTaskHandle = NULL;
 TaskHandle_t KeyTaskHandle = NULL;
 TaskHandle_t KeyManllegeTaskHandle = NULL;
 TaskHandle_t LEDTaskHandle = NULL;
+TaskHandle_t LvHandlerTaskHandle = NULL;
 
 QueueHandle_t Key_Power_queue = NULL;
 
@@ -82,10 +84,10 @@ void User_Tasks_Init(void)
                                          tskIDLE_PRIORITY + 2U,
                                          &LEDTaskHandle));
 
-    User_Tasks_RequireStatus(xTaskCreate(KeyManllegeTask,
-                                         "KeyMgrTask",
-                                         128U * 2U,
+    User_Tasks_RequireStatus(xTaskCreate(LvHandlerTask,
+                                         "LvHandlerTask",
+                                         1024U,
                                          NULL,
-                                         tskIDLE_PRIORITY + 2U,
-                                         &KeyManllegeTaskHandle));
+                                         tskIDLE_PRIORITY + 1U,
+                                         &LvHandlerTaskHandle));
 }

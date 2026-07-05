@@ -337,7 +337,7 @@
               <MiscControls />
               <Define>USE_HAL_DRIVER,STM32L471xx</Define>
               <Undefine />
-              <IncludePath>../Core/Inc;../Drivers/STM32L4xx_HAL_Driver/Inc;../Drivers/STM32L4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32L4xx/Include;../Drivers/CMSIS/Include;../.cmsis/include;../MDK-ARM/RTE/_STM32L471_FAN;../USER/APP;../USER/BSP;../USER/GUI;../USER/TASK;../USER/Middle/FreeRTOS/Source/include;../USER/Middle/FreeRTOS/Source/portable/GCC/ARM_CM4F;../USER/Middle/Plain_UI;../USER/Middle/Plain_UI/config;../USER/Middle/Plain_UI/core;../USER/Middle/Plain_UI/event;../USER/Middle/Plain_UI/datastore;../USER/Middle/Plain_UI/animation;../USER/Middle/Plain_UI/effects;../USER/Middle/Plain_UI/layer;../USER/Middle/Plain_UI/popup;../USER/Middle/Plain_UI/widget/base;../USER/Middle/Plain_UI/widget/basic;../USER/Middle/Plain_UI/widget/advanced;../USER/Middle/Plain_UI/navigation;../USER/Middle/Plain_UI/hal;../USER/Middle/Plain_UI/hal/backend_lvgl;../USER/Middle/Plain_UI/hal/backend_lvgl/stm32;../USER/Middle/Plain_UI/app;../USER/Middle/Transfer;../USER/Middle/lvgl/lvgl;../USER/Middle/lvgl/lvgl/src;../USER/Middle/lvgl/lvgl/examples/porting</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32L4xx_HAL_Driver/Inc;../Drivers/STM32L4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32L4xx/Include;../Drivers/CMSIS/Include;../.cmsis/include;../MDK-ARM/RTE/_STM32L471_FAN;../USER/APP;../USER/BSP;../USER/GUI;../USER/TASK;../USER/LVGL;../USER/Middle/FreeRTOS/Source/include;../USER/Middle/FreeRTOS/Source/portable/GCC/ARM_CM4F;../USER/Middle/Transfer;../USER/Middle/lvgl/lvgl;../USER/Middle/lvgl/lvgl/src;../USER/Middle/lvgl/lvgl/examples/porting</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1411,11 +1411,6 @@
               <FilePath>../USER/TASK/freertos_hooks.c</FilePath>
             </File>
             <File>
-              <FileName>ui_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/TASK/ui_task.c</FilePath>
-            </File>
-            <File>
               <FileName>user_HardwareInitTask.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/TASK/user_HardwareInitTask.c</FilePath>
@@ -1439,6 +1434,11 @@
               <FileName>user_LEDTask.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/TASK/user_LEDTask.c</FilePath>
+            </File>
+            <File>
+              <FileName>user_LVGLTask.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/TASK/user_LVGLTask.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1598,152 +1598,12 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>USER/Middle/Plain_UI</GroupName>
+          <GroupName>USER/LVGL</GroupName>
           <Files>
             <File>
-              <FileName>ui_animation.c</FileName>
+              <FileName>lv_port_disp.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/animation/ui_animation.c</FilePath>
-            </File>
-            <File>
-              <FileName>page_controls.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/app/page_controls/page_controls.c</FilePath>
-            </File>
-            <File>
-              <FileName>page_data.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/app/page_data/page_data.c</FilePath>
-            </File>
-            <File>
-              <FileName>page_home.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/app/page_home/page_home.c</FilePath>
-            </File>
-            <File>
-              <FileName>page_list.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/app/page_list/page_list.c</FilePath>
-            </File>
-            <File>
-              <FileName>page_settings.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/app/page_settings/page_settings.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_app_state.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/app/ui_app_state.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_product_app.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/app/ui_product_app.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_dirty_region.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/core/ui_dirty_region.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_event_bridge.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/core/ui_event_bridge.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_main.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/core/ui_main.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_tick.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/core/ui_tick.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_update.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/core/ui_update.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_property_binding.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/datastore/ui_property_binding.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_property_store.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/datastore/ui_property_store.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_fx_emitter.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/effects/ui_fx_emitter.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_marquee.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/effects/ui_marquee.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_input_event_queue.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/event/ui_input_event_queue.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_message_bus.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/event/ui_message_bus.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_lv_port_disp.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/hal/backend_lvgl/stm32/ui_lv_port_disp.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_renderer_adapter.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/hal/backend_lvgl/ui_renderer_adapter.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_hal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/hal/ui_hal.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_layer_manager.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/layer/ui_layer_manager.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_focus_engine.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/navigation/ui_focus_engine.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_navigation.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/navigation/ui_navigation.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_page_manager.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/navigation/ui_page_manager.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_page_registry.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/navigation/ui_page_registry.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_modal_manager.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/popup/ui_modal_manager.c</FilePath>
-            </File>
-            <File>
-              <FileName>ui_virtual_list.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/Middle/Plain_UI/widget/advanced/ui_virtual_list.c</FilePath>
+              <FilePath>../USER/LVGL/lv_port_disp.c</FilePath>
             </File>
           </Files>
         </Group>

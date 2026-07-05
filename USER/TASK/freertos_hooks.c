@@ -1,6 +1,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "lvgl.h"
+
 static StaticTask_t g_idle_task_tcb;
 static StackType_t g_idle_task_stack[configMINIMAL_STACK_SIZE];
 
@@ -31,6 +33,11 @@ void vApplicationMallocFailedHook(void)
     for (;;)
     {
     }
+}
+
+void vApplicationTickHook(void)
+{
+    lv_tick_inc(1U);
 }
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)

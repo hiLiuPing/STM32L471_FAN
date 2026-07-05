@@ -1,6 +1,10 @@
 #ifndef _LCD_H_
 #define _LCD_H_
 
+#include <stdint.h>
+
+void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const uint16_t *color_p);
+
 #include "lcd_init.h"
 
 void LCD_DrawPoint(uint16_t x, uint16_t y, uint16_t color);                                                                                // »­µãº¯Êý

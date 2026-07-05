@@ -32,6 +32,7 @@ void LCD_SetCursor(uint16_t x, uint16_t y);                                     
 void LCD_Address_Set(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye);          // �������꺯��
 void LCD_Fill(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, uint16_t color); // ��亯��
 void LCD_Init(void);                                                               // ����LCD��ʼ��
+void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const uint16_t *color_p);
 void  MY_LCD_Fill(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey, uint16_t *color);
 void LCD_WR_Bus(uint8_t dat);
 void LCD_WR_DATA8(uint8_t dat);
