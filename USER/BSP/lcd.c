@@ -6,6 +6,38 @@
 extern SPI_HandleTypeDef hspi1;
 // extern DMA_HandleTypeDef DMA_InitStructure;
 
+static volatile bool s_lcd_dma_busy = false;
+static lcd_dma_done_cb_t s_lcd_dma_done_cb = NULL;
+static void *s_lcd_dma_user_data = NULL;
+
+static void LCD_DMA_Finish(SPI_HandleTypeDef *hspi, bool wait_until_idle)
+{
+    lcd_dma_done_cb_t done_cb;
+    void *user_data;
+
+    if ((hspi == NULL) || (hspi->Instance != SPI1) || !s_lcd_dma_busy)
+    {
+        return;
+    }
+
+    while (wait_until_idle && (__HAL_SPI_GET_FLAG(hspi, SPI_FLAG_BSY) == SET))
+    {
+    }
+
+    LCD_CS_Set();
+
+    done_cb = s_lcd_dma_done_cb;
+    user_data = s_lcd_dma_user_data;
+    s_lcd_dma_done_cb = NULL;
+    s_lcd_dma_user_data = NULL;
+    s_lcd_dma_busy = false;
+
+    if (done_cb != NULL)
+    {
+        done_cb(user_data);
+    }
+}
+
 /**
  * @brief       ÔÚLCDÆÁÄ»ÉÏ»­Ò»¸öµã
  * @param       x:ÏñËØµãÁÐ×ø±ê
@@ -54,6 +86,61 @@ void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const 
     }
 
     LCD_CS_Set();
+}
+
+bool LCD_Color_Render_DMA(uint16_t xs,
+                          uint16_t ys,
+                          uint16_t xe,
+                          uint16_t ye,
+                          const uint16_t *color_p,
+                          lcd_dma_done_cb_t done_cb,
+                          void *user_data)
+{
+    uint32_t pixel_count;
+    uint32_t byte_count;
+
+    if ((color_p == NULL) || (xe < xs) || (ye < ys) || s_lcd_dma_busy)
+    {
+        return false;
+    }
+
+    pixel_count = ((uint32_t)xe - xs + 1U) * ((uint32_t)ye - ys + 1U);
+    byte_count = pixel_count * 2U;
+
+    if ((byte_count == 0U) || (byte_count > 0xFFFFU))
+    {
+        return false;
+    }
+
+    LCD_Address_Set(xs, ys, xe, ye);
+
+    s_lcd_dma_done_cb = done_cb;
+    s_lcd_dma_user_data = user_data;
+    s_lcd_dma_busy = true;
+
+    LCD_DC_Set();
+    LCD_CS_Clr();
+
+    if (HAL_SPI_Transmit_DMA(&hspi1, (uint8_t *)color_p, (uint16_t)byte_count) != HAL_OK)
+    {
+        LCD_CS_Set();
+        s_lcd_dma_done_cb = NULL;
+        s_lcd_dma_user_data = NULL;
+        s_lcd_dma_busy = false;
+        return false;
+    }
+
+    return true;
+}
+
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    LCD_DMA_Finish(hspi, true);
+}
+
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
+{
+    LCD_DMA_Finish(hspi, false);
 }
 
 /**

@@ -3,12 +3,10 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "led_app.h"
 #include "multi_led.h"
-#include "rgb_led.h"
 #include "user_TasksInit.h"
 #include "log.h"
-
-extern RGB_Object_t rgb;
 
 void LEDTask(void *pvParameters)
 {

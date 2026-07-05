@@ -1,10 +1,13 @@
 #ifndef _LCD_INIT_H_
 #define _LCD_INIT_H_
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "main.h"
 
 /* ����Һ���ֱ��� */
-#define USE_HORIZONTAL 3 // ���ú�������������ʾ 0��1Ϊ���� 2��3Ϊ����
+#define USE_HORIZONTAL 2 // ���ú�������������ʾ 0��1Ϊ���� 2��3Ϊ����
 #if USE_HORIZONTAL == 0 || USE_HORIZONTAL == 1
 #define LCD_W 142
 #define LCD_H 428
@@ -32,7 +35,15 @@ void LCD_SetCursor(uint16_t x, uint16_t y);                                     
 void LCD_Address_Set(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye);          // �������꺯��
 void LCD_Fill(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, uint16_t color); // ��亯��
 void LCD_Init(void);                                                               // ����LCD��ʼ��
+typedef void (*lcd_dma_done_cb_t)(void *user_data);
 void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const uint16_t *color_p);
+bool LCD_Color_Render_DMA(uint16_t xs,
+                          uint16_t ys,
+                          uint16_t xe,
+                          uint16_t ye,
+                          const uint16_t *color_p,
+                          lcd_dma_done_cb_t done_cb,
+                          void *user_data);
 void  MY_LCD_Fill(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey, uint16_t *color);
 void LCD_WR_Bus(uint8_t dat);
 void LCD_WR_DATA8(uint8_t dat);

@@ -1,11 +1,19 @@
 #ifndef _LCD_H_
 #define _LCD_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 
-void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const uint16_t *color_p);
-
 #include "lcd_init.h"
+
+void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const uint16_t *color_p);
+bool LCD_Color_Render_DMA(uint16_t xs,
+                          uint16_t ys,
+                          uint16_t xe,
+                          uint16_t ye,
+                          const uint16_t *color_p,
+                          lcd_dma_done_cb_t done_cb,
+                          void *user_data);
 
 void LCD_DrawPoint(uint16_t x, uint16_t y, uint16_t color);                                                                                // »­µãº¯Êý
 void LCD_DrawLine(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, uint16_t color);                                                     // »®Ïßº¯Êý

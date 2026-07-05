@@ -1,4 +1,6 @@
 #include "sht40_reg.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #include "main.h" // 获取 HAL_Delay (如果裸机) 或任务延时函数
 
  uint8_t SHT40_CRC8(uint8_t *data, uint8_t len) {

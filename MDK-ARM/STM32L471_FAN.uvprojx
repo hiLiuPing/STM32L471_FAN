@@ -1401,11 +1401,6 @@
           <GroupName>USER/TASK</GroupName>
           <Files>
             <File>
-              <FileName>app_sensors.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/TASK/app_sensors.c</FilePath>
-            </File>
-            <File>
               <FileName>freertos_hooks.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/TASK/freertos_hooks.c</FilePath>
@@ -1439,6 +1434,56 @@
               <FileName>user_LVGLTask.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/TASK/user_LVGLTask.c</FilePath>
+            </File>
+            <File>
+              <FileName>user_TransmitTask.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/TASK/user_TransmitTask.c</FilePath>
+            </File>
+            <File>
+              <FileName>user_AppDataTask.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/TASK/user_AppDataTask.c</FilePath>
+            </File>
+            <File>
+              <FileName>user_WeatherSyncTask.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/TASK/user_WeatherSyncTask.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>USER/APP</GroupName>
+          <Files>
+            <File>
+              <FileName>sensors_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/sensors_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>eeprom_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/eeprom_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>data_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/data_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>weather_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/weather_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>systemMonitor_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/systemMonitor_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>led_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/led_app.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1604,6 +1649,46 @@
               <FileName>lv_port_disp.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/LVGL/lv_port_disp.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>USER/GUI</GroupName>
+          <Files>
+            <File>
+              <FileName>ui.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/ui.c</FilePath>
+            </File>
+            <File>
+              <FileName>page_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/page_manager.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_StartPage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/screens/ui_StartPage.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_HomePage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/screens/ui_HomePage.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_FanPage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/screens/ui_FanPage.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_WeatherPage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/screens/ui_WeatherPage.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_SettingPage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/screens/ui_SettingPage.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -6,6 +6,7 @@
 
 #include "key.h"
 #include "log.h"
+#include "page_manager.h"
 
 #include "user_TasksInit.h"
 
@@ -21,11 +22,9 @@ static void KeyManager_Dispatch(const key_event_t *key_event)
     switch (key_event->type)
     {
     case KEY_EVT_CLICK:
-
-        break;
-
     case KEY_EVT_LONG:
-
+    case KEY_EVT_REPEAT:
+        ui_page_manager_handle_key_event((void *)key_event);
         break;
 
     default:

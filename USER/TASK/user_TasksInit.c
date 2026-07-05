@@ -6,6 +6,9 @@
 #include "user_KeyTask.h"
 #include "user_LEDTask.h"
 #include "user_LVGLTask.h"
+#include "user_AppDataTask.h"
+#include "user_TransmitTask.h"
+#include "user_WeatherSyncTask.h"
 
 #include "key.h"
 
@@ -14,11 +17,17 @@ TaskHandle_t KeyTaskHandle = NULL;
 TaskHandle_t KeyManllegeTaskHandle = NULL;
 TaskHandle_t LEDTaskHandle = NULL;
 TaskHandle_t LvHandlerTaskHandle = NULL;
+TaskHandle_t TransmitTaskHandle = NULL;
+TaskHandle_t AppDataTaskHandle = NULL;
+TaskHandle_t WeatherSyncTaskHandle = NULL;
 
 QueueHandle_t Key_Power_queue = NULL;
 
 SemaphoreHandle_t xKeyScanTaskWakeSemaphore = NULL;
 SemaphoreHandle_t xLedTaskWakeSemaphore = NULL;
+SemaphoreHandle_t xAppDataTaskWakeSemaphore = NULL;
+SemaphoreHandle_t xTransmitTaskWakeSemaphore = NULL;
+SemaphoreHandle_t xWeatherSyncTaskWakeSemaphore = NULL;
 
 volatile uint8_t g_system_hw_ready = 0U;
 
@@ -57,8 +66,14 @@ void User_Tasks_Init(void)
 
     xKeyScanTaskWakeSemaphore = xSemaphoreCreateBinary();
     xLedTaskWakeSemaphore = xSemaphoreCreateBinary();
+    xAppDataTaskWakeSemaphore = xSemaphoreCreateBinary();
+    xTransmitTaskWakeSemaphore = xSemaphoreCreateBinary();
+    xWeatherSyncTaskWakeSemaphore = xSemaphoreCreateBinary();
     User_Tasks_RequireHandle(xKeyScanTaskWakeSemaphore);
     User_Tasks_RequireHandle(xLedTaskWakeSemaphore);
+    User_Tasks_RequireHandle(xAppDataTaskWakeSemaphore);
+    User_Tasks_RequireHandle(xTransmitTaskWakeSemaphore);
+    User_Tasks_RequireHandle(xWeatherSyncTaskWakeSemaphore);
 
     Key_Power_queue = xQueueCreate(8U, sizeof(key_event_t));
     User_Tasks_RequireHandle(Key_Power_queue);
@@ -77,6 +92,13 @@ void User_Tasks_Init(void)
                                          tskIDLE_PRIORITY + 2U,
                                          &KeyTaskHandle));
 
+    User_Tasks_RequireStatus(xTaskCreate(KeyManllegeTask,
+                                         "KeyMgrTask",
+                                         128U * 2U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 2U,
+                                         &KeyManllegeTaskHandle));
+
     User_Tasks_RequireStatus(xTaskCreate(LEDTask,
                                          "LEDTask",
                                          128U * 2U,
@@ -90,4 +112,25 @@ void User_Tasks_Init(void)
                                          NULL,
                                          tskIDLE_PRIORITY + 1U,
                                          &LvHandlerTaskHandle));
+
+    User_Tasks_RequireStatus(xTaskCreate(TransmitTask,
+                                         "TransmitTask",
+                                         512U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 2U,
+                                         &TransmitTaskHandle));
+
+    User_Tasks_RequireStatus(xTaskCreate(AppDataTask,
+                                         "AppDataTask",
+                                         512U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 2U,
+                                         &AppDataTaskHandle));
+
+    User_Tasks_RequireStatus(xTaskCreate(WeatherSyncTask,
+                                         "WeatherSync",
+                                         256U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 1U,
+                                         &WeatherSyncTaskHandle));
 }

@@ -9,6 +9,7 @@
 
 static void disp_init(void);
 static void disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p);
+static void disp_flush_dma_done(void *user_data);
 
 static lv_disp_draw_buf_t s_disp_draw_buf;
 static lv_color_t s_disp_buf[LCD_W * LV_PORT_DISP_BUF_LINES];
@@ -64,11 +65,24 @@ static void disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_
         return;
     }
 
-    LCD_Color_Render((uint16_t)area->x1,
-                     (uint16_t)area->y1,
-                     (uint16_t)area->x2,
-                     (uint16_t)area->y2,
-                     (const uint16_t *)color_p);
+    if (!LCD_Color_Render_DMA((uint16_t)area->x1,
+                              (uint16_t)area->y1,
+                              (uint16_t)area->x2,
+                              (uint16_t)area->y2,
+                              (const uint16_t *)color_p,
+                              disp_flush_dma_done,
+                              disp_drv))
+    {
+        lv_disp_flush_ready(disp_drv);
+    }
+}
 
-    lv_disp_flush_ready(disp_drv);
+static void disp_flush_dma_done(void *user_data)
+{
+    lv_disp_drv_t *disp_drv = (lv_disp_drv_t *)user_data;
+
+    if (disp_drv != NULL)
+    {
+        lv_disp_flush_ready(disp_drv);
+    }
 }

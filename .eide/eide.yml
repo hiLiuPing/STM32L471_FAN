@@ -78,7 +78,6 @@ virtualFolder:
       folders:
         - name: TASK
           files:
-            - path: USER/TASK/app_sensors.c
             - path: USER/TASK/freertos_hooks.c
             - path: USER/TASK/user_HardwareInitTask.c
             - path: USER/TASK/user_KeyTask.c
@@ -86,6 +85,18 @@ virtualFolder:
             - path: USER/TASK/user_KeyManllegeTask.c
             - path: USER/TASK/user_LEDTask.c
             - path: USER/TASK/user_LVGLTask.c
+            - path: USER/TASK/user_TransmitTask.c
+            - path: USER/TASK/user_AppDataTask.c
+            - path: USER/TASK/user_WeatherSyncTask.c
+          folders: []
+        - name: APP
+          files:
+            - path: USER/APP/sensors_app.c
+            - path: USER/APP/eeprom_app.c
+            - path: USER/APP/data_app.c
+            - path: USER/APP/weather_app.c
+            - path: USER/APP/systemMonitor_app.c
+            - path: USER/APP/led_app.c
           folders: []
         - name: BSP
           files:
@@ -269,6 +280,16 @@ virtualFolder:
         - name: LVGL
           files:
             - path: USER/LVGL/lv_port_disp.c
+          folders: []
+        - name: GUI
+          files:
+            - path: USER/GUI/ui.c
+            - path: USER/GUI/page_manager.c
+            - path: USER/GUI/screens/ui_StartPage.c
+            - path: USER/GUI/screens/ui_HomePage.c
+            - path: USER/GUI/screens/ui_FanPage.c
+            - path: USER/GUI/screens/ui_WeatherPage.c
+            - path: USER/GUI/screens/ui_SettingPage.c
           folders: []
     - name: ::CMSIS
       files: []

@@ -1,44 +1,20 @@
 #include "user_HardwareInitTask.h"
 
-#include "app_sensors.h"
+#include "data_app.h"
 #include "key.h"
+#include "led_app.h"
 #include "log.h"
 #include "main.h"
-#include "multi_led.h"
-#include "rgb_led.h"
-#include "tim.h"
+#include "sensors_app.h"
+#include "systemMonitor_app.h"
 
 #include "lv_port_disp.h"
 #include "lvgl.h"
+#include "ui.h"
+#include "uart_dma.h"
 #include "usart.h"
 #include "user_TasksInit.h"
-
-LED_Object_t led2_blue;
-LED_Object_t led2_green;
-LED_Object_t led2_red;
-LED_Object_t led_blue;
-LED_Object_t led_green;
-LED_Object_t led_red;
-
-RGB_Object_t rgb;
-
-static void HardwareInitTask_InitLeds(void)
-{
-    LED_Driver_Init(&led_blue, LED1_B_GPIO_Port, LED1_B_Pin, &htim4, TIM_CHANNEL_2, 1U);
-    LED_Driver_Init(&led_red, LED1_R_GPIO_Port, LED1_R_Pin, &htim4, TIM_CHANNEL_1, 1U);
-    LED_Driver_Init(&led_green, LED1_G_GPIO_Port, LED1_G_Pin, &htim4, TIM_CHANNEL_3, 1U);
-
-    LED_Driver_Init(&led2_blue, LED2_B_GPIO_Port, LED2_B_Pin, &htim3, TIM_CHANNEL_1, 1U);
-    LED_Driver_Init(&led2_green, LED2_G_GPIO_Port, LED2_G_Pin, &htim3, TIM_CHANNEL_2, 1U);
-    LED_Driver_Init(&led2_red, LED2_R_GPIO_Port, LED2_R_Pin, &htim3, TIM_CHANNEL_3, 1U);
-
-    LED_Driver_SendCmd(&led2_blue, LED_MODE_PWM, LED_Heartbeat_Handler, 2000U, 0U, NULL);
-    LED_Driver_SendCmd(&led2_green, LED_MODE_PWM, LED_Heartbeat_Handler, 2000U, 0U, NULL);
-    LED_Driver_SendCmd(&led2_red, LED_MODE_PWM, LED_Heartbeat_Handler, 2000U, 0U, NULL);
-
-    RGB_Init(&rgb, &led_red, &led_green, &led_blue);
-    RGB_SendCmd(&rgb, RGB_EFFECT_RAINBOW, 5000U, 0U, 0U, 0U);
-}
+#include "weather_app.h"
 
 void HardwareInitTask(void *argument)
 {
@@ -48,19 +24,26 @@ void HardwareInitTask(void *argument)
 
     log_printf("start app");
     log_printf("step1: init leds...");
-    HardwareInitTask_InitLeds();
+    LED_App_Init();
     log_printf("step2: key init...");
     Key_Init();
-    log_printf("step3: lvgl init...");
+    log_printf("step3: app init...");
+    (void)APP_Sensors_Init();
+    DataApp_Init();
+    UserMonitor_Init();
+    uart_dma_init(&uart2_admin,
+                  &huart2,
+                  u2_dma_buf,
+                  sizeof(u2_dma_buf),
+                  u2_rb_buf,
+                  sizeof(u2_rb_buf));
+    log_printf("step4: lvgl init...");
     lv_init();
     lv_port_disp_init();
+    ui_init();
 
-    lv_obj_t *label = lv_label_create(lv_scr_act());
-    lv_label_set_text(label, "STM32L471 FAN");
-    lv_obj_center(label);
-
-    log_printf("step4: hw ready");
+    log_printf("step5: hw ready");
     User_Tasks_SetHardwareReady();
-    log_printf("step5: delete self");
+    log_printf("step6: delete self");
     vTaskDelete(NULL);
 }
