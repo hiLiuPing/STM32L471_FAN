@@ -26,8 +26,9 @@
 #define configEXPECTED_IDLE_TIME_BEFORE_SLEEP   20
 #define configCPU_CLOCK_HZ                      ( SystemCoreClock )
 #define configTICK_RATE_HZ                      ( ( TickType_t ) 1000 )
-#define configMAX_PRIORITIES                    32
-#define configMINIMAL_STACK_SIZE                ( ( uint16_t ) 256 )
+#define configMAX_PRIORITIES                    8
+/* Idle task only; application task stacks are sized explicitly in User_Tasks_Init. */
+#define configMINIMAL_STACK_SIZE                ( ( uint16_t ) 128 )
 #define configMAX_TASK_NAME_LEN                 16
 #define configUSE_16_BIT_TICKS                  0
 #define configIDLE_SHOULD_YIELD                 1
@@ -46,7 +47,8 @@
 /* Memory allocation related definitions. */
 #define configSUPPORT_STATIC_ALLOCATION         1
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
-#define configTOTAL_HEAP_SIZE                   ( ( size_t ) ( 25 * 1024 ) )
+/* Holds dynamic task stacks/TCBs/queues. Check xPortGetFreeHeapSize before lowering. */
+#define configTOTAL_HEAP_SIZE                   ( ( size_t ) ( 23 * 1024 ) )
 #define configAPPLICATION_ALLOCATED_HEAP        0
 
 /* Hook function related definitions. */

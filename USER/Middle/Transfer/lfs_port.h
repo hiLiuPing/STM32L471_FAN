@@ -8,9 +8,9 @@
 #endif
 
 /* ================= Flash分区（关键） ================= */
-#define FLASH_TOTAL_SIZE     (2 * 1024 * 1024)
+#define FLASH_TOTAL_SIZE     (32 * 1024 * 1024)
 
-#define BOOT_SIZE            (64 * 1024)
+#define BOOT_SIZE            (1 * 1024 * 1024)
 
 /* ================= FS起始地址（关键修复点） ================= */
 #define LFS_FLASH_OFFSET     (BOOT_SIZE)

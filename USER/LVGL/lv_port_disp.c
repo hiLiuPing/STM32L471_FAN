@@ -5,7 +5,8 @@
 #include "lcd.h"
 #include "lcd_init.h"
 
-#define LV_PORT_DISP_BUF_LINES 20U
+/* 10 lines keeps DMA refresh smooth while saving 8.4KB RAM versus 20 lines. */
+#define LV_PORT_DISP_BUF_LINES 10U
 
 static void disp_init(void);
 static void disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p);
