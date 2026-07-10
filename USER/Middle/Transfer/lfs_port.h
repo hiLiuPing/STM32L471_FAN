@@ -32,6 +32,7 @@
 #define LFS_BLOCK_COUNT   ((FLASH_TOTAL_SIZE - LFS_FLASH_OFFSET) / LFS_BLOCK_SIZE)
 
 /* ================= 全局 ================= */
+extern spi_flash_t g_spi_flash;
 extern lfs_t g_lfs;
 extern struct lfs_config g_cfg;
 #if FLASH_USE_FREERTOS

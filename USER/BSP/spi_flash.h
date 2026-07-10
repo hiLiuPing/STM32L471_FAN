@@ -6,7 +6,7 @@
 #include "spi.h"
 
 /* ================= OS SWITCH ================= */
-#define FLASH_USE_FREERTOS   0   // 1=RTOS 0=裸机
+#define FLASH_USE_FREERTOS   1   // 1=RTOS 0=裸机
 
 #if FLASH_USE_FREERTOS
 #include "FreeRTOS.h"

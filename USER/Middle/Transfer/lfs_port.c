@@ -3,6 +3,7 @@
 #include <string.h>
 
 /* ================= 全局 ================= */
+spi_flash_t g_spi_flash = {0};
 lfs_t g_lfs;
 struct lfs_config g_cfg;
 #if FLASH_USE_FREERTOS
@@ -155,15 +156,25 @@ int lfs_port_init(spi_flash_t *flash)
     g_cfg.prog_buffer = prog_buf;
     g_cfg.lookahead_buffer = lookahead_buf;
 //   lfs_format(&g_lfs, &g_cfg);
-    log_printf("[LFS] mount start\r\n");
+    log_printf("[LFS] mount start");
     int ret = lfs_mount(&g_lfs, &g_cfg);
+    log_printf("[LFS] mount ret=%d", ret);
 
     if (ret != 0)
     {
-        log_printf("[LFS] format...\r\n");
-        lfs_format(&g_lfs, &g_cfg);
+        /* 诊断：读 LFS 区域前 8 字节 */
+        uint8_t diag[8];
+        spi_flash_read(flash, LFS_FLASH_OFFSET, diag, sizeof(diag));
+        log_printf("[LFS] diag@1M=%02x%02x%02x%02x%02x%02x%02x%02x",
+                   diag[0],diag[1],diag[2],diag[3],
+                   diag[4],diag[5],diag[6],diag[7]);
+
+        log_printf("[LFS] format...");
+        ret = lfs_format(&g_lfs, &g_cfg);
+        log_printf("[LFS] format ret=%d", ret);
 
         ret = lfs_mount(&g_lfs, &g_cfg);
+        log_printf("[LFS] remount ret=%d", ret);
     }
 
     if (ret == 0)

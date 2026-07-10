@@ -79,14 +79,14 @@ void AppDataTask(void *argument)
             Update_INA226(&g_sensors_ina226);
         }
 
-        if ((TickType_t)(now - last_log_tick) >= pdMS_TO_TICKS(5000U))
-        {
-            last_log_tick += pdMS_TO_TICKS(5000U);
-            log_printf("[Sensor] t=%ld h=%ld soc=%lu",
-                       (long)(g_sensors_environment.temp * 10.0f),
-                       (long)(g_sensors_environment.hum * 10.0f),
-                       (unsigned long)(g_sensors_battery.soc + 0.5f));
-        }
+        // if ((TickType_t)(now - last_log_tick) >= pdMS_TO_TICKS(5000U))
+        // {
+        //     last_log_tick += pdMS_TO_TICKS(5000U);
+        //     log_printf("[Sensor] t=%ld h=%ld soc=%lu",
+        //                (long)(g_sensors_environment.temp * 10.0f),
+        //                (long)(g_sensors_environment.hum * 10.0f),
+        //                (unsigned long)(g_sensors_battery.soc + 0.5f));
+        // }
 
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(30U));
     }

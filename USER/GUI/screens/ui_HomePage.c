@@ -1,10 +1,14 @@
 #include "screens/ui_HomePage.h"
 
 #include <stdio.h>
-
+#include "log.h"
 #include "data_app.h"
 #include "sensors_app.h"
 #include "ui.h"
+
+#include "poetry_app.h"
+#include "heiti_lvgl_font.h"
+#include <stdlib.h>
 
 #define HOME_PAGE_ROW_COUNT 13U
 #define HOME_PAGE_COL_COUNT 2U
@@ -14,11 +18,27 @@
 #define HOME_PAGE_COL_STEP  114
 #define HOME_PAGE_CELL_W    106
 
+/* Poem section */
+#define HOME_PAGE_POEM_LINE_MAX   8U
+#define HOME_PAGE_POEM_INTERVAL   10U
+#define HOME_PAGE_POEM_Y0         4
+#define HOME_PAGE_POEM_X_RIGHT    10U
+#define HOME_PAGE_POEM_LINE_H     18U
+#define HOME_PAGE_POEM_W          400U
+
 lv_obj_t *ui_HomePage = NULL;
 
 static lv_obj_t *s_title_label = NULL;
 static lv_obj_t *s_rows[HOME_PAGE_ROW_COUNT] = {0};
 static lv_timer_t *s_refresh_timer = NULL;
+
+/* Poem state */
+static HeitiFont_Context_t s_heiti_ctx;
+static const lv_font_t *s_heiti_lvgl = NULL;
+static lv_obj_t *s_poem_headline = NULL;
+static lv_obj_t *s_poem_lines[HOME_PAGE_POEM_LINE_MAX];
+static uint8_t s_poem_buf[POETRY_APP_MAX_TEXT_SIZE];
+static uint32_t s_poem_tick = 0;
 
 static const char *bool_text(bool value)
 {
@@ -190,6 +210,40 @@ static void ui_HomePage_refresh(void)
     (void)snprintf(line, sizeof(line), "Motion\nTilt:%s", tilt_text(current_raw_direction));
     set_row(12U, line);
 
+    /* --- Poem update (every ~60 s) --- */
+    // s_poem_tick++;
+    // if (s_poem_tick >= HOME_PAGE_POEM_INTERVAL && s_heiti_lvgl != NULL)
+    // {
+    //     s_poem_tick = 0;
+    //     PoetryApp_Poem_t poem;
+    //     int ret = PoetryApp_OpenCollection(POETRY_COLL_TANG_300);
+    //     log_printf("[D] open=%d", ret);
+
+    //     if (ret == POETRY_APP_OK)
+    //     {
+    //         ret = PoetryApp_GetRandomPoem(POETRY_COLL_TANG_300,
+    //                                        s_poem_buf,
+    //                                        sizeof(s_poem_buf),
+    //                                        &poem);
+    //         log_printf("[D] poem=%d lines=%u", ret, (unsigned)poem.line_count);
+    //         if (ret == POETRY_APP_OK)
+    //         {
+    //             for (uint8_t i = 0U; i < HOME_PAGE_POEM_LINE_MAX; i++)
+    //             {
+    //                 if (i < poem.line_count)
+    //                 {
+    //                     lv_label_set_text(s_poem_lines[i], poem.lines[i]);
+    //                     lv_obj_clear_flag(s_poem_lines[i], LV_OBJ_FLAG_HIDDEN);
+    //                 }
+    //                 else
+    //                 {
+    //                     lv_obj_add_flag(s_poem_lines[i], LV_OBJ_FLAG_HIDDEN);
+    //                 }
+    //             }
+    //         }
+    //         PoetryApp_CloseCollection(POETRY_COLL_TANG_300);
+    //     }
+    // }
 }
 
 static void ui_HomePage_timer_cb(lv_timer_t *timer)
@@ -223,6 +277,47 @@ void ui_HomePage_screen_init(void)
         s_rows[i] = create_row(i);
     }
 
+    /* --- Poem section --- */
+    if (HeitiFont_Open(&s_heiti_ctx, HEITI_FONT_16) == HEITI_FONT_OK)
+    {
+        s_heiti_lvgl = HeitiLvgl_Register(&s_heiti_ctx);
+        log_printf("[D] font lvgl=%p", (void*)s_heiti_lvgl);
+    }
+    else
+    {
+        log_printf("[D] font open FAIL");
+    }
+
+    srand(lv_tick_get());
+
+    s_poem_headline = lv_label_create(ui_HomePage);
+    lv_label_set_text(s_poem_headline, "\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80 POEM \xe2\x94\x80\xe2\x94\x80\xe2\x94\x80");
+    lv_obj_set_style_text_color(s_poem_headline,
+                                 lv_color_hex(0x9CA3AF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(s_poem_headline,
+                                 &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(s_poem_headline, LV_ALIGN_TOP_LEFT, 10, HOME_PAGE_POEM_Y0);
+
+    for (uint8_t i = 0U; i < HOME_PAGE_POEM_LINE_MAX; i++)
+    {
+        s_poem_lines[i] = lv_label_create(ui_HomePage);
+        lv_label_set_text(s_poem_lines[i], "");
+        lv_obj_set_width(s_poem_lines[i], HOME_PAGE_POEM_W);
+        lv_label_set_long_mode(s_poem_lines[i], LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_color(s_poem_lines[i],
+                                     lv_color_hex(0x374151), LV_PART_MAIN | LV_STATE_DEFAULT);
+        if (s_heiti_lvgl != NULL)
+        {
+            lv_obj_set_style_text_font(s_poem_lines[i],
+                                        s_heiti_lvgl, LV_PART_MAIN | LV_STATE_DEFAULT);
+        }
+        lv_obj_set_style_text_align(s_poem_lines[i],
+                                     LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_align(s_poem_lines[i], LV_ALIGN_TOP_RIGHT,
+                     -(int16_t)HOME_PAGE_POEM_X_RIGHT,
+                     HOME_PAGE_POEM_Y0 + 24 + i * HOME_PAGE_POEM_LINE_H);
+    }
+
     ui_HomePage_refresh();
     s_refresh_timer = lv_timer_create(ui_HomePage_timer_cb, 1000U, NULL);
 }
@@ -240,6 +335,13 @@ void ui_HomePage_screen_destroy(void)
     {
         s_rows[i] = NULL;
     }
+    s_poem_headline = NULL;
+    for (uint8_t i = 0U; i < HOME_PAGE_POEM_LINE_MAX; i++)
+    {
+        s_poem_lines[i] = NULL;
+    }
+    s_heiti_lvgl = NULL;
+    HeitiFont_Close(&s_heiti_ctx);
     ui_HomePage = NULL;
 }
 

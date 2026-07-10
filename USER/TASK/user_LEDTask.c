@@ -25,13 +25,13 @@ void LEDTask(void *pvParameters)
         RGB_Update(&rgb, 10U);
 
         // 计数累加，满100次=100*10ms=1s打印日志
-        logTickCnt++;
-        if (logTickCnt >= LOG_CNT_MAX)
-        {
-            logTickCnt = 0;
-            // 你的打印日志代码
-            log_printf("LED Task running, RGB status print log every 1s\r\n");
-        }
+        // logTickCnt++;
+        // if (logTickCnt >= LOG_CNT_MAX)
+        // {
+        //     logTickCnt = 0;
+        //     // 你的打印日志代码
+        //     log_printf("LED Task running, RGB status print log every 1s\r\n");
+        // }
 
         vTaskDelay(pdMS_TO_TICKS(LOOP_DELAY_MS));
     }

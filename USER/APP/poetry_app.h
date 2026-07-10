@@ -22,7 +22,8 @@ typedef enum
     POETRY_APP_ERR_FORMAT = -2,
     POETRY_APP_ERR_RANGE = -3,
     POETRY_APP_ERR_BUF_SMALL = -4,
-    POETRY_APP_ERR_CRC = -5
+    POETRY_APP_ERR_CRC = -5,
+    POETRY_APP_ERR_IO = -6
 } PoetryApp_Result_t;
 
 typedef struct
@@ -50,6 +51,34 @@ int PoetryApp_CheckIndex(const PoetryApp_Header_t *header, uint32_t index);
 int PoetryApp_CheckTextBuffer(const PoetryApp_Entry_t *entry, uint32_t buf_size);
 uint32_t PoetryApp_CalcCrc32(const uint8_t *data, uint32_t len);
 int PoetryApp_CheckDataCrc(const PoetryApp_Header_t *header, const uint8_t *data);
+
+/* ========== Collection-level API ========== */
+
+typedef enum
+{
+    POETRY_COLL_SONG_300  = 0,
+    POETRY_COLL_TANG_300  = 1,
+    POETRY_COLL_SONG_3000 = 2,
+    POETRY_COLL_COUNT     = 3
+} PoetryApp_Collection_t;
+
+#define POETRY_APP_PATH_SONG_300   "song_300.idx"
+#define POETRY_APP_PATH_TANG_300   "tang_300.idx"
+#define POETRY_APP_PATH_SONG_3000  "song_3000.idx"
+
+#define POETRY_APP_MAX_POEM_LINES  24U
+
+typedef struct
+{
+    const char *lines[POETRY_APP_MAX_POEM_LINES];
+    uint8_t line_count;
+} PoetryApp_Poem_t;
+
+int PoetryApp_OpenCollection(PoetryApp_Collection_t coll);
+void PoetryApp_CloseCollection(PoetryApp_Collection_t coll);
+int PoetryApp_GetRandomPoem(PoetryApp_Collection_t coll,
+                            uint8_t *text_buf, uint32_t buf_size,
+                            PoetryApp_Poem_t *out);
 
 #ifdef __cplusplus
 }
