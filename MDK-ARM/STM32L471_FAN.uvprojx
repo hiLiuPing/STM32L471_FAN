@@ -1516,6 +1516,11 @@
               <FilePath>../USER/APP/weather_app.c</FilePath>
             </File>
             <File>
+              <FileName>qoi_scene_res.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/qoi_scene_res.c</FilePath>
+            </File>
+            <File>
               <FileName>systemMonitor_app.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/systemMonitor_app.c</FilePath>

@@ -1,15 +1,10 @@
 #include "ui_HomePage.h"
 
 #include "core/egui_timer.h"
-#include "data_app.h"
 #include "egui_port_stm32l471_fan.h"
 #include "page_manager.h"
+#include "qoi_scene_res.h"
 #include "ui_common.h"
-#include "ui_heiti_font.h"
-
-#define UI_HOME_CN_PROBE_TEXT \
-    "\xE4\xB8\xAD\xE6\x96\x87\xE6\xB5\x8B\xE8\xAF\x95" \
-    "\xEF\xBC\x9A\xE8\xAF\x97\xE8\xAF\x8D\xE5\xBC\xB9\xE7\xAA\x97"
 
 typedef struct
 {
@@ -23,6 +18,7 @@ static egui_view_api_t s_home_api;
 egui_view_t *ui_HomePage = NULL;
 
 static void ui_HomePage_on_draw(egui_view_t *self);
+static void ui_HomePage_draw_scene(egui_canvas_t *canvas);
 static void ui_HomePage_timer_cb(egui_timer_t *timer);
 
 void ui_HomePage_screen_init(void)
@@ -37,7 +33,7 @@ void ui_HomePage_screen_init(void)
     egui_view_set_position(view, 0, 0);
     egui_view_set_size(view, UI_SCREEN_W, UI_SCREEN_H);
     egui_view_set_visible(view, 1);
-    egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 1000U);
+    egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 250U);
 }
 
 void ui_HomePage_screen_destroy(void)
@@ -59,37 +55,44 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer)
     }
 }
 
+static void ui_HomePage_draw_scene(egui_canvas_t *canvas)
+{
+#if EGUI_CONFIG_FUNCTION_IMAGE_CODEC_QOI
+    const egui_image_qoi_t *bikes[] = {
+        &qoi_scene_bike1,
+        &qoi_scene_bike2,
+        &qoi_scene_bike3,
+        &qoi_scene_bike4,
+    };
+    uint32_t tick = egui_timer_get_current_time();
+    uint8_t bike_index = (uint8_t)((tick / 250U) % (sizeof(bikes) / sizeof(bikes[0])));
+
+    egui_image_draw_image(&qoi_scene_cloud3.base, canvas, -28, 14);
+    egui_image_draw_image(&qoi_scene_cloud4.base, canvas, 78, 4);
+    egui_image_draw_image(&qoi_scene_cloud5.base, canvas, 194, 18);
+    egui_image_draw_image(&qoi_scene_cloud1.base, canvas, 292, 8);
+    egui_image_draw_image(&qoi_scene_cloud2.base, canvas, 10, 0);
+
+    egui_image_draw_image(&qoi_scene_grass0.base, canvas, 0, 117);
+    egui_image_draw_image(&qoi_scene_grass0.base, canvas, 196, 117);
+    egui_image_draw_image(&qoi_scene_grass.base, canvas, 30, 103);
+    egui_image_draw_image(&qoi_scene_grassF0.base, canvas, 82, 105);
+    egui_image_draw_image(&qoi_scene_grassF1.base, canvas, 126, 103);
+    egui_image_draw_image(&qoi_scene_grassF2.base, canvas, 246, 98);
+    egui_image_draw_image(&qoi_scene_grassF3.base, canvas, 304, 105);
+    egui_image_draw_image(&qoi_scene_grassF4.base, canvas, 354, 101);
+    egui_image_draw_image(&qoi_scene_grassF5.base, canvas, 390, 102);
+
+    egui_image_draw_image(&bikes[bike_index]->base, canvas, 178, 70);
+#else
+    EGUI_UNUSED(canvas);
+#endif
+}
+
 static void ui_HomePage_on_draw(egui_view_t *self)
 {
-    char time_text[16];
     egui_canvas_t *canvas = egui_view_get_canvas(self);
 
-    Time_Format(time_text);
-
-    ui_draw_header(canvas, "Home", "", 0x22C55E);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_48_4), time_text, 228, 12, 180, 54,
-                 EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER, 0xF8FAFC);
-
-    ui_draw_panel(canvas, 18, 52, 118, 54, 0x12321F, 0x22C55E);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_18_4), "Fan", 30, 60, 90, 22, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xDCFCE7);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "Power / mode", 30, 84, 90, 14, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0x86EFAC);
-
-    ui_draw_panel(canvas, 154, 52, 118, 54, 0x1E293B, 0x38BDF8);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_18_4), "Weather", 166, 60, 90, 22, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xE0F2FE);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "Now / air", 166, 84, 90, 14, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xBAE6FD);
-
-    ui_draw_panel(canvas, 290, 52, 118, 54, 0x312E11, 0xEAB308);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_18_4), "Setting", 302, 60, 90, 22, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xFEF9C3);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "System info", 302, 84, 90, 14, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xFDE68A);
-
-    if (ui_heiti_font_16_is_ready())
-    {
-        ui_draw_text(canvas, ui_heiti_font_get_16(), UI_HOME_CN_PROBE_TEXT, 18, 116, 260, 20,
-                     EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xE2E8F0);
-    }
-    else
-    {
-        ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "CN font missing: " UI_HEITI_FONT_16_PATH, 18, 118, 260, 18,
-                     EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xFCA5A5);
-    }
+    ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, 0x87CEEB);
+    ui_HomePage_draw_scene(canvas);
 }

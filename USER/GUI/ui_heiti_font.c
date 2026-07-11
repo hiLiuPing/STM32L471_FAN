@@ -13,6 +13,8 @@ typedef struct
 {
     egui_font_t base;
     HeitiFont_Context_t ctx;
+    const char *path;
+    uint8_t default_line_h;
     bool open_tried;
     bool ready;
     const egui_font_t *fallback;
@@ -38,10 +40,49 @@ static const egui_font_api_t s_ui_heiti_font_api = {
     .get_str_size = ui_heiti_font_get_str_size,
 };
 
-static ui_heiti_font_t s_heiti_16 = {
-    .base = { .res = NULL, .api = &s_ui_heiti_font_api },
-    .fallback = EGUI_FONT_OF(&egui_res_font_montserrat_12_4),
+static ui_heiti_font_t s_heiti_fonts[] = {
+    {
+        .base = { .res = NULL, .api = &s_ui_heiti_font_api },
+        .path = UI_HEITI_FONT_12_PATH,
+        .default_line_h = 12U,
+        .fallback = EGUI_FONT_OF(&egui_res_font_montserrat_12_4),
+    },
+    {
+        .base = { .res = NULL, .api = &s_ui_heiti_font_api },
+        .path = UI_HEITI_FONT_16_PATH,
+        .default_line_h = 16U,
+        .fallback = EGUI_FONT_OF(&egui_res_font_montserrat_12_4),
+    },
+    {
+        .base = { .res = NULL, .api = &s_ui_heiti_font_api },
+        .path = UI_HEITI_FONT_18_PATH,
+        .default_line_h = 18U,
+        .fallback = EGUI_FONT_OF(&egui_res_font_montserrat_16_4),
+    },
+    {
+        .base = { .res = NULL, .api = &s_ui_heiti_font_api },
+        .path = UI_HEITI_FONT_20_PATH,
+        .default_line_h = 20U,
+        .fallback = EGUI_FONT_OF(&egui_res_font_montserrat_16_4),
+    },
 };
+
+static ui_heiti_font_t *ui_heiti_font_find(uint8_t size)
+{
+    switch (size)
+    {
+    case 12U:
+        return &s_heiti_fonts[0];
+    case 16U:
+        return &s_heiti_fonts[1];
+    case 18U:
+        return &s_heiti_fonts[2];
+    case 20U:
+        return &s_heiti_fonts[3];
+    default:
+        return NULL;
+    }
+}
 
 static int ui_heiti_utf8_decode(const char *s, uint32_t *out_cp)
 {
@@ -156,13 +197,13 @@ static bool ui_heiti_font_ensure_open(ui_heiti_font_t *font)
     }
 
     font->open_tried = true;
-    if (HeitiFont_Open(&font->ctx, UI_HEITI_FONT_16_PATH) == HEITI_FONT_OK)
+    if (HeitiFont_Open(&font->ctx, font->path) == HEITI_FONT_OK)
     {
         font->ready = true;
         return true;
     }
 
-    log_printf("[UI_FONT] open %s FAIL", UI_HEITI_FONT_16_PATH);
+    log_printf("[UI_FONT] open %s FAIL", font->path);
     return false;
 }
 
@@ -356,7 +397,7 @@ static int ui_heiti_font_get_str_size(const egui_font_t *self,
     const char *s = (const char *)string;
     egui_dim_t line_w = 0;
     egui_dim_t max_w = 0;
-    egui_dim_t line_h = 16;
+    egui_dim_t line_h = (font != NULL) ? font->default_line_h : 16;
     egui_dim_t total_h;
 
     if ((font != NULL) && ui_heiti_font_ensure_open(font))
@@ -450,13 +491,69 @@ static int ui_heiti_font_get_str_size(const egui_font_t *self,
     return 0;
 }
 
+const egui_font_t *ui_heiti_font_get(uint8_t size)
+{
+    ui_heiti_font_t *font = ui_heiti_font_find(size);
+
+    if (font == NULL)
+    {
+        font = ui_heiti_font_find(16U);
+    }
+
+    (void)ui_heiti_font_ensure_open(font);
+    return &font->base;
+}
+
+bool ui_heiti_font_is_ready(uint8_t size)
+{
+    ui_heiti_font_t *font = ui_heiti_font_find(size);
+
+    return (font != NULL) ? ui_heiti_font_ensure_open(font) : false;
+}
+
+const char *ui_heiti_font_get_path(uint8_t size)
+{
+    ui_heiti_font_t *font = ui_heiti_font_find(size);
+
+    return (font != NULL) ? font->path : UI_HEITI_FONT_16_PATH;
+}
+
+const egui_font_t *ui_heiti_font_get_12(void)
+{
+    return ui_heiti_font_get(12U);
+}
+
 const egui_font_t *ui_heiti_font_get_16(void)
 {
-    (void)ui_heiti_font_ensure_open(&s_heiti_16);
-    return &s_heiti_16.base;
+    return ui_heiti_font_get(16U);
+}
+
+const egui_font_t *ui_heiti_font_get_18(void)
+{
+    return ui_heiti_font_get(18U);
+}
+
+const egui_font_t *ui_heiti_font_get_20(void)
+{
+    return ui_heiti_font_get(20U);
+}
+
+bool ui_heiti_font_12_is_ready(void)
+{
+    return ui_heiti_font_is_ready(12U);
 }
 
 bool ui_heiti_font_16_is_ready(void)
 {
-    return ui_heiti_font_ensure_open(&s_heiti_16);
+    return ui_heiti_font_is_ready(16U);
+}
+
+bool ui_heiti_font_18_is_ready(void)
+{
+    return ui_heiti_font_is_ready(18U);
+}
+
+bool ui_heiti_font_20_is_ready(void)
+{
+    return ui_heiti_font_is_ready(20U);
 }

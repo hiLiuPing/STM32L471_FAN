@@ -8,11 +8,11 @@ extern "C" {
 #include <stdint.h>
 
 #ifndef UI_POETRY_POPUP_DEFAULT_INTERVAL_S
-#define UI_POETRY_POPUP_DEFAULT_INTERVAL_S 5U
+#define UI_POETRY_POPUP_DEFAULT_INTERVAL_S 50U
 #endif
 
 #ifndef UI_POETRY_POPUP_DEFAULT_DURATION_S
-#define UI_POETRY_POPUP_DEFAULT_DURATION_S 14U
+#define UI_POETRY_POPUP_DEFAULT_DURATION_S 15U
 #endif
 
 void ui_poetry_popup_init(void);
