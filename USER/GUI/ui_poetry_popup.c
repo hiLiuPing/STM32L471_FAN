@@ -13,6 +13,7 @@
 #include "poetry_app.h"
 #include "ui_common.h"
 #include "ui_heiti_font.h"
+#include "widget/egui_view.h"
 
 #define UI_POETRY_POPUP_TIMER_MS  200U
 #define UI_POETRY_POPUP_MAX_LINES  4U
@@ -225,8 +226,11 @@ static void ui_poetry_popup_show(void)
 
     s_popup.visible = 1U;
     s_popup.shown_at_ms = egui_timer_get_current_time();
+    egui_view_remove_from_user_root(EGUI_VIEW_OF(&s_popup.base));
+    egui_core_add_user_root_view(EGUI_VIEW_OF(&s_popup.base));
     egui_view_set_visible(EGUI_VIEW_OF(&s_popup.base), 1);
     egui_view_invalidate_full(EGUI_VIEW_OF(&s_popup.base));
+    log_printf("[UI_POETRY] show");
     egui_core_force_refresh(egui_port_get_core());
 }
 
@@ -237,6 +241,7 @@ static void ui_poetry_popup_hide(void)
     s_popup.shown_at_ms = 0U;
     egui_view_set_visible(EGUI_VIEW_OF(&s_popup.base), 0);
     egui_view_invalidate_full(EGUI_VIEW_OF(&s_popup.base));
+    log_printf("[UI_POETRY] hide");
     egui_core_force_refresh(egui_port_get_core());
 }
 
