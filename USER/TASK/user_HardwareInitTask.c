@@ -1,7 +1,6 @@
 #include "user_HardwareInitTask.h"
 
 #include "data_app.h"
-#include "heiti_font_drv.h"
 #include "key.h"
 #include "led_app.h"
 #include "lfs_port.h"
@@ -59,7 +58,6 @@ void HardwareInitTask(void *argument)
     else
     {
         log_printf("littlefs mount OK");
-        HeitiFont_Init();
     }
     log_printf("step4: lvgl init...");
     lv_init();

@@ -1525,6 +1525,11 @@
               <FileType>1</FileType>
               <FilePath>../USER/APP/poetry_app.c</FilePath>
             </File>
+            <File>
+              <FileName>heiti_font_drv.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/heiti_font_drv.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1704,6 +1709,11 @@
               <FileName>page_manager.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/GUI/page_manager.c</FilePath>
+            </File>
+            <File>
+              <FileName>heiti_lvgl_font.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/heiti_lvgl_font.c</FilePath>
             </File>
             <File>
               <FileName>ui_StartPage.c</FileName>

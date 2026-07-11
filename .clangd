@@ -47,7 +47,10 @@ CompileFlags:
     - -D"__OPTIMISE_SPACE=1"
     - -D"__OPT_SMALL_ASSERT=1"
     - -D"__OPTIMISE_LEVEL=2"
+    - -isystemC:\Keil_v5\ARM\ARMCLANG/include
+    - -isystemC:\Keil_v5\ARM\ARMCLANG/include/libcxx
   Remove: []
   CompilationDatabase: ./build/STM32L471_FAN
+  Compiler: C:\Keil_v5\ARM\ARMCLANG\bin\armclang.exe
 Diagnostics:
   Suppress: "*"
