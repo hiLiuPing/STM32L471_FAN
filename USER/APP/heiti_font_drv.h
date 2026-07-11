@@ -12,6 +12,7 @@ extern "C" {
 
 #define HEITI_FONT_MAX_CMAP_ENTRY 128U
 #define HEITI_FONT_GLYPH_RAW_MAX  512U
+#define HEITI_FONT_LOOKUP_CACHE_SIZE 16U
 
 typedef enum
 {
@@ -66,6 +67,19 @@ typedef struct HeitiFont_Context
 
     uint16_t cmap_count;
     HeitiFont_CmapEntry_t cmap[HEITI_FONT_MAX_CMAP_ENTRY];
+    uint32_t lookup_unicode_cache[HEITI_FONT_LOOKUP_CACHE_SIZE];
+    uint32_t lookup_glyph_cache[HEITI_FONT_LOOKUP_CACHE_SIZE];
+    uint8_t lookup_cache_next;
+
+    bool last_lookup_valid;
+    uint32_t last_lookup_unicode;
+    uint32_t last_lookup_glyph;
+    bool last_cmap_valid;
+    uint16_t last_cmap_index;
+    bool span_cache_valid;
+    uint32_t span_cache_glyph;
+    uint32_t span_cache_offset;
+    uint32_t span_cache_size;
 
     struct lfs_file_config file_cfg;
     uint8_t file_buf[1024];
@@ -77,6 +91,10 @@ void HeitiFont_Close(HeitiFont_Context_t *ctx);
 HeitiFont_Result_t HeitiFont_Lookup(HeitiFont_Context_t *ctx,
                                     uint32_t unicode_cp,
                                     uint32_t *out_glyph_index);
+
+HeitiFont_Result_t HeitiFont_GetGlyphDsc(HeitiFont_Context_t *ctx,
+                                         uint32_t glyph_index,
+                                         HeitiFont_GlyphDsc_t *dsc);
 
 HeitiFont_Result_t HeitiFont_GetGlyph(HeitiFont_Context_t *ctx,
                                       uint32_t glyph_index,

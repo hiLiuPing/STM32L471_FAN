@@ -77,6 +77,86 @@ static int read_section_header(HeitiFont_Context_t *ctx,
     return 0;
 }
 
+static bool lookup_cache_get(HeitiFont_Context_t *ctx,
+                             uint32_t unicode_cp,
+                             uint32_t *out_glyph_index)
+{
+    if (ctx->last_lookup_valid && (ctx->last_lookup_unicode == unicode_cp))
+    {
+        *out_glyph_index = ctx->last_lookup_glyph;
+        return true;
+    }
+
+    for (uint8_t i = 0U; i < HEITI_FONT_LOOKUP_CACHE_SIZE; i++)
+    {
+        if (ctx->lookup_unicode_cache[i] == unicode_cp)
+        {
+            *out_glyph_index = ctx->lookup_glyph_cache[i];
+            ctx->last_lookup_unicode = unicode_cp;
+            ctx->last_lookup_glyph = *out_glyph_index;
+            ctx->last_lookup_valid = true;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void lookup_cache_put(HeitiFont_Context_t *ctx,
+                             uint32_t unicode_cp,
+                             uint32_t glyph_index)
+{
+    uint8_t slot;
+
+    ctx->last_lookup_unicode = unicode_cp;
+    ctx->last_lookup_glyph = glyph_index;
+    ctx->last_lookup_valid = true;
+
+    for (uint8_t i = 0U; i < HEITI_FONT_LOOKUP_CACHE_SIZE; i++)
+    {
+        if (ctx->lookup_unicode_cache[i] == unicode_cp)
+        {
+            ctx->lookup_glyph_cache[i] = glyph_index;
+            return;
+        }
+    }
+
+    slot = ctx->lookup_cache_next;
+    ctx->lookup_unicode_cache[slot] = unicode_cp;
+    ctx->lookup_glyph_cache[slot] = glyph_index;
+    ctx->lookup_cache_next = (uint8_t)((slot + 1U) % HEITI_FONT_LOOKUP_CACHE_SIZE);
+}
+
+static bool cmap_entry_contains(const HeitiFont_CmapEntry_t *entry, uint32_t unicode_cp)
+{
+    return (unicode_cp >= entry->range_start) &&
+           (unicode_cp < (entry->range_start + entry->range_length));
+}
+
+static bool cmap_cache_get(HeitiFont_Context_t *ctx,
+                           uint32_t unicode_cp,
+                           uint16_t *out_cmap_index)
+{
+    if (!ctx->last_cmap_valid || (ctx->last_cmap_index >= ctx->cmap_count))
+    {
+        return false;
+    }
+
+    if (!cmap_entry_contains(&ctx->cmap[ctx->last_cmap_index], unicode_cp))
+    {
+        return false;
+    }
+
+    *out_cmap_index = ctx->last_cmap_index;
+    return true;
+}
+
+static void cmap_cache_put(HeitiFont_Context_t *ctx, uint16_t cmap_index)
+{
+    ctx->last_cmap_index = cmap_index;
+    ctx->last_cmap_valid = true;
+}
+
 static uint32_t bit_read(const uint8_t *data, uint32_t *bit_pos, uint8_t n_bits)
 {
     uint32_t value = 0U;
@@ -159,6 +239,7 @@ static HeitiFont_Result_t parse_head(const uint8_t raw[HEAD_DATA_SIZE],
 static HeitiFont_Result_t parse_cmap(HeitiFont_Context_t *ctx, uint32_t cmap_start)
 {
     uint8_t count_raw[4];
+    uint16_t format_count[4] = {0U, 0U, 0U, 0U};
 
     if (f_read_at(ctx, cmap_start + 8U, count_raw, sizeof(count_raw)) != 0)
     {
@@ -197,7 +278,16 @@ static HeitiFont_Result_t parse_cmap(HeitiFont_Context_t *ctx, uint32_t cmap_sta
             log_printf("[FONT] bad cmap type=%u", entry->format_type);
             return HEITI_FONT_ERR_FORMAT;
         }
+
+        format_count[entry->format_type]++;
     }
+
+    log_printf("[FONT] cmap=%u f0_full=%u sp_full=%u f0_tiny=%u sp_tiny=%u",
+               (unsigned)ctx->cmap_count,
+               (unsigned)format_count[CMAP_FORMAT0_FULL],
+               (unsigned)format_count[CMAP_SPARSE_FULL],
+               (unsigned)format_count[CMAP_FORMAT0_TINY],
+               (unsigned)format_count[CMAP_SPARSE_TINY]);
 
     return HEITI_FONT_OK;
 }
@@ -238,6 +328,67 @@ static HeitiFont_Result_t read_loca_offset(HeitiFont_Context_t *ctx,
     return HEITI_FONT_OK;
 }
 
+static HeitiFont_Result_t get_glyph_span(HeitiFont_Context_t *ctx,
+                                         uint32_t glyph_index,
+                                         uint32_t *out_offset,
+                                         uint32_t *out_size)
+{
+    uint32_t offset_curr;
+    uint32_t offset_next;
+    HeitiFont_Result_t res;
+
+    if ((ctx == NULL) || (out_offset == NULL) || (out_size == NULL))
+    {
+        return HEITI_FONT_ERR_PARAM;
+    }
+
+    if (ctx->span_cache_valid && (ctx->span_cache_glyph == glyph_index))
+    {
+        *out_offset = ctx->span_cache_offset;
+        *out_size = ctx->span_cache_size;
+        return HEITI_FONT_OK;
+    }
+
+    res = read_loca_offset(ctx, glyph_index, &offset_curr);
+    if (res != HEITI_FONT_OK)
+    {
+        return res;
+    }
+
+    if ((glyph_index + 1U) < ctx->loca_count)
+    {
+        res = read_loca_offset(ctx, glyph_index + 1U, &offset_next);
+        if (res != HEITI_FONT_OK)
+        {
+            return res;
+        }
+    }
+    else
+    {
+        offset_next = ctx->glyf_section_len;
+    }
+
+    if ((offset_next < offset_curr) || (offset_next > ctx->glyf_section_len))
+    {
+        return HEITI_FONT_ERR_FORMAT;
+    }
+
+    *out_offset = offset_curr;
+    *out_size = offset_next - offset_curr;
+
+    ctx->span_cache_valid = true;
+    ctx->span_cache_glyph = glyph_index;
+    ctx->span_cache_offset = *out_offset;
+    ctx->span_cache_size = *out_size;
+
+    return HEITI_FONT_OK;
+}
+
+static uint32_t glyph_header_bits(const HeitiFont_Context_t *ctx)
+{
+    return (uint32_t)ctx->aw_bits + 2U * ctx->xy_bits + 2U * ctx->wh_bits;
+}
+
 static HeitiFont_Result_t read_u16_at(HeitiFont_Context_t *ctx, uint32_t offset, uint16_t *out_value)
 {
     uint8_t raw[2];
@@ -249,6 +400,96 @@ static HeitiFont_Result_t read_u16_at(HeitiFont_Context_t *ctx, uint32_t offset,
 
     *out_value = rd16(raw);
     return HEITI_FONT_OK;
+}
+
+static HeitiFont_Result_t lookup_in_cmap_entry(HeitiFont_Context_t *ctx,
+                                               const HeitiFont_CmapEntry_t *entry,
+                                               uint32_t unicode_cp,
+                                               uint32_t *out_glyph_index)
+{
+    uint32_t rcp;
+    uint32_t data_start;
+
+    if (!cmap_entry_contains(entry, unicode_cp))
+    {
+        return HEITI_FONT_ERR_NOT_FOUND;
+    }
+
+    rcp = unicode_cp - entry->range_start;
+    data_start = ctx->cmap_section_start + entry->data_offset;
+
+    if (entry->format_type == CMAP_FORMAT0_TINY)
+    {
+        *out_glyph_index = (uint32_t)entry->glyph_id_start + rcp;
+        return HEITI_FONT_OK;
+    }
+
+    if (entry->format_type == CMAP_FORMAT0_FULL)
+    {
+        uint8_t glyph_ofs;
+
+        if (rcp >= entry->data_entries_count)
+        {
+            return HEITI_FONT_ERR_NOT_FOUND;
+        }
+
+        if (f_read_at(ctx, data_start + rcp, &glyph_ofs, 1U) != 0)
+        {
+            return HEITI_FONT_ERR_IO;
+        }
+
+        *out_glyph_index = (uint32_t)entry->glyph_id_start + glyph_ofs;
+        return HEITI_FONT_OK;
+    }
+
+    if ((entry->format_type == CMAP_SPARSE_TINY) ||
+        (entry->format_type == CMAP_SPARSE_FULL))
+    {
+        uint32_t left = 0U;
+        uint32_t right = entry->data_entries_count;
+
+        while (left < right)
+        {
+            uint32_t mid = left + ((right - left) >> 1);
+            uint16_t listed_rcp;
+
+            if (read_u16_at(ctx, data_start + mid * 2U, &listed_rcp) != HEITI_FONT_OK)
+            {
+                return HEITI_FONT_ERR_IO;
+            }
+
+            if ((uint32_t)listed_rcp == rcp)
+            {
+                if (entry->format_type == CMAP_SPARSE_TINY)
+                {
+                    *out_glyph_index = (uint32_t)entry->glyph_id_start + mid;
+                }
+                else
+                {
+                    uint16_t glyph_ofs;
+                    uint32_t ofs_start = data_start + (uint32_t)entry->data_entries_count * 2U;
+
+                    if (read_u16_at(ctx, ofs_start + mid * 2U, &glyph_ofs) != HEITI_FONT_OK)
+                    {
+                        return HEITI_FONT_ERR_IO;
+                    }
+                    *out_glyph_index = (uint32_t)entry->glyph_id_start + glyph_ofs;
+                }
+                return HEITI_FONT_OK;
+            }
+
+            if ((uint32_t)listed_rcp < rcp)
+            {
+                left = mid + 1U;
+            }
+            else
+            {
+                right = mid;
+            }
+        }
+    }
+
+    return HEITI_FONT_ERR_NOT_FOUND;
 }
 
 static HeitiFont_Result_t parse_glyph_header(HeitiFont_Context_t *ctx,
@@ -559,6 +800,9 @@ HeitiFont_Result_t HeitiFont_Lookup(HeitiFont_Context_t *ctx,
                                     uint32_t unicode_cp,
                                     uint32_t *out_glyph_index)
 {
+    uint16_t cmap_index;
+    HeitiFont_Result_t res;
+
     if ((ctx == NULL) || !ctx->is_open || (out_glyph_index == NULL))
     {
         return HEITI_FONT_ERR_PARAM;
@@ -569,94 +813,105 @@ HeitiFont_Result_t HeitiFont_Lookup(HeitiFont_Context_t *ctx,
         return HEITI_FONT_ERR_NOT_FOUND;
     }
 
+    if (lookup_cache_get(ctx, unicode_cp, out_glyph_index))
+    {
+        return HEITI_FONT_OK;
+    }
+
+    if (cmap_cache_get(ctx, unicode_cp, &cmap_index))
+    {
+        res = lookup_in_cmap_entry(ctx, &ctx->cmap[cmap_index], unicode_cp, out_glyph_index);
+        if (res == HEITI_FONT_OK)
+        {
+            lookup_cache_put(ctx, unicode_cp, *out_glyph_index);
+            return HEITI_FONT_OK;
+        }
+
+        if (res == HEITI_FONT_ERR_IO)
+        {
+            return res;
+        }
+    }
+
     for (uint16_t i = 0U; i < ctx->cmap_count; i++)
     {
         const HeitiFont_CmapEntry_t *entry = &ctx->cmap[i];
-        uint32_t rcp;
-        uint32_t data_start;
 
-        if ((unicode_cp < entry->range_start) ||
-            (unicode_cp >= (entry->range_start + entry->range_length)))
+        if (!cmap_entry_contains(entry, unicode_cp))
         {
             continue;
         }
 
-        rcp = unicode_cp - entry->range_start;
-        data_start = ctx->cmap_section_start + entry->data_offset;
-
-        if (entry->format_type == CMAP_FORMAT0_TINY)
+        res = lookup_in_cmap_entry(ctx, entry, unicode_cp, out_glyph_index);
+        if (res == HEITI_FONT_OK)
         {
-            *out_glyph_index = (uint32_t)entry->glyph_id_start + rcp;
+            cmap_cache_put(ctx, i);
+            lookup_cache_put(ctx, unicode_cp, *out_glyph_index);
             return HEITI_FONT_OK;
         }
 
-        if (entry->format_type == CMAP_FORMAT0_FULL)
+        if (res == HEITI_FONT_ERR_IO)
         {
-            uint8_t glyph_ofs;
-
-            if (rcp >= entry->data_entries_count)
-            {
-                return HEITI_FONT_ERR_NOT_FOUND;
-            }
-
-            if (f_read_at(ctx, data_start + rcp, &glyph_ofs, 1U) != 0)
-            {
-                return HEITI_FONT_ERR_IO;
-            }
-
-            *out_glyph_index = (uint32_t)entry->glyph_id_start + glyph_ofs;
-            return HEITI_FONT_OK;
-        }
-
-        if ((entry->format_type == CMAP_SPARSE_TINY) ||
-            (entry->format_type == CMAP_SPARSE_FULL))
-        {
-            uint32_t left = 0U;
-            uint32_t right = entry->data_entries_count;
-
-            while (left < right)
-            {
-                uint32_t mid = left + ((right - left) >> 1);
-                uint16_t listed_rcp;
-
-                if (read_u16_at(ctx, data_start + mid * 2U, &listed_rcp) != HEITI_FONT_OK)
-                {
-                    return HEITI_FONT_ERR_IO;
-                }
-
-                if ((uint32_t)listed_rcp == rcp)
-                {
-                    if (entry->format_type == CMAP_SPARSE_TINY)
-                    {
-                        *out_glyph_index = (uint32_t)entry->glyph_id_start + mid;
-                    }
-                    else
-                    {
-                        uint16_t glyph_ofs;
-                        uint32_t ofs_start = data_start + (uint32_t)entry->data_entries_count * 2U;
-
-                        if (read_u16_at(ctx, ofs_start + mid * 2U, &glyph_ofs) != HEITI_FONT_OK)
-                        {
-                            return HEITI_FONT_ERR_IO;
-                        }
-                        *out_glyph_index = (uint32_t)entry->glyph_id_start + glyph_ofs;
-                    }
-                    return HEITI_FONT_OK;
-                }
-
-                if ((uint32_t)listed_rcp < rcp)
-                {
-                    left = mid + 1U;
-                }
-                else
-                {
-                    right = mid;
-                }
-            }
+            return res;
         }
     }
 
     return HEITI_FONT_ERR_NOT_FOUND;
+}
+
+HeitiFont_Result_t HeitiFont_GetGlyphDsc(HeitiFont_Context_t *ctx,
+                                         uint32_t glyph_index,
+                                         HeitiFont_GlyphDsc_t *dsc)
+{
+    uint8_t glyph_raw[16];
+    uint32_t offset_curr;
+    uint32_t glyph_size;
+    uint32_t header_bits;
+    uint32_t header_bytes;
+    HeitiFont_Result_t res;
+
+    if ((ctx == NULL) || !ctx->is_open || (dsc == NULL))
+    {
+        return HEITI_FONT_ERR_PARAM;
+    }
+
+    if (glyph_index == 0U)
+    {
+        memset(dsc, 0, sizeof(*dsc));
+        return HEITI_FONT_OK;
+    }
+
+    res = get_glyph_span(ctx, glyph_index, &offset_curr, &glyph_size);
+    if (res != HEITI_FONT_OK)
+    {
+        return res;
+    }
+
+    if (glyph_size == 0U)
+    {
+        memset(dsc, 0, sizeof(*dsc));
+        return HEITI_FONT_OK;
+    }
+
+    header_bits = glyph_header_bits(ctx);
+    header_bytes = (header_bits + 7U) >> 3;
+
+    if ((header_bytes == 0U) || (header_bytes > glyph_size))
+    {
+        return HEITI_FONT_ERR_FORMAT;
+    }
+
+    if (header_bytes > sizeof(glyph_raw))
+    {
+        return HEITI_FONT_ERR_NO_MEM;
+    }
+
+    if (f_read_at(ctx, ctx->glyf_section_start + offset_curr, glyph_raw, header_bytes) != 0)
+    {
+        return HEITI_FONT_ERR_IO;
+    }
+
+    return parse_glyph_header(ctx, glyph_raw, dsc);
 }
 
 HeitiFont_Result_t HeitiFont_GetGlyph(HeitiFont_Context_t *ctx,
@@ -667,7 +922,6 @@ HeitiFont_Result_t HeitiFont_GetGlyph(HeitiFont_Context_t *ctx,
 {
     static uint8_t glyph_raw[HEITI_FONT_GLYPH_RAW_MAX];
     uint32_t offset_curr;
-    uint32_t offset_next;
     uint32_t total_size;
     uint32_t header_bits;
     uint32_t pixel_count;
@@ -687,31 +941,11 @@ HeitiFont_Result_t HeitiFont_GetGlyph(HeitiFont_Context_t *ctx,
         return HEITI_FONT_OK;
     }
 
-    res = read_loca_offset(ctx, glyph_index, &offset_curr);
+    res = get_glyph_span(ctx, glyph_index, &offset_curr, &total_size);
     if (res != HEITI_FONT_OK)
     {
         return res;
     }
-
-    if ((glyph_index + 1U) < ctx->loca_count)
-    {
-        res = read_loca_offset(ctx, glyph_index + 1U, &offset_next);
-        if (res != HEITI_FONT_OK)
-        {
-            return res;
-        }
-    }
-    else
-    {
-        offset_next = ctx->glyf_section_len;
-    }
-
-    if ((offset_next < offset_curr) || (offset_next > ctx->glyf_section_len))
-    {
-        return HEITI_FONT_ERR_FORMAT;
-    }
-
-    total_size = offset_next - offset_curr;
     if (total_size == 0U)
     {
         memset(dsc, 0, sizeof(*dsc));
@@ -745,7 +979,7 @@ HeitiFont_Result_t HeitiFont_GetGlyph(HeitiFont_Context_t *ctx,
     pixel_count = (uint32_t)dsc->box_w * dsc->box_h;
     bitmap_bits = pixel_count * ((ctx->bpp == 3U) ? 4U : ctx->bpp);
     bitmap_bytes = (bitmap_bits + 7U) >> 3;
-    header_bits = (uint32_t)ctx->aw_bits + 2U * ctx->xy_bits + 2U * ctx->wh_bits;
+    header_bits = glyph_header_bits(ctx);
 
     if ((total_size * 8U) < header_bits)
     {

@@ -1,8 +1,10 @@
 #include "user_HardwareInitTask.h"
 
 #include "data_app.h"
+#include "fan_app.h"
 #include "key.h"
 #include "led_app.h"
+#include "lptim.h"
 #include "lfs_port.h"
 #include "log.h"
 #include "main.h"
@@ -27,6 +29,8 @@ void HardwareInitTask(void *argument)
     log_printf("start app");
     log_printf("step1: init leds...");
     LED_App_Init();
+    log_printf("step1.5: init fan...");
+    FanApp_Init();
     log_printf("step2: key init...");
     Key_Init();
     log_printf("step3: app init...");
@@ -63,6 +67,10 @@ void HardwareInitTask(void *argument)
     lv_init();
     lv_port_disp_init();
     ui_init();
+    if (LPTIM1_Start1sTick() != HAL_OK)
+    {
+        log_printf("lptim1 1s tick start FAIL");
+    }
 
     log_printf("step5: hw ready");
     User_Tasks_SetHardwareReady();

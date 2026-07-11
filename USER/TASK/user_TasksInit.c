@@ -5,23 +5,27 @@
 #include "user_KeyManllegeTask.h"
 #include "user_KeyTask.h"
 #include "user_LEDTask.h"
+#include "user_FanTask.h"
 #include "user_LVGLTask.h"
 #include "user_AppDataTask.h"
 #include "user_TransmitTask.h"
 #include "user_WeatherSyncTask.h"
 
+#include "fan_app.h"
 #include "key.h"
 
 TaskHandle_t HardwareInitTaskHandle = NULL;
 TaskHandle_t KeyTaskHandle = NULL;
 TaskHandle_t KeyManllegeTaskHandle = NULL;
 TaskHandle_t LEDTaskHandle = NULL;
+TaskHandle_t FanTaskHandle = NULL;
 TaskHandle_t LvHandlerTaskHandle = NULL;
 TaskHandle_t TransmitTaskHandle = NULL;
 TaskHandle_t AppDataTaskHandle = NULL;
 TaskHandle_t WeatherSyncTaskHandle = NULL;
 
 QueueHandle_t Key_Power_queue = NULL;
+QueueHandle_t Fan_Command_queue = NULL;
 
 SemaphoreHandle_t xKeyScanTaskWakeSemaphore = NULL;
 SemaphoreHandle_t xLedTaskWakeSemaphore = NULL;
@@ -77,6 +81,9 @@ void User_Tasks_Init(void)
 
     Key_Power_queue = xQueueCreate(8U, sizeof(key_event_t));
     User_Tasks_RequireHandle(Key_Power_queue);
+    Fan_Command_queue = xQueueCreate(8U, sizeof(fan_cmd_t));
+    User_Tasks_RequireHandle(Fan_Command_queue);
+    FanApp_AttachCommandQueue(Fan_Command_queue);
 
     User_Tasks_RequireStatus(xTaskCreate(HardwareInitTask,
                                          "HwInitTask",
@@ -105,6 +112,13 @@ void User_Tasks_Init(void)
                                          NULL,
                                          tskIDLE_PRIORITY + 2U,
                                          &LEDTaskHandle));
+
+    User_Tasks_RequireStatus(xTaskCreate(FanTask,
+                                         "FanTask",
+                                         128U * 2U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 2U,
+                                         &FanTaskHandle));
 
     User_Tasks_RequireStatus(xTaskCreate(LvHandlerTask,
                                          "LvHandlerTask",

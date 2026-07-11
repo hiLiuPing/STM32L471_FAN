@@ -1466,6 +1466,11 @@
               <FilePath>../USER/TASK/user_LEDTask.c</FilePath>
             </File>
             <File>
+              <FileName>user_FanTask.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/TASK/user_FanTask.c</FilePath>
+            </File>
+            <File>
               <FileName>user_LVGLTask.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/TASK/user_LVGLTask.c</FilePath>
@@ -1519,6 +1524,11 @@
               <FileName>led_app.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/led_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>fan_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/fan_app.c</FilePath>
             </File>
             <File>
               <FileName>poetry_app.c</FileName>
@@ -1714,6 +1724,11 @@
               <FileName>heiti_lvgl_font.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/GUI/heiti_lvgl_font.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_poetry_popup.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/ui_poetry_popup.c</FilePath>
             </File>
             <File>
               <FileName>ui_StartPage.c</FileName>

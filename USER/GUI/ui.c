@@ -5,6 +5,8 @@
 #include "screens/ui_SettingPage.h"
 #include "screens/ui_StartPage.h"
 #include "screens/ui_WeatherPage.h"
+#include <stdlib.h>
+#include "ui_poetry_popup.h"
 
 static ui_page_t s_pages[] = {
     {
@@ -63,6 +65,7 @@ void ui_init(void)
         lv_disp_set_theme(disp, theme);
     }
 
+    srand(lv_tick_get());
     ui_page_manager_init();
 
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(s_pages) / sizeof(s_pages[0])); i++)
@@ -71,4 +74,5 @@ void ui_init(void)
     }
 
     ui_page_manager_load_init();
+    ui_poetry_popup_init();
 }

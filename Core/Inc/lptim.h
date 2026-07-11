@@ -41,6 +41,8 @@ extern LPTIM_HandleTypeDef hlptim1;
 void MX_LPTIM1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
+HAL_StatusTypeDef LPTIM1_Start1sTick(void);
+uint32_t LPTIM1_ConsumeSecondTicks(void);
 
 /* USER CODE END Prototypes */
 

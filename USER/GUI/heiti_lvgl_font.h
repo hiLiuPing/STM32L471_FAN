@@ -18,6 +18,7 @@ extern "C" {
  * @return     pointer to a static lv_font_t, or NULL on error
  */
 const lv_font_t *HeitiLvgl_Register(HeitiFont_Context_t *ctx);
+const lv_font_t *HeitiLvgl_OpenDefault(const char *path);
 
 #ifdef __cplusplus
 }

@@ -16,12 +16,14 @@ extern TaskHandle_t HardwareInitTaskHandle;
 extern TaskHandle_t KeyTaskHandle;
 extern TaskHandle_t KeyManllegeTaskHandle;
 extern TaskHandle_t LEDTaskHandle;
+extern TaskHandle_t FanTaskHandle;
 extern TaskHandle_t LvHandlerTaskHandle;
 extern TaskHandle_t TransmitTaskHandle;
 extern TaskHandle_t AppDataTaskHandle;
 extern TaskHandle_t WeatherSyncTaskHandle;
 
 extern QueueHandle_t Key_Power_queue;
+extern QueueHandle_t Fan_Command_queue;
 
 extern SemaphoreHandle_t xKeyScanTaskWakeSemaphore;
 extern SemaphoreHandle_t xLedTaskWakeSemaphore;
