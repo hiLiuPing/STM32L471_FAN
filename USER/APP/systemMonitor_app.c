@@ -54,7 +54,7 @@ void MemDiag_LogSnapshot(const char *tag)
     MemDiag_LogTaskStack("HwInit", HardwareInitTaskHandle);
     MemDiag_LogTaskStack("Key", KeyTaskHandle);
     MemDiag_LogTaskStack("LED", LEDTaskHandle);
-    MemDiag_LogTaskStack("LVGL", LvHandlerTaskHandle);
+    MemDiag_LogTaskStack("EGUI", EGUIHandlerTaskHandle);
     MemDiag_LogTaskStack("TX", TransmitTaskHandle);
     MemDiag_LogTaskStack("AppData", AppDataTaskHandle);
     MemDiag_LogTaskStack("Weather", WeatherSyncTaskHandle);

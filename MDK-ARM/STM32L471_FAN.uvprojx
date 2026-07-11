@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32L471xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32L4xx_HAL_Driver/Inc;../Drivers/STM32L4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32L4xx/Include;../Drivers/CMSIS/Include;../.cmsis/include;../MDK-ARM/RTE/_STM32L471_FAN;../USER/APP;../USER/BSP;../USER/GUI;../USER/TASK;../USER/LVGL;../USER/Middle/FreeRTOS/Source/include;../USER/Middle/FreeRTOS/Source/portable/GCC/ARM_CM4F;../USER/Middle/Transfer;../USER/Middle/lvgl/lvgl;../USER/Middle/lvgl/lvgl/src;../USER/Middle/lvgl/lvgl/examples/porting</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32L4xx_HAL_Driver/Inc;../Drivers/STM32L4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32L4xx/Include;../Drivers/CMSIS/Include;../.cmsis/include;../MDK-ARM/RTE/_STM32L471_FAN;../USER/APP;../USER/BSP;../USER/GUI;../USER/TASK;../USER/Middle/FreeRTOS/Source/include;../USER/Middle/FreeRTOS/Source/portable/GCC/ARM_CM4F;../USER/Middle/Transfer;../USER/Middle/EmbeddedGUI/src;../USER/Middle/EmbeddedGUI/src/config;../USER/Middle/EmbeddedGUI/porting/stm32l471_fan;../USER/Middle/EmbeddedGUI/driver/bus;../USER/Middle/EmbeddedGUI/driver/lcd;../USER/Middle/EmbeddedGUI/third_party/plutosvg/source;../USER/Middle/EmbeddedGUI/third_party/plutovg/include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1471,9 +1471,9 @@
               <FilePath>../USER/TASK/user_FanTask.c</FilePath>
             </File>
             <File>
-              <FileName>user_LVGLTask.c</FileName>
+              <FileName>user_EGUITask.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/TASK/user_LVGLTask.c</FilePath>
+              <FilePath>../USER/TASK/user_EGUITask.c</FilePath>
             </File>
             <File>
               <FileName>user_TransmitTask.c</FileName>
@@ -1698,16 +1698,6 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>USER/LVGL</GroupName>
-          <Files>
-            <File>
-              <FileName>lv_port_disp.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/LVGL/lv_port_disp.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
           <GroupName>USER/GUI</GroupName>
           <Files>
             <File>
@@ -1719,11 +1709,6 @@
               <FileName>page_manager.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/GUI/page_manager.c</FilePath>
-            </File>
-            <File>
-              <FileName>heiti_lvgl_font.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/GUI/heiti_lvgl_font.c</FilePath>
             </File>
             <File>
               <FileName>ui_poetry_popup.c</FileName>
@@ -1758,687 +1743,1052 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>USER/Middle/LVGL</GroupName>
+          <GroupName>USER/Middle/EmbeddedGUI</GroupName>
           <Files>
             <File>
-              <FileName>lv_disp.c</FileName>
+              <FileName>egui_animation.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_disp.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation.c</FilePath>
             </File>
             <File>
-              <FileName>lv_event.c</FileName>
+              <FileName>egui_animation_alpha.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_event.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation_alpha.c</FilePath>
             </File>
             <File>
-              <FileName>lv_group.c</FileName>
+              <FileName>egui_animation_color.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_group.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation_color.c</FilePath>
             </File>
             <File>
-              <FileName>lv_indev.c</FileName>
+              <FileName>egui_animation_resize.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_indev.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation_resize.c</FilePath>
             </File>
             <File>
-              <FileName>lv_indev_scroll.c</FileName>
+              <FileName>egui_animation_scale_size.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_indev_scroll.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation_scale_size.c</FilePath>
             </File>
             <File>
-              <FileName>lv_obj.c</FileName>
+              <FileName>egui_animation_set.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_obj.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation_set.c</FilePath>
             </File>
             <File>
-              <FileName>lv_obj_class.c</FileName>
+              <FileName>egui_animation_timeline.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_obj_class.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation_timeline.c</FilePath>
             </File>
             <File>
-              <FileName>lv_obj_draw.c</FileName>
+              <FileName>egui_animation_translate.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_obj_draw.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation_translate.c</FilePath>
             </File>
             <File>
-              <FileName>lv_obj_pos.c</FileName>
+              <FileName>egui_animation_value.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_obj_pos.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_animation_value.c</FilePath>
             </File>
             <File>
-              <FileName>lv_obj_scroll.c</FileName>
+              <FileName>egui_interpolator.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_obj_scroll.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator.c</FilePath>
             </File>
             <File>
-              <FileName>lv_obj_style.c</FileName>
+              <FileName>egui_interpolator_accelerate.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_obj_style.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_accelerate.c</FilePath>
             </File>
             <File>
-              <FileName>lv_obj_style_gen.c</FileName>
+              <FileName>egui_interpolator_accelerate_decelerate.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_obj_style_gen.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_accelerate_decelerate.c</FilePath>
             </File>
             <File>
-              <FileName>lv_obj_tree.c</FileName>
+              <FileName>egui_interpolator_anticipate.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_obj_tree.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_anticipate.c</FilePath>
             </File>
             <File>
-              <FileName>lv_refr.c</FileName>
+              <FileName>egui_interpolator_anticipate_overshoot.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_refr.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_anticipate_overshoot.c</FilePath>
             </File>
             <File>
-              <FileName>lv_theme.c</FileName>
+              <FileName>egui_interpolator_bounce.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/core/lv_theme.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_bounce.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw.c</FileName>
+              <FileName>egui_interpolator_cycle.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_cycle.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_arc.c</FileName>
+              <FileName>egui_interpolator_decelerate.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_arc.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_decelerate.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_img.c</FileName>
+              <FileName>egui_interpolator_linear.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_img.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_linear.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_label.c</FileName>
+              <FileName>egui_interpolator_overshoot.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_label.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_interpolator_overshoot.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_layer.c</FileName>
+              <FileName>egui_view_fade.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_layer.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/anim/egui_view_fade.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_line.c</FileName>
+              <FileName>egui_activity.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_line.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/app/egui_activity.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_mask.c</FileName>
+              <FileName>egui_dialog.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_mask.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/app/egui_dialog.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_rect.c</FileName>
+              <FileName>egui_msgbox.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_rect.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/app/egui_msgbox.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_transform.c</FileName>
+              <FileName>egui_page_base.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_transform.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/app/egui_page_base.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_triangle.c</FileName>
+              <FileName>egui_toast.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_draw_triangle.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/app/egui_toast.c</FilePath>
             </File>
             <File>
-              <FileName>lv_img_buf.c</FileName>
+              <FileName>egui_toast_std.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_img_buf.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/app/egui_toast_std.c</FilePath>
             </File>
             <File>
-              <FileName>lv_img_cache.c</FileName>
+              <FileName>egui_background.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_img_cache.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/background/egui_background.c</FilePath>
             </File>
             <File>
-              <FileName>lv_img_decoder.c</FileName>
+              <FileName>egui_background_color.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/lv_img_decoder.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/background/egui_background_color.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw.c</FileName>
+              <FileName>egui_background_gradient.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/background/egui_background_gradient.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_arc.c</FileName>
+              <FileName>egui_background_image.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_arc.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/background/egui_background_image.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_blend.c</FileName>
+              <FileName>egui_canvas.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_blend.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_dither.c</FileName>
+              <FileName>egui_canvas_bezier.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_dither.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_bezier.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_gradient.c</FileName>
+              <FileName>egui_canvas_circle_hq.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_gradient.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_circle_hq.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_img.c</FileName>
+              <FileName>egui_canvas_compact.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_img.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_compact.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_layer.c</FileName>
+              <FileName>egui_canvas_ellipse.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_layer.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_ellipse.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_letter.c</FileName>
+              <FileName>egui_canvas_gradient.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_letter.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_gradient.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_line.c</FileName>
+              <FileName>egui_canvas_line.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_line.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_line.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_polygon.c</FileName>
+              <FileName>egui_canvas_line_hq.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_polygon.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_line_hq.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_rect.c</FileName>
+              <FileName>egui_canvas_polygon.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_rect.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_polygon.c</FilePath>
             </File>
             <File>
-              <FileName>lv_draw_sw_transform.c</FileName>
+              <FileName>egui_canvas_transform.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/draw/sw/lv_draw_sw_transform.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_transform.c</FilePath>
             </File>
             <File>
-              <FileName>lv_flex.c</FileName>
+              <FileName>egui_canvas_triangle.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/layouts/flex/lv_flex.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/canvas/egui_canvas_triangle.c</FilePath>
             </File>
             <File>
-              <FileName>lv_grid.c</FileName>
+              <FileName>egui_api.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/layouts/grid/lv_grid.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_api.c</FilePath>
             </File>
             <File>
-              <FileName>lv_extra.c</FileName>
+              <FileName>egui_common.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/lv_extra.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_common.c</FilePath>
             </File>
             <File>
-              <FileName>lv_theme_basic.c</FileName>
+              <FileName>egui_core.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/themes/basic/lv_theme_basic.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core.c</FilePath>
             </File>
             <File>
-              <FileName>lv_theme_default.c</FileName>
+              <FileName>egui_core_activity.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/themes/default/lv_theme_default.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_activity.c</FilePath>
             </File>
             <File>
-              <FileName>lv_theme_mono.c</FileName>
+              <FileName>egui_core_animation.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/themes/mono/lv_theme_mono.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_animation.c</FilePath>
             </File>
             <File>
-              <FileName>lv_animimg.c</FileName>
+              <FileName>egui_core_debug.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/animimg/lv_animimg.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_debug.c</FilePath>
             </File>
             <File>
-              <FileName>lv_calendar.c</FileName>
+              <FileName>egui_core_dialog.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/calendar/lv_calendar.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_dialog.c</FilePath>
             </File>
             <File>
-              <FileName>lv_calendar_header_arrow.c</FileName>
+              <FileName>egui_core_dirty.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/calendar/lv_calendar_header_arrow.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_dirty.c</FilePath>
             </File>
             <File>
-              <FileName>lv_calendar_header_dropdown.c</FileName>
+              <FileName>egui_core_key.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/calendar/lv_calendar_header_dropdown.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_key.c</FilePath>
             </File>
             <File>
-              <FileName>lv_chart.c</FileName>
+              <FileName>egui_core_pfb.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/chart/lv_chart.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_pfb.c</FilePath>
             </File>
             <File>
-              <FileName>lv_colorwheel.c</FileName>
+              <FileName>egui_core_toast.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/colorwheel/lv_colorwheel.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_toast.c</FilePath>
             </File>
             <File>
-              <FileName>lv_imgbtn.c</FileName>
+              <FileName>egui_core_touch.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/imgbtn/lv_imgbtn.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_core_touch.c</FilePath>
             </File>
             <File>
-              <FileName>lv_keyboard.c</FileName>
+              <FileName>egui_display_driver.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/keyboard/lv_keyboard.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_display_driver.c</FilePath>
             </File>
             <File>
-              <FileName>lv_led.c</FileName>
+              <FileName>egui_encoder_driver.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/led/lv_led.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_encoder_driver.c</FilePath>
             </File>
             <File>
-              <FileName>lv_list.c</FileName>
+              <FileName>egui_event.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/list/lv_list.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_event.c</FilePath>
             </File>
             <File>
-              <FileName>lv_menu.c</FileName>
+              <FileName>egui_focus.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/menu/lv_menu.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_focus.c</FilePath>
             </File>
             <File>
-              <FileName>lv_meter.c</FileName>
+              <FileName>egui_focus_group.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/meter/lv_meter.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_focus_group.c</FilePath>
             </File>
             <File>
-              <FileName>lv_msgbox.c</FileName>
+              <FileName>egui_input.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/msgbox/lv_msgbox.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_input.c</FilePath>
             </File>
             <File>
-              <FileName>lv_span.c</FileName>
+              <FileName>egui_key_event.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/span/lv_span.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_key_event.c</FilePath>
             </File>
             <File>
-              <FileName>lv_spinbox.c</FileName>
+              <FileName>egui_motion_event.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/spinbox/lv_spinbox.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_motion_event.c</FilePath>
             </File>
             <File>
-              <FileName>lv_spinner.c</FileName>
+              <FileName>egui_pfb_manager.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/spinner/lv_spinner.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_pfb_manager.c</FilePath>
             </File>
             <File>
-              <FileName>lv_tabview.c</FileName>
+              <FileName>egui_platform.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/tabview/lv_tabview.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_platform.c</FilePath>
             </File>
             <File>
-              <FileName>lv_tileview.c</FileName>
+              <FileName>egui_region.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/tileview/lv_tileview.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_region.c</FilePath>
             </File>
             <File>
-              <FileName>lv_win.c</FileName>
+              <FileName>egui_rotation.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/extra/widgets/win/lv_win.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_rotation.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font.c</FileName>
+              <FileName>egui_scroller.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_scroller.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_dejavu_16_persian_hebrew.c</FileName>
+              <FileName>egui_subject.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_dejavu_16_persian_hebrew.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_subject.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_fmt_txt.c</FileName>
+              <FileName>egui_timer.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_fmt_txt.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_timer.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_loader.c</FileName>
+              <FileName>egui_touch_driver.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_loader.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_touch_driver.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_10.c</FileName>
+              <FileName>egui_trig_lut.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_10.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_trig_lut.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_12.c</FileName>
+              <FileName>egui_velocity_tracker.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_12.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/core/egui_velocity_tracker.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_12_subpx.c</FileName>
+              <FileName>egui_font.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_12_subpx.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/font/egui_font.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_14.c</FileName>
+              <FileName>egui_font_lattice.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_14.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/font/egui_font_lattice.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_16.c</FileName>
+              <FileName>egui_font_std.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_16.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/font/egui_font_std.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_18.c</FileName>
+              <FileName>egui_font_ttf.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_18.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/font/egui_font_ttf.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_20.c</FileName>
+              <FileName>egui_image.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_20.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/image/egui_image.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_22.c</FileName>
+              <FileName>egui_image_decode_utils.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_22.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/image/egui_image_decode_utils.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_24.c</FileName>
+              <FileName>egui_image_file.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_24.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/image/egui_image_file.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_26.c</FileName>
+              <FileName>egui_image_qoi.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_26.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/image/egui_image_qoi.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_28.c</FileName>
+              <FileName>egui_image_rle.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_28.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/image/egui_image_rle.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_28_compressed.c</FileName>
+              <FileName>egui_image_std.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_28_compressed.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/image/egui_image_std.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_30.c</FileName>
+              <FileName>egui_image_svg.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_30.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/image/egui_image_svg.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_32.c</FileName>
+              <FileName>egui_mask.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_32.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/mask/egui_mask.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_34.c</FileName>
+              <FileName>egui_mask_circle.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_34.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/mask/egui_mask_circle.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_36.c</FileName>
+              <FileName>egui_mask_gradient.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_36.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/mask/egui_mask_gradient.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_38.c</FileName>
+              <FileName>egui_mask_image.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_38.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/mask/egui_mask_image.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_40.c</FileName>
+              <FileName>egui_mask_round_rectangle.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_40.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/mask/egui_mask_round_rectangle.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_42.c</FileName>
+              <FileName>egui_i18n.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_42.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_i18n.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_44.c</FileName>
+              <FileName>egui_res_circle_info.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_44.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_circle_info.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_46.c</FileName>
+              <FileName>egui_res_font_material_symbols_common_16_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_46.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_material_symbols_common_16_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_48.c</FileName>
+              <FileName>egui_res_font_material_symbols_common_20_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_48.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_material_symbols_common_20_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_8.c</FileName>
+              <FileName>egui_res_font_material_symbols_common_24_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_montserrat_8.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_material_symbols_common_24_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_simsun_16_cjk.c</FileName>
+              <FileName>egui_res_font_montserrat_10_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_simsun_16_cjk.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_10_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_unscii_16.c</FileName>
+              <FileName>egui_res_font_montserrat_12_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_unscii_16.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_12_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_unscii_8.c</FileName>
+              <FileName>egui_res_font_montserrat_14_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/font/lv_font_unscii_8.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_14_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_hal_disp.c</FileName>
+              <FileName>egui_res_font_montserrat_16_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/hal/lv_hal_disp.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_16_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_hal_indev.c</FileName>
+              <FileName>egui_res_font_montserrat_18_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/hal/lv_hal_indev.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_18_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_hal_tick.c</FileName>
+              <FileName>egui_res_font_montserrat_20_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/hal/lv_hal_tick.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_20_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_anim.c</FileName>
+              <FileName>egui_res_font_montserrat_22_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_anim.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_22_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_anim_timeline.c</FileName>
+              <FileName>egui_res_font_montserrat_24_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_anim_timeline.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_24_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_area.c</FileName>
+              <FileName>egui_res_font_montserrat_26_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_area.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_26_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_async.c</FileName>
+              <FileName>egui_res_font_montserrat_28_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_async.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_28_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_bidi.c</FileName>
+              <FileName>egui_res_font_montserrat_30_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_bidi.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_30_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_color.c</FileName>
+              <FileName>egui_res_font_montserrat_32_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_color.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_32_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_fs.c</FileName>
+              <FileName>egui_res_font_montserrat_34_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_fs.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_34_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_gc.c</FileName>
+              <FileName>egui_res_font_montserrat_36_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_gc.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_36_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_ll.c</FileName>
+              <FileName>egui_res_font_montserrat_38_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_ll.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_38_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_log.c</FileName>
+              <FileName>egui_res_font_montserrat_40_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_log.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_40_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_lru.c</FileName>
+              <FileName>egui_res_font_montserrat_42_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_lru.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_42_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_math.c</FileName>
+              <FileName>egui_res_font_montserrat_44_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_math.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_44_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_mem.c</FileName>
+              <FileName>egui_res_font_montserrat_46_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_mem.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_46_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_printf.c</FileName>
+              <FileName>egui_res_font_montserrat_48_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_printf.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_48_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_style.c</FileName>
+              <FileName>egui_res_font_montserrat_8_4.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_style.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/resource/egui_res_font_montserrat_8_4.c</FilePath>
             </File>
             <File>
-              <FileName>lv_style_gen.c</FileName>
+              <FileName>egui_shadow.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_style_gen.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/shadow/egui_shadow.c</FilePath>
             </File>
             <File>
-              <FileName>lv_templ.c</FileName>
+              <FileName>egui_style.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_templ.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/style/egui_style.c</FilePath>
             </File>
             <File>
-              <FileName>lv_timer.c</FileName>
+              <FileName>egui_style_transition.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_timer.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/style/egui_style_transition.c</FilePath>
             </File>
             <File>
-              <FileName>lv_tlsf.c</FileName>
+              <FileName>egui_theme.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_tlsf.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/style/egui_theme.c</FilePath>
             </File>
             <File>
-              <FileName>lv_txt.c</FileName>
+              <FileName>egui_theme_dark.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_txt.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/style/egui_theme_dark.c</FilePath>
             </File>
             <File>
-              <FileName>lv_txt_ap.c</FileName>
+              <FileName>egui_theme_light.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_txt_ap.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/style/egui_theme_light.c</FilePath>
             </File>
             <File>
-              <FileName>lv_utils.c</FileName>
+              <FileName>egui_diag.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/misc/lv_utils.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/test/egui_diag.c</FilePath>
             </File>
             <File>
-              <FileName>lv_arc.c</FileName>
+              <FileName>egui_test.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_arc.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/test/egui_test.c</FilePath>
             </File>
             <File>
-              <FileName>lv_bar.c</FileName>
+              <FileName>egui_fixmath.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_bar.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/utils/egui_fixmath.c</FilePath>
             </File>
             <File>
-              <FileName>lv_btn.c</FileName>
+              <FileName>egui_sprintf.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_btn.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/utils/egui_sprintf.c</FilePath>
             </File>
             <File>
-              <FileName>lv_btnmatrix.c</FileName>
+              <FileName>egui_utils.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_btnmatrix.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/utils/egui_utils.c</FilePath>
             </File>
             <File>
-              <FileName>lv_canvas.c</FileName>
+              <FileName>simple_data_ringbuffer.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_canvas.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/utils/simple_ringbuffer/simple_data_ringbuffer.c</FilePath>
             </File>
             <File>
-              <FileName>lv_checkbox.c</FileName>
+              <FileName>simple_ringbuffer.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_checkbox.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/utils/simple_ringbuffer/simple_ringbuffer.c</FilePath>
             </File>
             <File>
-              <FileName>lv_dropdown.c</FileName>
+              <FileName>egui_property.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_dropdown.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_property.c</FilePath>
             </File>
             <File>
-              <FileName>lv_img.c</FileName>
+              <FileName>egui_view.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_img.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view.c</FilePath>
             </File>
             <File>
-              <FileName>lv_label.c</FileName>
+              <FileName>egui_view_activity_ring.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_label.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_activity_ring.c</FilePath>
             </File>
             <File>
-              <FileName>lv_line.c</FileName>
+              <FileName>egui_view_analog_clock.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_line.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_analog_clock.c</FilePath>
             </File>
             <File>
-              <FileName>lv_objx_templ.c</FileName>
+              <FileName>egui_view_animated_image.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_objx_templ.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_animated_image.c</FilePath>
             </File>
             <File>
-              <FileName>lv_roller.c</FileName>
+              <FileName>egui_view_arc_slider.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_roller.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_arc_slider.c</FilePath>
             </File>
             <File>
-              <FileName>lv_slider.c</FileName>
+              <FileName>egui_view_autocomplete.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_slider.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_autocomplete.c</FilePath>
             </File>
             <File>
-              <FileName>lv_switch.c</FileName>
+              <FileName>egui_view_button.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_switch.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_button.c</FilePath>
             </File>
             <File>
-              <FileName>lv_table.c</FileName>
+              <FileName>egui_view_button_matrix.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_table.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_button_matrix.c</FilePath>
             </File>
             <File>
-              <FileName>lv_textarea.c</FileName>
+              <FileName>egui_view_canvas_panner.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/Middle/lvgl/lvgl/src/widgets/lv_textarea.c</FilePath>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_canvas_panner.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_canvas_viewport.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_canvas_viewport.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_card.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_card.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_chart_axis.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_chart_axis.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_chart_bar.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_chart_bar.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_chart_common.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_chart_common.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_chart_line.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_chart_line.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_chart_pie.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_chart_pie.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_chart_scatter.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_chart_scatter.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_checkbox.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_checkbox.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_chips.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_chips.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_circle_dirty.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_circle_dirty.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_circular_progress_bar.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_circular_progress_bar.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_combobox.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_combobox.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_compass.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_compass.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_deferred_image.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_deferred_image.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_digital_clock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_digital_clock.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_divider.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_divider.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_dynamic_label.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_dynamic_label.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_flexlayout.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_flexlayout.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_gauge.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_gauge.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_grid_view.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_grid_view.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_gridlayout.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_gridlayout.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_group.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_group.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_heart_rate.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_heart_rate.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_image.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_image.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_image_button.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_image_button.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_keyboard.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_keyboard.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_label.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_label.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_led.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_line.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_line.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_linear_value_helper.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_linear_value_helper.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_linearlayout.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_linearlayout.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_list.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_list.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_list_view.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_list_view.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_lyric_scroller.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_lyric_scroller.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_menu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_menu.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_mini_calendar.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_mini_calendar.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_mp4.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_mp4.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_notification_badge.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_notification_badge.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_number_picker.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_number_picker.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_page_indicator.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_page_indicator.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_pattern_lock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_pattern_lock.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_progress_bar.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_progress_bar.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_radio_button.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_radio_button.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_ring_text_basic.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_ring_text_basic.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_roller.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_roller.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_scale.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_scale.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_scroll.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_scroll.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_segmented_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_segmented_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_slider.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_slider.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_spangroup.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_spangroup.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_spinner.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_spinner.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_stepper.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_stepper.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_stopwatch.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_stopwatch.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_switch.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_switch.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_tab_bar.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_tab_bar.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_table.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_table.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_textblock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_textblock.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_textinput.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_textinput.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_tileview.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_tileview.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_toggle_button.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_toggle_button.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_viewpage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_viewpage.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_viewpage_cache.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_viewpage_cache.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_virtual_grid.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_virtual_grid.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_virtual_list.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_virtual_list.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_virtual_page.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_virtual_page.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_virtual_section_list.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_virtual_section_list.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_virtual_stage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_virtual_stage.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_virtual_strip.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_virtual_strip.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_virtual_tree.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_virtual_tree.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_virtual_viewport.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_virtual_viewport.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_view_window.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/src/widget/egui_view_window.c</FilePath>
+            </File>
+            <File>
+              <FileName>egui_port_stm32l471_fan.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/porting/stm32l471_fan/egui_port_stm32l471_fan.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -316,13 +316,16 @@ targets:
         - USER/BSP
         - USER/GUI
         - USER/TASK
-        - USER/LVGL
         - USER/Middle/FreeRTOS/Source/include
         - USER/Middle/FreeRTOS/Source/portable/GCC/ARM_CM4F
         - USER/Middle/Transfer
-        - USER/Middle/lvgl/lvgl
-        - USER/Middle/lvgl/lvgl/src
-        - USER/Middle/lvgl/lvgl/examples/porting
+        - USER/Middle/EmbeddedGUI/src
+        - USER/Middle/EmbeddedGUI/src/config
+        - USER/Middle/EmbeddedGUI/driver/bus
+        - USER/Middle/EmbeddedGUI/driver/lcd
+        - USER/Middle/EmbeddedGUI/third_party/plutosvg/source
+        - USER/Middle/EmbeddedGUI/third_party/plutovg/include
+        - USER/Middle/EmbeddedGUI/porting/stm32l471_fan
       libList: []
     excludeList: []
     settings:

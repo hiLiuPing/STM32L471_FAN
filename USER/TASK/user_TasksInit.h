@@ -17,7 +17,7 @@ extern TaskHandle_t KeyTaskHandle;
 extern TaskHandle_t KeyManllegeTaskHandle;
 extern TaskHandle_t LEDTaskHandle;
 extern TaskHandle_t FanTaskHandle;
-extern TaskHandle_t LvHandlerTaskHandle;
+extern TaskHandle_t EGUIHandlerTaskHandle;
 extern TaskHandle_t TransmitTaskHandle;
 extern TaskHandle_t AppDataTaskHandle;
 extern TaskHandle_t WeatherSyncTaskHandle;

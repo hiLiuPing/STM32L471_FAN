@@ -12,9 +12,7 @@
 #include "spi_flash.h"
 #include "systemMonitor_app.h"
 
-#include "lv_port_disp.h"
-#include "lvgl.h"
-#include "ui.h"
+#include "egui_port_stm32l471_fan.h"
 #include "uart_dma.h"
 #include "usart.h"
 #include "user_TasksInit.h"
@@ -63,10 +61,8 @@ void HardwareInitTask(void *argument)
     {
         log_printf("littlefs mount OK");
     }
-    log_printf("step4: lvgl init...");
-    lv_init();
-    lv_port_disp_init();
-    ui_init();
+    log_printf("step4: egui init...");
+    egui_port_start();
     if (LPTIM1_Start1sTick() != HAL_OK)
     {
         log_printf("lptim1 1s tick start FAIL");

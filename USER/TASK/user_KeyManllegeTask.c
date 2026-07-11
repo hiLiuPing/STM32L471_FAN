@@ -6,7 +6,7 @@
 
 #include "key.h"
 #include "log.h"
-#include "page_manager.h"
+#include "egui_port_stm32l471_fan.h"
 
 #include "user_TasksInit.h"
 
@@ -24,7 +24,7 @@ static void KeyManager_Dispatch(const key_event_t *key_event)
     case KEY_EVT_CLICK:
     case KEY_EVT_LONG:
     case KEY_EVT_REPEAT:
-        ui_page_manager_handle_key_event((void *)key_event);
+        egui_port_handle_key_event(key_event);
         break;
 
     default:

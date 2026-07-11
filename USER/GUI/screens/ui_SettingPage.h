@@ -5,9 +5,9 @@
 extern "C" {
 #endif
 
-#include "lvgl.h"
+#include "widget/egui_view.h"
 
-extern lv_obj_t *ui_SettingPage;
+extern egui_view_t *ui_SettingPage;
 
 void ui_SettingPage_screen_init(void);
 void ui_SettingPage_screen_destroy(void);

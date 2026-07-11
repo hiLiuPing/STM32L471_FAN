@@ -6,7 +6,7 @@
 #include "user_KeyTask.h"
 #include "user_LEDTask.h"
 #include "user_FanTask.h"
-#include "user_LVGLTask.h"
+#include "user_EGUITask.h"
 #include "user_AppDataTask.h"
 #include "user_TransmitTask.h"
 #include "user_WeatherSyncTask.h"
@@ -19,7 +19,7 @@ TaskHandle_t KeyTaskHandle = NULL;
 TaskHandle_t KeyManllegeTaskHandle = NULL;
 TaskHandle_t LEDTaskHandle = NULL;
 TaskHandle_t FanTaskHandle = NULL;
-TaskHandle_t LvHandlerTaskHandle = NULL;
+TaskHandle_t EGUIHandlerTaskHandle = NULL;
 TaskHandle_t TransmitTaskHandle = NULL;
 TaskHandle_t AppDataTaskHandle = NULL;
 TaskHandle_t WeatherSyncTaskHandle = NULL;
@@ -120,12 +120,12 @@ void User_Tasks_Init(void)
                                          tskIDLE_PRIORITY + 2U,
                                          &FanTaskHandle));
 
-    User_Tasks_RequireStatus(xTaskCreate(LvHandlerTask,
-                                         "LvHandlerTask",
-                                         1024U,
+    User_Tasks_RequireStatus(xTaskCreate(EGUIHandlerTask,
+                                         "EGUIHandler",
+                                         128U * 12U,
                                          NULL,
                                          tskIDLE_PRIORITY + 1U,
-                                         &LvHandlerTaskHandle));
+                                         &EGUIHandlerTaskHandle));
 
     // User_Tasks_RequireStatus(xTaskCreate(TransmitTask,
     //                                      "TransmitTask",

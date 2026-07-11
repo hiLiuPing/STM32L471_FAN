@@ -5,7 +5,6 @@
 extern "C" {
 #endif
 
-#include "lvgl.h"
 #include "page_manager.h"
 
 void ui_init(void);
