@@ -133,6 +133,13 @@ bool LCD_Color_Render_DMA(uint16_t xs,
     return true;
 }
 
+void LCD_Color_Render_DMA_Wait(void)
+{
+    while (s_lcd_dma_busy)
+    {
+    }
+}
+
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     LCD_DMA_Finish(hspi, true);

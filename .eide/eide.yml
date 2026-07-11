@@ -84,7 +84,8 @@ virtualFolder:
             - path: USER/TASK/user_TasksInit.c
             - path: USER/TASK/user_KeyManllegeTask.c
             - path: USER/TASK/user_LEDTask.c
-            - path: USER/TASK/user_LVGLTask.c
+            - path: USER/TASK/user_FanTask.c
+            - path: USER/TASK/user_EGUITask.c
             - path: USER/TASK/user_TransmitTask.c
             - path: USER/TASK/user_AppDataTask.c
             - path: USER/TASK/user_WeatherSyncTask.c

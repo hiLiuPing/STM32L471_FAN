@@ -5,13 +5,15 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
+
 #include "widget/egui_view.h"
 
 extern egui_view_t *ui_HomePage;
 
 void ui_HomePage_screen_init(void);
 void ui_HomePage_screen_destroy(void);
-void ui_HomePage_key_handler(void *key_event);
+bool ui_HomePage_key_handler(void *key_event);
 
 #ifdef __cplusplus
 }

@@ -41,9 +41,9 @@ void ui_SettingPage_screen_destroy(void)
 {
 }
 
-void ui_SettingPage_key_handler(void *key_event)
+bool ui_SettingPage_key_handler(void *key_event)
 {
-    ui_page_handle_default_key_event(key_event);
+    return ui_page_consume_nav_key_event(key_event);
 }
 
 static void ui_SettingPage_timer_cb(egui_timer_t *timer)
@@ -76,6 +76,6 @@ static void ui_SettingPage_on_draw(egui_view_t *self)
                  EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xF8FAFC);
     (void)snprintf(line, sizeof(line), "Heap %lu bytes", (unsigned long)xPortGetFreeHeapSize());
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), line, 236, 80, 146, 14, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xCBD5E1);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "Poetry popup: ASCII fallback", 236, 96, 146, 14,
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "Poetry popup: Heiti 16", 236, 96, 146, 14,
                  EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xCBD5E1);
 }

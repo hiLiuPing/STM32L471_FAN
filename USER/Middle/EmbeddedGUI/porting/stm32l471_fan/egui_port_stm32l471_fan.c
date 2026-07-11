@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "core/egui_core.h"
 #include "core/egui_display_driver.h"
 #include "core/egui_platform.h"
 #include "lcd.h"
@@ -61,6 +62,13 @@ static egui_platform_t s_egui_platform = {
     .ops = &s_egui_platform_ops,
 };
 
+static void egui_port_ui_init(egui_core_t *core)
+{
+    (void)core;
+
+    ui_init();
+}
+
 static void egui_lcd_init(egui_core_t *core)
 {
     (void)core;
@@ -68,6 +76,16 @@ static void egui_lcd_init(egui_core_t *core)
     LCD_Init();
     LCD_BLK_Set();
     LCD_Fill(0U, 0U, (uint16_t)(LCD_W - 1U), (uint16_t)(LCD_H - 1U), BLACK);
+}
+
+static void egui_lcd_dma_done(void *user_data)
+{
+    egui_core_t *core = (egui_core_t *)user_data;
+
+    if ((core != NULL) && (core->render.pfb_mgr.pending_count > 0U))
+    {
+        egui_pfb_notify_flush_complete(core);
+    }
 }
 
 static void egui_lcd_draw_area(egui_core_t *core,
@@ -80,15 +98,15 @@ static void egui_lcd_draw_area(egui_core_t *core,
     int16_t x2;
     int16_t y2;
 
-    (void)core;
-
     if ((data == NULL) || (w <= 0) || (h <= 0))
     {
+        egui_lcd_dma_done(core);
         return;
     }
 
     if ((x < 0) || (y < 0) || (x >= LCD_W) || (y >= LCD_H))
     {
+        egui_lcd_dma_done(core);
         return;
     }
 
@@ -96,10 +114,22 @@ static void egui_lcd_draw_area(egui_core_t *core,
     y2 = (int16_t)(y + h - 1);
     if ((x2 >= LCD_W) || (y2 >= LCD_H))
     {
+        egui_lcd_dma_done(core);
         return;
     }
 
-    LCD_Color_Render((uint16_t)x, (uint16_t)y, (uint16_t)x2, (uint16_t)y2, data);
+    if (!LCD_Color_Render_DMA((uint16_t)x, (uint16_t)y, (uint16_t)x2, (uint16_t)y2, data, egui_lcd_dma_done, core))
+    {
+        LCD_Color_Render((uint16_t)x, (uint16_t)y, (uint16_t)x2, (uint16_t)y2, data);
+        egui_lcd_dma_done(core);
+    }
+}
+
+static void egui_lcd_wait_draw_complete(egui_core_t *core)
+{
+    (void)core;
+
+    LCD_Color_Render_DMA_Wait();
 }
 
 static void egui_lcd_set_power(egui_core_t *core, uint8_t on)
@@ -119,7 +149,7 @@ static void egui_lcd_set_power(egui_core_t *core, uint8_t on)
 static const egui_display_driver_ops_t s_egui_lcd_ops = {
     .init = egui_lcd_init,
     .draw_area = egui_lcd_draw_area,
-    .wait_draw_complete = NULL,
+    .wait_draw_complete = egui_lcd_wait_draw_complete,
     .flush = NULL,
     .set_brightness = NULL,
     .set_power = egui_lcd_set_power,
@@ -144,16 +174,33 @@ static egui_display_driver_t s_egui_lcd_driver = {
 
 void egui_port_start(void)
 {
+    egui_color_int_t *pfb_buffers[EGUI_CONFIG_PFB_BUFFER_COUNT];
+    egui_display_setup_t setup;
+
     if (s_egui_started)
     {
         return;
     }
 
     egui_platform_register(&s_egui_platform);
-    egui_init(&s_egui_core, s_egui_pfb);
-    egui_display_driver_register(&s_egui_core, &s_egui_lcd_driver);
-    ui_init();
-    egui_core_resume(&s_egui_core);
+
+    for (int i = 0; i < EGUI_CONFIG_PFB_BUFFER_COUNT; i++)
+    {
+        pfb_buffers[i] = s_egui_pfb[i];
+    }
+
+    setup.screen_width = EGUI_CONFIG_SCREEN_WIDTH;
+    setup.screen_height = EGUI_CONFIG_SCREEN_HEIGHT;
+    setup.pfb_width = EGUI_CONFIG_PFB_WIDTH;
+    setup.pfb_height = EGUI_CONFIG_PFB_HEIGHT;
+    setup.pfb_buffers = pfb_buffers;
+    setup.pfb_buffer_count = EGUI_CONFIG_PFB_BUFFER_COUNT;
+    setup.display_driver = &s_egui_lcd_driver;
+    setup.render_config = NULL;
+    setup.touch_register = NULL;
+    setup.uicode_init = egui_port_ui_init;
+    setup.display_id = 0U;
+    egui_setup_display(&s_egui_core, &setup);
 
     s_egui_started = true;
 }

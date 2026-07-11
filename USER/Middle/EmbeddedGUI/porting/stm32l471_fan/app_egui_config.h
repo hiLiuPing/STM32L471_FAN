@@ -9,10 +9,10 @@
 /* Existing LVGL port used LV_COLOR_16_SWAP=1 for SPI RGB565 byte order. */
 #define EGUI_CONFIG_COLOR_16_SWAP 1
 
-/* Match the old LVGL 10-line draw buffer, but keep flushing synchronous first. */
+/* Two 10-line PFB buffers let SPI DMA flush one tile while the next tile renders. */
 #define EGUI_CONFIG_PFB_WIDTH        EGUI_CONFIG_SCREEN_WIDTH
 #define EGUI_CONFIG_PFB_HEIGHT       10
-#define EGUI_CONFIG_PFB_BUFFER_COUNT 1
+#define EGUI_CONFIG_PFB_BUFFER_COUNT 2
 
 #define EGUI_CONFIG_MAX_FPS          30
 #define EGUI_CONFIG_DIRTY_AREA_COUNT 4

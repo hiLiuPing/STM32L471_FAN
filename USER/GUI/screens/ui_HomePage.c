@@ -5,6 +5,11 @@
 #include "egui_port_stm32l471_fan.h"
 #include "page_manager.h"
 #include "ui_common.h"
+#include "ui_heiti_font.h"
+
+#define UI_HOME_CN_PROBE_TEXT \
+    "\xE4\xB8\xAD\xE6\x96\x87\xE6\xB5\x8B\xE8\xAF\x95" \
+    "\xEF\xBC\x9A\xE8\xAF\x97\xE8\xAF\x8D\xE5\xBC\xB9\xE7\xAA\x97"
 
 typedef struct
 {
@@ -39,9 +44,9 @@ void ui_HomePage_screen_destroy(void)
 {
 }
 
-void ui_HomePage_key_handler(void *key_event)
+bool ui_HomePage_key_handler(void *key_event)
 {
-    ui_page_handle_default_key_event(key_event);
+    return ui_page_consume_nav_key_event(key_event);
 }
 
 static void ui_HomePage_timer_cb(egui_timer_t *timer)
@@ -61,7 +66,7 @@ static void ui_HomePage_on_draw(egui_view_t *self)
 
     Time_Format(time_text);
 
-    ui_draw_header(canvas, "Home", "N/R switch pages  L/B page actions", 0x22C55E);
+    ui_draw_header(canvas, "Home", "", 0x22C55E);
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_48_4), time_text, 228, 12, 180, 54,
                  EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER, 0xF8FAFC);
 
@@ -76,4 +81,15 @@ static void ui_HomePage_on_draw(egui_view_t *self)
     ui_draw_panel(canvas, 290, 52, 118, 54, 0x312E11, 0xEAB308);
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_18_4), "Setting", 302, 60, 90, 22, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xFEF9C3);
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "System info", 302, 84, 90, 14, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xFDE68A);
+
+    if (ui_heiti_font_16_is_ready())
+    {
+        ui_draw_text(canvas, ui_heiti_font_get_16(), UI_HOME_CN_PROBE_TEXT, 18, 116, 260, 20,
+                     EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xE2E8F0);
+    }
+    else
+    {
+        ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "CN font missing: " UI_HEITI_FONT_16_PATH, 18, 118, 260, 18,
+                     EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0xFCA5A5);
+    }
 }

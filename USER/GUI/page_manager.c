@@ -227,9 +227,9 @@ void ui_page_manager_handle_key_event(void *key_event)
         return;
     }
 
-    if (current_page->key_event_handler != NULL)
+    if (current_page->key_consume != NULL)
     {
-        current_page->key_event_handler(key_event);
+        (void)current_page->key_consume(key_event);
     }
 }
 
@@ -243,26 +243,36 @@ void ui_page_manager_service(void)
     }
 }
 
-void ui_page_handle_default_key_event(void *key_event)
+bool ui_page_consume_nav_key_event(void *key_event)
 {
     const key_event_t *event = (const key_event_t *)key_event;
 
     if (event == NULL)
     {
-        return;
+        return false;
     }
 
     if ((event->type != KEY_EVT_CLICK) && (event->type != KEY_EVT_REPEAT))
     {
-        return;
+        return false;
+    }
+
+    if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
+    {
+        ui_page_manager_next();
+        return true;
     }
 
     if (event->id == KEY_ID_R)
     {
         ui_page_manager_next();
+        return true;
     }
     else if (event->id == KEY_ID_N)
     {
         ui_page_manager_prev();
+        return true;
     }
+
+    return false;
 }

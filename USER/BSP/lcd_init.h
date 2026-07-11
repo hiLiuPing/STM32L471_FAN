@@ -44,6 +44,7 @@ bool LCD_Color_Render_DMA(uint16_t xs,
                           const uint16_t *color_p,
                           lcd_dma_done_cb_t done_cb,
                           void *user_data);
+void LCD_Color_Render_DMA_Wait(void);
 void  MY_LCD_Fill(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey, uint16_t *color);
 void LCD_WR_Bus(uint8_t dat);
 void LCD_WR_DATA8(uint8_t dat);

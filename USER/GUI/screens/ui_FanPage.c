@@ -42,37 +42,38 @@ void ui_FanPage_screen_destroy(void)
 {
 }
 
-void ui_FanPage_key_handler(void *key_event)
+bool ui_FanPage_key_handler(void *key_event)
 {
-    const key_event_t *event = (const key_event_t *)key_event;
+    // const key_event_t *event = (const key_event_t *)key_event;
 
-    if (event == NULL)
-    {
-        return;
-    }
+    // if (event == NULL)
+    // {
+    //     return false;
+    // }
 
-    if (event->type == KEY_EVT_CLICK)
-    {
-        fan_state_t state;
+    // if (event->type == KEY_EVT_CLICK)
+    // {
+    //     fan_state_t state;
 
-        FanApp_GetState(&state);
-        if (event->id == KEY_ID_L)
-        {
-            (void)FanApp_SetPower(state.power_on == 0U, 0U);
-            egui_view_invalidate_full(ui_FanPage);
-            return;
-        }
-        if (event->id == KEY_ID_B)
-        {
-            uint8_t index = (uint8_t)((FanApp_ModeToIndex(state.mode) + 1U) % FanApp_GetModeCount());
+    //     FanApp_GetState(&state);
+    //     if (event->id == KEY_ID_L)
+    //     {
+    //         (void)FanApp_SetPower(state.power_on == 0U, 0U);
+    //         egui_view_invalidate_full(ui_FanPage);
+    //         return true;
+    //     }
+    //     if (event->id == KEY_ID_B)
+    //     {
+    //         uint8_t index = (uint8_t)((FanApp_ModeToIndex(state.mode) + 1U) % FanApp_GetModeCount());
 
-            (void)FanApp_SetMode(FanApp_ModeFromIndex(index), 0U);
-            egui_view_invalidate_full(ui_FanPage);
-            return;
-        }
-    }
+    //         (void)FanApp_SetMode(FanApp_ModeFromIndex(index), 0U);
+    //         egui_view_invalidate_full(ui_FanPage);
+    //         return true;
+    //     }
+    // }
 
-    ui_page_handle_default_key_event(key_event);
+    // return ui_page_consume_nav_key_event(key_event);
+    return ui_page_consume_nav_key_event(key_event);
 }
 
 static void ui_FanPage_timer_cb(egui_timer_t *timer)

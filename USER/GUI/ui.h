@@ -8,7 +8,7 @@ extern "C" {
 #include "page_manager.h"
 
 void ui_init(void);
-void ui_page_handle_default_key_event(void *key_event);
+bool ui_page_consume_nav_key_event(void *key_event);
 
 #ifdef __cplusplus
 }

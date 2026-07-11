@@ -18,7 +18,7 @@ typedef struct
     void (*init)(void);
     void (*deinit)(void);
     egui_view_t **page_view;
-    void (*key_event_handler)(void *key_event);
+    bool (*key_consume)(void *key_event);
     void (*service)(void);
     const char *name;
     bool nav_enabled;
@@ -34,7 +34,7 @@ void ui_page_manager_goto(const char *page_name, uint8_t index);
 ui_page_t *ui_page_manager_get_current(void);
 void ui_page_manager_handle_key_event(void *key_event);
 void ui_page_manager_service(void);
-void ui_page_handle_default_key_event(void *key_event);
+bool ui_page_consume_nav_key_event(void *key_event);
 
 #ifdef __cplusplus
 }

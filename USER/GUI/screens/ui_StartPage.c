@@ -47,9 +47,9 @@ void ui_StartPage_screen_destroy(void)
     }
 }
 
-void ui_StartPage_key_handler(void *key_event)
+bool ui_StartPage_key_handler(void *key_event)
 {
-    ui_page_handle_default_key_event(key_event);
+    return ui_page_consume_nav_key_event(key_event);
 }
 
 static void ui_StartPage_timer_cb(egui_timer_t *timer)

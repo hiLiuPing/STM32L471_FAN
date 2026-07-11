@@ -1716,6 +1716,11 @@
               <FilePath>../USER/GUI/ui_poetry_popup.c</FilePath>
             </File>
             <File>
+              <FileName>ui_heiti_font.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/ui_heiti_font.c</FilePath>
+            </File>
+            <File>
               <FileName>ui_StartPage.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/GUI/screens/ui_StartPage.c</FilePath>

@@ -14,6 +14,7 @@ bool LCD_Color_Render_DMA(uint16_t xs,
                           const uint16_t *color_p,
                           lcd_dma_done_cb_t done_cb,
                           void *user_data);
+void LCD_Color_Render_DMA_Wait(void);
 
 void LCD_DrawPoint(uint16_t x, uint16_t y, uint16_t color);                                                                                // »­µãº¯Êý
 void LCD_DrawLine(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, uint16_t color);                                                     // »®Ïßº¯Êý
