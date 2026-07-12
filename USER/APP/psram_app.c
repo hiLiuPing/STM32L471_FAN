@@ -21,7 +21,7 @@ int PSRAM_App_Init(void)
         return -1;
     }
 
-    log_printf("[APP] Font init OK\r\n");
+    log_printf("[APP] PSRAM init OK\r\n");
 
     // qspi_psram_test(&g_psram);
 

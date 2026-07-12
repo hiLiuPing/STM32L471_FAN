@@ -17,6 +17,9 @@
 #define EGUI_CONFIG_MAX_FPS          30
 #define EGUI_CONFIG_DIRTY_AREA_COUNT 4
 
+/* Enable 8-bit alpha channel pixel accessor for egui_image_std */
+#define EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565_8 1
+
 /* No touch in this migration round. Physical keys remain enabled. */
 #define EGUI_CONFIG_FUNCTION_SUPPORT_TOUCH 0
 #define EGUI_CONFIG_FUNCTION_SUPPORT_KEY   1

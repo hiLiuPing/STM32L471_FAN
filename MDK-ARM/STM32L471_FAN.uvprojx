@@ -1516,9 +1516,14 @@
               <FilePath>../USER/APP/weather_app.c</FilePath>
             </File>
             <File>
-              <FileName>qoi_scene_res.c</FileName>
+              <FileName>home_scene_res.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../USER/APP/qoi_scene_res.c</FilePath>
+              <FilePath>../USER/APP/home_scene_res.c</FilePath>
+            </File>
+            <File>
+              <FileName>psram_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/psram_app.c</FilePath>
             </File>
             <File>
               <FileName>systemMonitor_app.c</FileName>
@@ -1604,6 +1609,11 @@
               <FileName>multi_led.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/BSP/multi_led.c</FilePath>
+            </File>
+            <File>
+              <FileName>qspi_psram.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/BSP/qspi_psram.c</FilePath>
             </File>
             <File>
               <FileName>rgb_led.c</FileName>

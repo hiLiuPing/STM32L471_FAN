@@ -2,8 +2,8 @@
 
 #include "core/egui_timer.h"
 #include "egui_port_stm32l471_fan.h"
+#include "home_scene_res.h"
 #include "page_manager.h"
-#include "qoi_scene_res.h"
 #include "ui_common.h"
 
 typedef struct
@@ -16,6 +16,8 @@ static ui_home_page_t s_home_page;
 static egui_view_api_t s_home_api;
 
 egui_view_t *ui_HomePage = NULL;
+static bool s_home_animation_enabled = true;
+static uint32_t s_home_scene_tick = 0U;
 
 static void ui_HomePage_on_draw(egui_view_t *self);
 static void ui_HomePage_draw_scene(egui_canvas_t *canvas);
@@ -26,7 +28,7 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer);
 
 /* Draw image only if partially visible on screen.
  * All scene images are ≤232px wide, so x∈(-232, 428) guarantees visibility. */
-static inline void draw_if_visible(const egui_image_qoi_t *img, egui_canvas_t *canvas,
+static inline void draw_if_visible(const egui_image_std_t *img, egui_canvas_t *canvas,
                                     int x, int y)
 {
     if (x < SCREEN_W && x > -232)
@@ -47,7 +49,9 @@ void ui_HomePage_screen_init(void)
     egui_view_set_position(view, 0, 0);
     egui_view_set_size(view, UI_SCREEN_W, UI_SCREEN_H);
     egui_view_set_visible(view, 1);
-    egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 100U);
+    s_home_animation_enabled = true;
+    s_home_scene_tick = egui_timer_get_current_time();
+    egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 50U);
 }
 
 void ui_HomePage_screen_destroy(void)
@@ -59,12 +63,38 @@ bool ui_HomePage_key_handler(void *key_event)
     return ui_page_consume_nav_key_event(key_event);
 }
 
+void ui_HomePage_set_animation_enabled(bool enable)
+{
+    bool next = enable ? true : false;
+
+    if (s_home_animation_enabled == next)
+    {
+        return;
+    }
+
+    s_home_animation_enabled = next;
+    if (s_home_animation_enabled)
+    {
+        s_home_scene_tick = egui_timer_get_current_time();
+        if ((ui_HomePage != NULL) && egui_view_get_visible(ui_HomePage))
+        {
+            egui_view_invalidate_full(ui_HomePage);
+        }
+    }
+}
+
+bool ui_HomePage_get_animation_enabled(void)
+{
+    return s_home_animation_enabled;
+}
+
 static void ui_HomePage_timer_cb(egui_timer_t *timer)
 {
     egui_view_t *view = (egui_view_t *)timer->user_data;
 
-    if ((view != NULL) && egui_view_get_visible(view))
+    if ((view != NULL) && egui_view_get_visible(view) && s_home_animation_enabled)
     {
+        s_home_scene_tick = egui_timer_get_current_time();
         egui_view_invalidate_full(view);
     }
 }
@@ -87,9 +117,9 @@ static void draw_grass_front_group(egui_canvas_t *canvas, int base_x)
 
 static void ui_HomePage_draw_scene(egui_canvas_t *canvas)
 {
-#if EGUI_CONFIG_FUNCTION_IMAGE_CODEC_QOI
+#if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565
 
-    static const egui_image_qoi_t *const bikes[] =
+    static const egui_image_std_t *const bikes[] =
     {
         &qoi_scene_bike1,
         &qoi_scene_bike2,
@@ -97,7 +127,7 @@ static void ui_HomePage_draw_scene(egui_canvas_t *canvas)
         &qoi_scene_bike4,
     };
 
-    uint32_t tick = egui_timer_get_current_time();
+    uint32_t tick = s_home_scene_tick;
 
     uint8_t bike_index = (tick / 100) % 4;
 

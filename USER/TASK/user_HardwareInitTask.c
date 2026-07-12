@@ -8,6 +8,7 @@
 #include "lfs_port.h"
 #include "log.h"
 #include "main.h"
+#include "psram_app.h"
 #include "sensors_app.h"
 #include "spi_flash.h"
 #include "systemMonitor_app.h"
@@ -61,6 +62,17 @@ void HardwareInitTask(void *argument)
     {
         log_printf("littlefs mount OK");
     }
+
+    log_printf("step3.7: psram init...");
+    if (PSRAM_App_Init() != 0)
+    {
+        log_printf("psram init FAIL");
+    }
+    else
+    {
+        log_printf("psram init OK");
+    }
+
     log_printf("step4: egui init...");
     egui_port_start();
     if (LPTIM1_Start1sTick() != HAL_OK)

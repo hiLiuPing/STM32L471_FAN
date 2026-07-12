@@ -11,9 +11,14 @@
 #include "log.h"
 #include "page_manager.h"
 #include "poetry_app.h"
+#include "screens/ui_HomePage.h"
 #include "ui_common.h"
 #include "ui_heiti_font.h"
 #include "widget/egui_view.h"
+
+#ifndef UI_POETRY_POPUP_PAUSE_HOME_ANIM
+#define UI_POETRY_POPUP_PAUSE_HOME_ANIM 1
+#endif
 
 #define UI_POETRY_POPUP_TIMER_MS       50U
 #define UI_POETRY_POPUP_PANEL_X        54
@@ -53,6 +58,7 @@ typedef struct
     int16_t hidden_panel_y;
     uint16_t text_total_h;
     uint8_t line_count;
+    uint8_t home_anim_was_enabled;
     uint8_t poem_buf[POETRY_APP_MAX_TEXT_SIZE];
     const char *lines[POETRY_APP_MAX_POEM_LINES];
     egui_dim_t line_widths[POETRY_APP_MAX_POEM_LINES];
@@ -311,6 +317,10 @@ static void ui_poetry_popup_show(void)
     }
 
     now = egui_timer_get_current_time();
+#if UI_POETRY_POPUP_PAUSE_HOME_ANIM
+    s_popup.home_anim_was_enabled = ui_HomePage_get_animation_enabled() ? 1U : 0U;
+    ui_HomePage_set_animation_enabled(false);
+#endif
     s_popup.phase = UI_POETRY_POPUP_PHASE_ENTERING;
     s_popup.shown_at_ms = now;
     s_popup.anim_start_ms = now;
@@ -339,6 +349,13 @@ static void ui_poetry_popup_hide(void)
     s_popup.shown_at_ms = 0U;
     s_popup.anim_start_ms = 0U;
     s_popup.panel_y = s_popup.hidden_panel_y;
+#if UI_POETRY_POPUP_PAUSE_HOME_ANIM
+    if (s_popup.home_anim_was_enabled != 0U)
+    {
+        ui_HomePage_set_animation_enabled(true);
+    }
+    s_popup.home_anim_was_enabled = 0U;
+#endif
     ui_poetry_popup_invalidate_panel(old_y);
     egui_view_set_visible(EGUI_VIEW_OF(&s_popup.base), 0);
     log_printf("[UI_POETRY] hide");
