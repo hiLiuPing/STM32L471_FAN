@@ -34,6 +34,19 @@ static inline void ui_draw_panel(egui_canvas_t *canvas,
     egui_canvas_draw_rectangle(canvas, x, y, w, h, 1, ui_color(border_rgb), EGUI_ALPHA_100);
 }
 
+static inline void ui_draw_round_panel(egui_canvas_t *canvas,
+                                       egui_dim_t x,
+                                       egui_dim_t y,
+                                       egui_dim_t w,
+                                       egui_dim_t h,
+                                       egui_dim_t r,
+                                       uint32_t fill_rgb,
+                                       uint32_t border_rgb)
+{
+    egui_canvas_draw_round_rectangle_fill(canvas, x, y, w, h, r, ui_color(fill_rgb), EGUI_ALPHA_100);
+    egui_canvas_draw_round_rectangle(canvas, x, y, w, h, r, 1, ui_color(border_rgb), EGUI_ALPHA_100);
+}
+
 static inline void ui_draw_text(egui_canvas_t *canvas,
                                 const egui_font_t *font,
                                 const char *text,

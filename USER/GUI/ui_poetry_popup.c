@@ -511,6 +511,6 @@ static void ui_poetry_popup_on_draw(egui_view_t *self)
         return;
     }
 
-    ui_draw_panel(canvas, UI_POETRY_POPUP_PANEL_X, s_popup.panel_y, UI_POETRY_POPUP_PANEL_W, UI_POETRY_POPUP_PANEL_H, 0x111827, 0x93C5FD);
+    ui_draw_round_panel(canvas, UI_POETRY_POPUP_PANEL_X, s_popup.panel_y, UI_POETRY_POPUP_PANEL_W, UI_POETRY_POPUP_PANEL_H, 12, 0x4A90E2, 0xFFFFFF);
     ui_poetry_popup_draw_lines(canvas, s_popup.panel_y);
 }
