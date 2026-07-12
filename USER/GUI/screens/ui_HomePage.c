@@ -55,35 +55,65 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer)
     }
 }
 
+static void draw_cloud_group(egui_canvas_t *canvas, int base_x)
+{
+    egui_image_draw_image(&qoi_scene_cloud1.base, canvas, base_x + 20, 8);
+    egui_image_draw_image(&qoi_scene_cloud2.base, canvas, base_x + 300, 50);
+}
+
+static void draw_grass_front_group(egui_canvas_t *canvas, int base_x)
+{
+    egui_image_draw_image(&qoi_scene_grassF0.base, canvas, base_x + 62, 120);
+    egui_image_draw_image(&qoi_scene_grassF1.base, canvas, base_x + 126, 120);
+    egui_image_draw_image(&qoi_scene_grassF2.base, canvas, base_x + 200, 120);
+    egui_image_draw_image(&qoi_scene_grassF3.base, canvas, base_x + 254, 120);
+    egui_image_draw_image(&qoi_scene_grassF4.base, canvas, base_x + 300, 120);
+    egui_image_draw_image(&qoi_scene_grassF5.base, canvas, base_x + 390, 120);
+}
 static void ui_HomePage_draw_scene(egui_canvas_t *canvas)
 {
 #if EGUI_CONFIG_FUNCTION_IMAGE_CODEC_QOI
-    const egui_image_qoi_t *bikes[] = {
+
+    const egui_image_qoi_t *bikes[] =
+    {
         &qoi_scene_bike1,
         &qoi_scene_bike2,
         &qoi_scene_bike3,
         &qoi_scene_bike4,
     };
-    uint32_t tick = egui_timer_get_current_time();
-    uint8_t bike_index = (uint8_t)((tick / 250U) % (sizeof(bikes) / sizeof(bikes[0])));
 
-    egui_image_draw_image(&qoi_scene_cloud3.base, canvas, -28, 14);
-    egui_image_draw_image(&qoi_scene_cloud4.base, canvas, 78, 4);
-    egui_image_draw_image(&qoi_scene_cloud5.base, canvas, 194, 18);
-    egui_image_draw_image(&qoi_scene_cloud1.base, canvas, 292, 8);
-    egui_image_draw_image(&qoi_scene_cloud2.base, canvas, 10, 0);
+    uint32_t tick = egui_timer_get_current_time();
+
+    uint8_t bike_index = (tick / 100) % 4;
+
+    /* 云：慢 */
+    int cloud_offset = (tick / 100) % 428;
+    int cloud_base1 = -cloud_offset;
+    int cloud_base2 = cloud_base1 + 428;
+
+    draw_cloud_group(canvas, cloud_base1);
+    draw_cloud_group(canvas, cloud_base2);
+
+    /* 地面 */
+    for (int x = 0; x <= 400; x += 40)
+    {
+        egui_image_draw_image(&qoi_scene_grass.base, canvas, x, 110);
+    }
 
     egui_image_draw_image(&qoi_scene_grass0.base, canvas, 0, 117);
-    egui_image_draw_image(&qoi_scene_grass0.base, canvas, 196, 117);
-    egui_image_draw_image(&qoi_scene_grass.base, canvas, 30, 103);
-    egui_image_draw_image(&qoi_scene_grassF0.base, canvas, 82, 105);
-    egui_image_draw_image(&qoi_scene_grassF1.base, canvas, 126, 103);
-    egui_image_draw_image(&qoi_scene_grassF2.base, canvas, 246, 98);
-    egui_image_draw_image(&qoi_scene_grassF3.base, canvas, 304, 105);
-    egui_image_draw_image(&qoi_scene_grassF4.base, canvas, 354, 101);
-    egui_image_draw_image(&qoi_scene_grassF5.base, canvas, 390, 102);
+    egui_image_draw_image(&qoi_scene_grass0.base, canvas, 195, 117);
 
-    egui_image_draw_image(&bikes[bike_index]->base, canvas, 178, 70);
+    /* 前景草：比云快一点 */
+    int grass_offset = (tick / 50) % 428;
+    int grass_base1 = -grass_offset;
+    int grass_base2 = grass_base1 + 428;
+
+    draw_grass_front_group(canvas, grass_base1);
+    draw_grass_front_group(canvas, grass_base2);
+
+    /* 自行车 */
+    egui_image_draw_image(&bikes[bike_index]->base, canvas, 178, 55);
+
 #else
     EGUI_UNUSED(canvas);
 #endif
