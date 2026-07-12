@@ -1,10 +1,13 @@
 #include "ui_HomePage.h"
 
 #include "core/egui_timer.h"
+#include "data_app.h"
 #include "egui_port_stm32l471_fan.h"
 #include "home_scene_res.h"
+#include "icons.h"
 #include "page_manager.h"
 #include "ui_common.h"
+#include "ui_heiti_font.h"
 
 typedef struct
 {
@@ -18,13 +21,26 @@ static egui_view_api_t s_home_api;
 egui_view_t *ui_HomePage = NULL;
 static bool s_home_animation_enabled = true;
 static uint32_t s_home_scene_tick = 0U;
+static uint32_t s_home_status_tick = 0U;
+static uint32_t s_home_status_version = 0xFFFFFFFFU;
+static const egui_font_t *s_home_heiti_16 = NULL;
 
 static void ui_HomePage_on_draw(egui_view_t *self);
 static void ui_HomePage_draw_scene(egui_canvas_t *canvas);
+static void ui_HomePage_draw_status(egui_canvas_t *canvas);
 static void ui_HomePage_timer_cb(egui_timer_t *timer);
 
 /* Screen bounds for culling */
 #define SCREEN_W (int)UI_SCREEN_W
+
+#define HOME_STATUS_TOP_X 0
+#define HOME_STATUS_TOP_Y 0
+#define HOME_STATUS_TOP_W UI_SCREEN_W
+#define HOME_STATUS_TOP_H 34
+#define HOME_STATUS_ENV_X 288
+#define HOME_STATUS_ENV_Y 110
+#define HOME_STATUS_ENV_W 136
+#define HOME_STATUS_ENV_H 32
 
 /* Draw image only if partially visible on screen.
  * All scene images are ≤232px wide, so x∈(-232, 428) guarantees visibility. */
@@ -35,6 +51,38 @@ static inline void draw_if_visible(const egui_image_std_t *img, egui_canvas_t *c
     {
         egui_image_draw_image(&img->base, canvas, x, y);
     }
+}
+
+static void ui_HomePage_invalidate_rect(egui_view_t *view,
+                                        egui_dim_t x,
+                                        egui_dim_t y,
+                                        egui_dim_t w,
+                                        egui_dim_t h)
+{
+    egui_region_t region;
+
+    region.location.x = x;
+    region.location.y = y;
+    region.size.width = w;
+    region.size.height = h;
+    egui_view_invalidate_region(view, &region);
+}
+
+static void ui_HomePage_invalidate_scene_regions(egui_view_t *view)
+{
+    ui_HomePage_invalidate_rect(view, 0, HOME_STATUS_TOP_H, UI_SCREEN_W, 76);
+    ui_HomePage_invalidate_rect(view, 0, HOME_STATUS_ENV_Y, HOME_STATUS_ENV_X, (egui_dim_t)(UI_SCREEN_H - HOME_STATUS_ENV_Y));
+    ui_HomePage_invalidate_rect(view,
+                                (egui_dim_t)(HOME_STATUS_ENV_X + HOME_STATUS_ENV_W),
+                                HOME_STATUS_ENV_Y,
+                                (egui_dim_t)(UI_SCREEN_W - HOME_STATUS_ENV_X - HOME_STATUS_ENV_W),
+                                (egui_dim_t)(UI_SCREEN_H - HOME_STATUS_ENV_Y));
+}
+
+static void ui_HomePage_invalidate_status_regions(egui_view_t *view)
+{
+    ui_HomePage_invalidate_rect(view, HOME_STATUS_TOP_X, HOME_STATUS_TOP_Y, HOME_STATUS_TOP_W, HOME_STATUS_TOP_H);
+    ui_HomePage_invalidate_rect(view, HOME_STATUS_ENV_X, HOME_STATUS_ENV_Y, HOME_STATUS_ENV_W, HOME_STATUS_ENV_H);
 }
 
 void ui_HomePage_screen_init(void)
@@ -51,6 +99,9 @@ void ui_HomePage_screen_init(void)
     egui_view_set_visible(view, 1);
     s_home_animation_enabled = true;
     s_home_scene_tick = egui_timer_get_current_time();
+    s_home_status_tick = s_home_scene_tick;
+    s_home_status_version = 0xFFFFFFFFU;
+    s_home_heiti_16 = NULL;
     egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 50U);
 }
 
@@ -91,11 +142,40 @@ bool ui_HomePage_get_animation_enabled(void)
 static void ui_HomePage_timer_cb(egui_timer_t *timer)
 {
     egui_view_t *view = (egui_view_t *)timer->user_data;
+    DataApp_HomeStatus_t status;
+    uint32_t now;
+    uint8_t refresh_status = 0U;
 
-    if ((view != NULL) && egui_view_get_visible(view) && s_home_animation_enabled)
+    if ((view == NULL) || !egui_view_get_visible(view))
     {
-        s_home_scene_tick = egui_timer_get_current_time();
-        egui_view_invalidate_full(view);
+        return;
+    }
+
+    now = egui_timer_get_current_time();
+    DataApp_HomeStatus_Get(&status);
+    if (status.version != s_home_status_version)
+    {
+        s_home_status_version = status.version;
+        refresh_status = 1U;
+    }
+    if ((now - s_home_status_tick) >= 1000U)
+    {
+        s_home_status_tick = now;
+        refresh_status = 1U;
+    }
+
+    if (s_home_animation_enabled)
+    {
+        s_home_scene_tick = now;
+        ui_HomePage_invalidate_scene_regions(view);
+        if (refresh_status != 0U)
+        {
+            ui_HomePage_invalidate_status_regions(view);
+        }
+    }
+    else if (refresh_status != 0U)
+    {
+        ui_HomePage_invalidate_status_regions(view);
     }
 }
 
@@ -170,10 +250,113 @@ static void ui_HomePage_draw_scene(egui_canvas_t *canvas)
 #endif
 }
 
+static void ui_HomePage_draw_raw_text(egui_canvas_t *canvas,
+                                      const egui_font_t *font,
+                                      const char *text,
+                                      egui_dim_t x,
+                                      egui_dim_t y,
+                                      uint32_t rgb)
+{
+    if ((font != NULL) && (text != NULL))
+    {
+        egui_canvas_draw_text(canvas, font, text, x, y, ui_color(rgb), EGUI_ALPHA_100);
+    }
+}
+
+static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
+                                             egui_dim_t x,
+                                             egui_dim_t y,
+                                             egui_dim_t w,
+                                             egui_dim_t h)
+{
+    egui_region_t target;
+    egui_region_t clipped;
+    egui_region_t *work_region;
+
+    if (canvas == NULL)
+    {
+        return 0U;
+    }
+
+    target.location.x = x;
+    target.location.y = y;
+    target.size.width = w;
+    target.size.height = h;
+    work_region = egui_canvas_get_base_view_work_region(canvas);
+    egui_region_intersect(work_region, &target, &clipped);
+
+    return (uint8_t)((clipped.size.width > 0) && (clipped.size.height > 0));
+}
+
+static void ui_HomePage_draw_top_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status)
+{
+    const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_12_4);
+    const egui_font_t *heiti_font;
+#if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565
+    const egui_image_std_t *weather_icon;
+#endif
+
+    if ((status == NULL) ||
+        !ui_HomePage_canvas_intersects(canvas, HOME_STATUS_TOP_X, HOME_STATUS_TOP_Y, HOME_STATUS_TOP_W, HOME_STATUS_TOP_H))
+    {
+        return;
+    }
+
+    if (s_home_heiti_16 == NULL)
+    {
+        s_home_heiti_16 = ui_heiti_font_get_16();
+    }
+    heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
+
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_30_4), status->time_text, 10, 1, 86, 32, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0x0F172A);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->date_text, 104, 9, 0x0F172A);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->week_text, 194, 9, 0x0F172A);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->temp_high_text, 270, 9, 0x0F172A);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->temp_low_text, 326, 9, 0x0F172A);
+
+#if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565
+    weather_icon = ui_weather_icon_get(status->weather_icon_id);
+    if (weather_icon != NULL)
+    {
+        egui_image_draw_image(&weather_icon->base, canvas, 390, 2);
+    }
+#endif
+}
+
+static void ui_HomePage_draw_env_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status)
+{
+    const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_12_4);
+    const egui_font_t *heiti_font;
+
+    if ((status == NULL) ||
+        !ui_HomePage_canvas_intersects(canvas, HOME_STATUS_ENV_X, HOME_STATUS_ENV_Y, HOME_STATUS_ENV_W, HOME_STATUS_ENV_H))
+    {
+        return;
+    }
+
+    if (s_home_heiti_16 == NULL)
+    {
+        s_home_heiti_16 = ui_heiti_font_get_16();
+    }
+    heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
+
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->env_text, 316, 116, 0x164E63);
+}
+
+static void ui_HomePage_draw_status(egui_canvas_t *canvas)
+{
+    DataApp_HomeStatus_t status;
+
+    DataApp_HomeStatus_Get(&status);
+    ui_HomePage_draw_top_status(canvas, &status);
+    ui_HomePage_draw_env_status(canvas, &status);
+}
+
 static void ui_HomePage_on_draw(egui_view_t *self)
 {
     egui_canvas_t *canvas = egui_view_get_canvas(self);
 
     ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, 0x87CEEB);
     ui_HomePage_draw_scene(canvas);
+    ui_HomePage_draw_status(canvas);
 }

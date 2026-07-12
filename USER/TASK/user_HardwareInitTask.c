@@ -83,5 +83,7 @@ void HardwareInitTask(void *argument)
     log_printf("step5: hw ready");
     User_Tasks_SetHardwareReady();
     log_printf("step6: delete self");
+    Weather_FillDemoData();
+    log_printf("fill demo weather data");
     vTaskDelete(NULL);
 }

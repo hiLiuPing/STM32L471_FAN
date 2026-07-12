@@ -6,8 +6,10 @@
 
 #include "rtc.h"
 #include "task.h"
+#include "weather_app.h"
 
 #define DATA_APP_TIME_BUF_NUM 2U
+#define DATA_APP_HOME_STATUS_BUF_NUM 2U
 
 TiltKey_t current_raw_direction = MSG_TILT_NONE;
 
@@ -15,6 +17,87 @@ static app_time_t s_time_buf[DATA_APP_TIME_BUF_NUM];
 static volatile uint8_t s_time_write_idx = 0U;
 static volatile uint8_t s_time_read_idx = 1U;
 static uint8_t s_colon = 1U;
+static DataApp_HomeStatus_t s_home_status_buf[DATA_APP_HOME_STATUS_BUF_NUM];
+static volatile uint8_t s_home_status_read_idx = 0U;
+static uint32_t s_home_status_version = 0U;
+
+static uint8_t DataApp_Weekday(uint16_t year, uint8_t month, uint8_t day)
+{
+    static const uint8_t offsets[] = { 0U, 3U, 2U, 5U, 0U, 3U, 5U, 1U, 4U, 6U, 2U, 4U };
+    uint16_t y = year;
+
+    if ((year < 2000U) || (month < 1U) || (month > 12U) || (day < 1U) || (day > 31U))
+    {
+        return 0U;
+    }
+
+    if (month < 3U)
+    {
+        y--;
+    }
+
+    return (uint8_t)((y + (y / 4U) - (y / 100U) + (y / 400U) + offsets[month - 1U] + day) % 7U);
+}
+
+static int DataApp_FloatToX10(float value)
+{
+    if (value >= 0.0f)
+    {
+        return (int)((value * 10.0f) + 0.5f);
+    }
+
+    return (int)((value * 10.0f) - 0.5f);
+}
+
+static int DataApp_HumidityToInt(float humidity)
+{
+    if (humidity < 0.0f)
+    {
+        return 0;
+    }
+    if (humidity > 100.0f)
+    {
+        return 100;
+    }
+    return (int)(humidity + 0.5f);
+}
+
+static void DataApp_FormatEnv(char *buf, uint32_t buf_size)
+{
+    int temp_x10;
+    int temp_abs;
+
+    if ((buf == NULL) || (buf_size == 0U))
+    {
+        return;
+    }
+
+    temp_x10 = DataApp_FloatToX10(g_sensors_environment.temp);
+    temp_abs = (temp_x10 < 0) ? -temp_x10 : temp_x10;
+    (void)snprintf(buf,
+                   buf_size,
+                   "%s%d.%dC %d%%",
+                   (temp_x10 < 0) ? "-" : "",
+                   temp_abs / 10,
+                   temp_abs % 10,
+                   DataApp_HumidityToInt(g_sensors_environment.hum));
+}
+
+static uint8_t DataApp_HomeStatusEquals(const DataApp_HomeStatus_t *a, const DataApp_HomeStatus_t *b)
+{
+    if ((a == NULL) || (b == NULL))
+    {
+        return 0U;
+    }
+
+    return (uint8_t)((a->weather_icon_id == b->weather_icon_id) &&
+                     (strcmp(a->time_text, b->time_text) == 0) &&
+                     (strcmp(a->date_text, b->date_text) == 0) &&
+                     (strcmp(a->week_text, b->week_text) == 0) &&
+                     (strcmp(a->temp_high_text, b->temp_high_text) == 0) &&
+                     (strcmp(a->temp_low_text, b->temp_low_text) == 0) &&
+                     (strcmp(a->env_text, b->env_text) == 0));
+}
 
 void Time_Init(void)
 {
@@ -87,11 +170,64 @@ void Time_Format(char *out)
     }
 }
 
+void DataApp_HomeStatus_Update(void)
+{
+    static const char *const week_text[] = {
+        "\345\221\250\346\227\245",
+        "\345\221\250\344\270\200",
+        "\345\221\250\344\272\214",
+        "\345\221\250\344\270\211",
+        "\345\221\250\345\233\233",
+        "\345\221\250\344\272\224",
+        "\345\221\250\345\205\255",
+    };
+    DataApp_HomeStatus_t next;
+    const DataApp_HomeStatus_t *current = &s_home_status_buf[s_home_status_read_idx];
+    const WeatherDay_t *today = &g_future_weather[0];
+    app_time_t t;
+    uint8_t weekday;
+    uint8_t write_idx;
+
+    memset(&next, 0, sizeof(next));
+    Time_Get(&t);
+    weekday = DataApp_Weekday(t.year, t.month, t.date);
+
+    (void)snprintf(next.time_text, sizeof(next.time_text), "%02u:%02u", t.hour, t.min);
+    (void)snprintf(next.date_text, sizeof(next.date_text), "%u\346\234\210%u\346\227\245", t.month, t.date);
+    (void)snprintf(next.week_text, sizeof(next.week_text), "%s", week_text[weekday]);
+    (void)snprintf(next.temp_high_text, sizeof(next.temp_high_text), "\351\253\230%dC", today->temp_high);
+    (void)snprintf(next.temp_low_text, sizeof(next.temp_low_text), "\344\275\216%dC", today->temp_low);
+    DataApp_FormatEnv(next.env_text, sizeof(next.env_text));
+    next.weather_icon_id = (uint16_t)today->icon_id;
+
+    if (!DataApp_HomeStatusEquals(&next, current))
+    {
+        s_home_status_version++;
+    }
+    next.version = s_home_status_version;
+
+    write_idx = (uint8_t)((s_home_status_read_idx + 1U) % DATA_APP_HOME_STATUS_BUF_NUM);
+    s_home_status_buf[write_idx] = next;
+    s_home_status_read_idx = write_idx;
+}
+
+void DataApp_HomeStatus_Get(DataApp_HomeStatus_t *out)
+{
+    if (out != NULL)
+    {
+        *out = s_home_status_buf[s_home_status_read_idx];
+    }
+}
+
 void DataApp_Init(void)
 {
     Time_Init();
+    memset(s_home_status_buf, 0, sizeof(s_home_status_buf));
+    s_home_status_read_idx = 0U;
+    s_home_status_version = 0U;
     RTC_ReadToBuffer();
     Buffer_Swap();
+    DataApp_HomeStatus_Update();
 }
 
 void DataApp_QuoteInvalidate(void)

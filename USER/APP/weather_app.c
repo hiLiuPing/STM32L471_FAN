@@ -66,16 +66,71 @@ uint8_t Weather_HasCompletedSync(void)
 
 void Weather_FillDemoData(void)
 {
-    copy_token(g_now_weather.text, sizeof(g_now_weather.text), "Rain");
+    strcpy(g_now_weather.text, "Rain");
     g_now_weather.icon = 100;
     g_now_weather.temp = 22;
     g_now_weather.feelsLike = 24;
-    copy_token(g_now_weather.windDir, sizeof(g_now_weather.windDir), "East");
+    strcpy(g_now_weather.windDir, "East");
+    g_now_weather.windScale = 0;
     g_now_weather.vis = 2;
-    g_now_weather.humidity = 55;
+    g_now_weather.humidity = 15;
     g_now_weather.aqi = 95;
+    g_now_weather.pm10 = 22;
+    g_now_weather.pm25 = 13;
+    g_now_weather.no2 = 10;
+    g_now_weather.so2 = 6;
+    g_now_weather.co = 5.00f;
+    g_now_weather.o3 = 0;
+
     g_air_detail.aqi = 22;
+    g_air_detail.pm10 = 13;
     g_air_detail.pm25 = 10;
+    g_air_detail.no2 = 6;
+    g_air_detail.so2 = 5;
+    g_air_detail.co = 0.00f;
+    g_air_detail.o3 = 70;
+
+    strcpy(g_future_weather[0].date, "2026-06-13");
+    strcpy(g_future_weather[0].weather, "HeavyRain");
+    g_future_weather[0].temp_high = 23;
+    g_future_weather[0].temp_low = 20;
+    g_future_weather[0].icon_id = 307;
+
+    strcpy(g_future_weather[1].date, "2026-06-14");
+    strcpy(g_future_weather[1].weather, "Cloudy");
+    g_future_weather[1].temp_high = 32;
+    g_future_weather[1].temp_low = 21;
+    g_future_weather[1].icon_id = 101;
+
+    strcpy(g_future_weather[2].date, "2026-06-15");
+    strcpy(g_future_weather[2].weather, "Cloudy");
+    g_future_weather[2].temp_high = 33;
+    g_future_weather[2].temp_low = 23;
+    g_future_weather[2].icon_id = 101;
+
+    strcpy(g_future_weather[3].date, "2026-06-16");
+    strcpy(g_future_weather[3].weather, "Rain");
+    g_future_weather[3].temp_high = 34;
+    g_future_weather[3].temp_low = 24;
+    g_future_weather[3].icon_id = 305;
+
+    strcpy(g_future_weather[4].date, "2026-06-17");
+    strcpy(g_future_weather[4].weather, "Rain");
+    g_future_weather[4].temp_high = 34;
+    g_future_weather[4].temp_low = 25;
+    g_future_weather[4].icon_id = 305;
+
+    strcpy(g_future_weather[5].date, "2026-06-18");
+    strcpy(g_future_weather[5].weather, "MidRain");
+    g_future_weather[5].temp_high = 30;
+    g_future_weather[5].temp_low = 25;
+    g_future_weather[5].icon_id = 306;
+
+    strcpy(g_future_weather[6].date, "2026-06-19");
+    strcpy(g_future_weather[6].weather, "MidRain");
+    g_future_weather[6].temp_high = 29;
+    g_future_weather[6].temp_low = 25;
+    g_future_weather[6].icon_id = 306;
 }
 
 uint8_t stm32_calc_crc8(uint8_t *ptr, uint16_t len)

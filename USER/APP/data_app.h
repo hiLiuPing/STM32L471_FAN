@@ -20,6 +20,7 @@ extern "C" {
 
 #define DATA_APP_QUOTE_DEFAULT_PERIOD_MS 50000U
 #define DATA_APP_QUOTE_TEXT_LEN          96U
+#define DATA_APP_HOME_TEXT_LEN           24U
 
 typedef struct
 {
@@ -30,6 +31,18 @@ typedef struct
     uint8_t min;
     uint8_t sec;
 } app_time_t;
+
+typedef struct
+{
+    char time_text[8];
+    char date_text[DATA_APP_HOME_TEXT_LEN];
+    char week_text[DATA_APP_HOME_TEXT_LEN];
+    char temp_high_text[DATA_APP_HOME_TEXT_LEN];
+    char temp_low_text[DATA_APP_HOME_TEXT_LEN];
+    char env_text[DATA_APP_HOME_TEXT_LEN];
+    uint16_t weather_icon_id;
+    uint32_t version;
+} DataApp_HomeStatus_t;
 
 typedef enum
 {
@@ -73,6 +86,8 @@ void Time_BlinkUpdate(void);
 void RTC_ReadToBuffer(void);
 void Buffer_Swap(void);
 void Time_Format(char *out);
+void DataApp_HomeStatus_Update(void);
+void DataApp_HomeStatus_Get(DataApp_HomeStatus_t *out);
 
 void DataApp_QuoteInvalidate(void);
 void DataApp_QuoteServiceUpdate(TickType_t now);

@@ -127,12 +127,12 @@ void User_Tasks_Init(void)
                                          tskIDLE_PRIORITY + 1U,
                                          &EGUIHandlerTaskHandle));
 
-    // User_Tasks_RequireStatus(xTaskCreate(TransmitTask,
-    //                                      "TransmitTask",
-    //                                      512U,
-    //                                      NULL,
-    //                                      tskIDLE_PRIORITY + 2U,
-    //                                      &TransmitTaskHandle));
+    User_Tasks_RequireStatus(xTaskCreate(TransmitTask,
+                                         "TransmitTask",
+                                         512U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 2U,
+                                         &TransmitTaskHandle));
 
     User_Tasks_RequireStatus(xTaskCreate(AppDataTask,
                                          "AppDataTask",
@@ -141,10 +141,10 @@ void User_Tasks_Init(void)
                                          tskIDLE_PRIORITY + 2U,
                                          &AppDataTaskHandle));
 
-    // User_Tasks_RequireStatus(xTaskCreate(WeatherSyncTask,
-    //                                      "WeatherSync",
-    //                                      256U,
-    //                                      NULL,
-    //                                      tskIDLE_PRIORITY + 1U,
-    //                                      &WeatherSyncTaskHandle));
+    User_Tasks_RequireStatus(xTaskCreate(WeatherSyncTask,
+                                         "WeatherSync",
+                                         256U,
+                                         NULL,
+                                         tskIDLE_PRIORITY + 1U,
+                                         &WeatherSyncTaskHandle));
 }

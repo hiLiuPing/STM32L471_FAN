@@ -21,6 +21,19 @@ typedef struct
     uint8_t glyph_bitmap[HEITI_FONT_GLYPH_RAW_MAX];
 } ui_heiti_font_t;
 
+#define UI_HEITI_GLYPH_CACHE_SLOTS 16U
+
+typedef struct
+{
+    const ui_heiti_font_t *font;
+    uint32_t cp;
+    HeitiFont_GlyphDsc_t dsc;
+    uint8_t bpp;
+    uint8_t valid;
+    uint32_t age;
+    uint8_t bitmap[HEITI_FONT_GLYPH_RAW_MAX];
+} ui_heiti_glyph_cache_t;
+
 static int ui_heiti_font_draw_string(const egui_font_t *self,
                                      egui_canvas_t *canvas,
                                      const void *string,
@@ -39,6 +52,9 @@ static const egui_font_api_t s_ui_heiti_font_api = {
     .draw_string = ui_heiti_font_draw_string,
     .get_str_size = ui_heiti_font_get_str_size,
 };
+
+static ui_heiti_glyph_cache_t s_heiti_glyph_cache[UI_HEITI_GLYPH_CACHE_SLOTS];
+static uint32_t s_heiti_glyph_cache_age = 0U;
 
 static ui_heiti_font_t s_heiti_fonts[] = {
     {
@@ -66,6 +82,69 @@ static ui_heiti_font_t s_heiti_fonts[] = {
         .fallback = EGUI_FONT_OF(&egui_res_font_montserrat_16_4),
     },
 };
+
+static ui_heiti_glyph_cache_t *ui_heiti_glyph_cache_find(const ui_heiti_font_t *font, uint32_t cp)
+{
+    for (uint8_t i = 0U; i < UI_HEITI_GLYPH_CACHE_SLOTS; i++)
+    {
+        ui_heiti_glyph_cache_t *entry = &s_heiti_glyph_cache[i];
+
+        if ((entry->valid != 0U) && (entry->font == font) && (entry->cp == cp))
+        {
+            entry->age = ++s_heiti_glyph_cache_age;
+            return entry;
+        }
+    }
+
+    return NULL;
+}
+
+static ui_heiti_glyph_cache_t *ui_heiti_glyph_cache_alloc(void)
+{
+    ui_heiti_glyph_cache_t *oldest = &s_heiti_glyph_cache[0];
+
+    for (uint8_t i = 0U; i < UI_HEITI_GLYPH_CACHE_SLOTS; i++)
+    {
+        ui_heiti_glyph_cache_t *entry = &s_heiti_glyph_cache[i];
+
+        if (entry->valid == 0U)
+        {
+            return entry;
+        }
+
+        if (entry->age < oldest->age)
+        {
+            oldest = entry;
+        }
+    }
+
+    return oldest;
+}
+
+static const ui_heiti_glyph_cache_t *ui_heiti_glyph_cache_put(const ui_heiti_font_t *font,
+                                                              uint32_t cp,
+                                                              const HeitiFont_GlyphDsc_t *dsc,
+                                                              uint8_t bpp,
+                                                              const uint8_t *bitmap)
+{
+    ui_heiti_glyph_cache_t *entry;
+
+    if ((font == NULL) || (dsc == NULL) || (bitmap == NULL))
+    {
+        return NULL;
+    }
+
+    entry = ui_heiti_glyph_cache_alloc();
+    entry->font = font;
+    entry->cp = cp;
+    entry->dsc = *dsc;
+    entry->bpp = bpp;
+    entry->valid = 1U;
+    entry->age = ++s_heiti_glyph_cache_age;
+    memcpy(entry->bitmap, bitmap, sizeof(entry->bitmap));
+
+    return entry;
+}
 
 static ui_heiti_font_t *ui_heiti_font_find(uint8_t size)
 {
@@ -261,16 +340,36 @@ static int ui_heiti_font_draw_glyph(ui_heiti_font_t *font,
 {
     uint32_t glyph_index;
     HeitiFont_GlyphDsc_t dsc;
+    const ui_heiti_glyph_cache_t *cache;
+    const uint8_t *bitmap;
     uint8_t bpp;
     egui_dim_t baseline;
     egui_dim_t draw_x;
     egui_dim_t draw_y;
 
-    if (!ui_heiti_font_ensure_open(font) ||
-        (HeitiFont_Lookup(&font->ctx, cp, &glyph_index) != HEITI_FONT_OK) ||
-        (HeitiFont_GetGlyph(&font->ctx, glyph_index, &dsc, font->glyph_bitmap, sizeof(font->glyph_bitmap)) != HEITI_FONT_OK))
+    if (!ui_heiti_font_ensure_open(font))
     {
         return 0;
+    }
+
+    cache = ui_heiti_glyph_cache_find(font, cp);
+    if (cache != NULL)
+    {
+        dsc = cache->dsc;
+        bpp = cache->bpp;
+        bitmap = cache->bitmap;
+    }
+    else
+    {
+        if ((HeitiFont_Lookup(&font->ctx, cp, &glyph_index) != HEITI_FONT_OK) ||
+            (HeitiFont_GetGlyph(&font->ctx, glyph_index, &dsc, font->glyph_bitmap, sizeof(font->glyph_bitmap)) != HEITI_FONT_OK))
+        {
+            return 0;
+        }
+
+        bpp = (uint8_t)HeitiFont_GetBpp(&font->ctx);
+        cache = ui_heiti_glyph_cache_put(font, cp, &dsc, bpp, font->glyph_bitmap);
+        bitmap = (cache != NULL) ? cache->bitmap : font->glyph_bitmap;
     }
 
     if (adv != NULL)
@@ -283,7 +382,6 @@ static int ui_heiti_font_draw_glyph(ui_heiti_font_t *font,
         return 1;
     }
 
-    bpp = (uint8_t)HeitiFont_GetBpp(&font->ctx);
     baseline = (egui_dim_t)(y + HeitiFont_GetBaseLine(&font->ctx));
     draw_x = (egui_dim_t)(x + dsc.ofs_x);
     draw_y = (egui_dim_t)(baseline - dsc.ofs_y - dsc.box_h);
@@ -293,7 +391,7 @@ static int ui_heiti_font_draw_glyph(ui_heiti_font_t *font,
         for (uint16_t gx = 0U; gx < dsc.box_w; gx++)
         {
             uint32_t pixel_index = (uint32_t)gy * dsc.box_w + gx;
-            uint8_t value = ui_heiti_bitmap_read(font->glyph_bitmap, pixel_index, bpp);
+            uint8_t value = ui_heiti_bitmap_read(bitmap, pixel_index, bpp);
             egui_alpha_t pixel_alpha = ui_heiti_alpha_from_value(value, bpp);
 
             if (pixel_alpha != EGUI_ALPHA_0)

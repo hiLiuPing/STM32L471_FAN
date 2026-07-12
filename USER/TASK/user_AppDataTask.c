@@ -77,6 +77,7 @@ void AppDataTask(void *argument)
             Update_Battery(&g_sensors_battery);
             Update_Charger(&g_sensors_charger);
             Update_INA226(&g_sensors_ina226);
+            DataApp_HomeStatus_Update();
         }
 
         // if ((TickType_t)(now - last_log_tick) >= pdMS_TO_TICKS(5000U))
