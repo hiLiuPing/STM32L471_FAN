@@ -70,7 +70,7 @@ static void ui_HomePage_invalidate_rect(egui_view_t *view,
 
 static void ui_HomePage_invalidate_scene_regions(egui_view_t *view)
 {
-    ui_HomePage_invalidate_rect(view, 0, HOME_STATUS_TOP_H, UI_SCREEN_W, 76);
+    ui_HomePage_invalidate_rect(view, 0, 0, UI_SCREEN_W, HOME_STATUS_ENV_Y);
     ui_HomePage_invalidate_rect(view, 0, HOME_STATUS_ENV_Y, HOME_STATUS_ENV_X, (egui_dim_t)(UI_SCREEN_H - HOME_STATUS_ENV_Y));
     ui_HomePage_invalidate_rect(view,
                                 (egui_dim_t)(HOME_STATUS_ENV_X + HOME_STATUS_ENV_W),
@@ -290,7 +290,7 @@ static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
 
 static void ui_HomePage_draw_top_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status)
 {
-    const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_12_4);
+    const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
 #if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565
     const egui_image_std_t *weather_icon;
@@ -308,11 +308,11 @@ static void ui_HomePage_draw_top_status(egui_canvas_t *canvas, const DataApp_Hom
     }
     heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_30_4), status->time_text, 10, 1, 86, 32, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0x0F172A);
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->date_text, 104, 9, 0x0F172A);
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->week_text, 194, 9, 0x0F172A);
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->temp_high_text, 270, 9, 0x0F172A);
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->temp_low_text, 326, 9, 0x0F172A);
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_30_4), status->time_text, 10, 1, 86, 32, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0x4A90E2);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->date_text, 104, 9, 0x4A90E2);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->week_text, 194, 9, 0x4A90E2);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->temp_high_text, 270, 9, 0x4A90E2);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->temp_low_text, 326, 9, 0x4A90E2);
 
 #if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565
     weather_icon = ui_weather_icon_get(status->weather_icon_id);
@@ -325,7 +325,7 @@ static void ui_HomePage_draw_top_status(egui_canvas_t *canvas, const DataApp_Hom
 
 static void ui_HomePage_draw_env_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status)
 {
-    const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_12_4);
+    const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
 
     if ((status == NULL) ||
@@ -340,7 +340,7 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas, const DataApp_Hom
     }
     heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->env_text, 316, 116, 0x164E63);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->env_text, 316, 116, 0x4A90E2);
 }
 
 static void ui_HomePage_draw_status(egui_canvas_t *canvas)

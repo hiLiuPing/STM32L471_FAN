@@ -1,163 +1,133 @@
-项目总览
-项目为基于 LVGL、面向 STM32/ESP32 嵌入式平台的 Metro 风格 UI 框架 Plain_UI，采用分层解耦架构，分离底层驱动、UI 核心、业务页面、硬件抽象层，内置事件总线、数据绑定、动画调度、图层、弹窗、虚拟列表、页面导航全套能力。
-Plain_UI/
-├─ config/                       # 全局配置中心
-│  ├─ ui_config.h                # UI尺寸、缓存大小、FPS、动画开关
-│  ├─ ui_macro.h                 # 常用宏、断言、容器宏
-│  └─ ui_version.h               # 版本信息
-├─ core/                         # UI核心驱动层
-│  ├─ ui_main.c                  # UI初始化入口
-│  ├─ ui_main.h
-│  ├─ ui_update.c                # UI逻辑更新
-│  ├─ ui_update.h
-│  ├─ ui_tick.c                  # 系统时基驱动
-│  ├─ ui_tick.h
-│  ├─ ui_event_bridge.c          # LVGL事件桥接
-│  └─ ui_event_bridge.h
-├─ event/                        # 全局事件总线
-│  ├─ ui_event_type.h            # 统一事件枚举
-│  ├─ ui_event_bus.c             # 发布订阅机制
-│  ├─ ui_event_bus.h
-│  ├─ ui_event_queue.c           # 事件队列
-│  └─ ui_event_queue.h
-├─ datastore/                    # UI数据中心（重点模块）
-│  ├─ ui_model.c                 # 全局数据模型
-│  ├─ ui_model.h
-│  ├─ ui_binding.c               # 数据绑定
-│  ├─ ui_binding.h
-│  ├─ ui_snapshot.c              # 数据快照
-│  └─ ui_snapshot.h
-├─ animation/                    # 基础动画引擎
-│  ├─ ui_anim.c
-│  ├─ ui_anim.h
-│  ├─ ui_anim_scheduler.c        # 动画调度器
-│  ├─ ui_anim_scheduler.h
-│  ├─ ui_anim_curves.c           # 缓动曲线
-│  └─ ui_anim_curves.h
-├─ effects/                      # Metro风格高级特效
-│  ├─ effect_tile_flip.c         # 磁贴翻转
-│  ├─ effect_tile_flip.h
-│  ├─ effect_turnstile.c         # WP页面进场
-│  ├─ effect_turnstile.h
-│  ├─ effect_tilt.c              # 点击倾斜
-│  ├─ effect_tilt.h
-│  ├─ effect_weather.c           # 天气动画控制器
-│  ├─ effect_rain.c              # 雨滴
-│  ├─ effect_snow.c              # 雪花
-│  ├─ effect_cloud.c             # 云层漂浮
-│  ├─ effect_marquee.c           # 跑马灯
-│  └─ effect_marquee.h
-├─ layer/                        # 图层系统
-│  ├─ ui_layer_wallpaper.c       # 背景层
-│  ├─ ui_layer_wallpaper.h
-│  ├─ ui_overlay.c               # 顶层覆盖层
-│  ├─ ui_overlay.h
-│  ├─ ui_parallax.c              # 视差滚动
-│  └─ ui_parallax.h
-├─ popup/                        # 弹窗系统
-│  ├─ ui_popup_pool.c            # 静态对象池
-│  ├─ ui_popup_pool.h
-│  ├─ ui_popup.c                 # 弹窗管理
-│  ├─ ui_popup.h
-│  ├─ ui_dialog.c                # 对话框
-│  ├─ ui_dialog.h
-│  ├─ ui_toast.c                 # Toast提示
-│  └─ ui_toast.h
-├─ widget/                       # Metro控件库
-│  ├─ base/
-│  │  ├─ ui_widget.c             # 控件基类
-│  │  └─ ui_widget.h
-│  ├─ basic/
-│  │  ├─ ui_button.c
-│  │  ├─ ui_button.h
-│  │  ├─ ui_label.c
-│  │  ├─ ui_label.h
-│  │  ├─ ui_image.c
-│  │  ├─ ui_image.h
-│  │  ├─ ui_progress.c
-│  │  └─ ui_progress.h
-│  └─ advanced/
-│     ├─ ui_tile.c               # Metro磁贴
-│     ├─ ui_tile.h
-│     ├─ ui_weather_tile.c       # 天气磁贴
-│     ├─ ui_weather_tile.h
-│     ├─ ui_music_tile.c         # 音乐磁贴
-│     ├─ ui_music_tile.h
-│     ├─ ui_clock_tile.c         # 时钟磁贴
-│     ├─ ui_clock_tile.h
-│     ├─ ui_album_tile.c         # 专辑封面磁贴
-│     ├─ ui_album_tile.h
-│     ├─ ui_list_virtual.c       # 虚拟列表
-│     └─ ui_list_virtual.h
-├─ navigation/                   # 页面导航系统
-│  ├─ ui_page_manager.c          # 页面生命周期
-│  ├─ ui_page_manager.h
-│  ├─ ui_page_registry.c         # 页面注册
-│  ├─ ui_page_registry.h
-│  ├─ ui_nav_stack.c             # 导航栈
-│  ├─ ui_nav_stack.h
-│  ├─ ui_transition.c            # 页面切换动画
-│  └─ ui_transition.h
-├─ hal/                          # LVGL硬件抽象层
-│  ├─ ui_hal.h
-│  └─ backend_lvgl/
-│      ├─ stm32/
-│      │  ├─ ui_lv_port_disp.c
-│      │  ├─ ui_lv_port_indev.c
-│      │  ├─ ui_lv_port_fs.c
-│      │  └─ ui_lv_port_dma2d.c
-│      └─ esp32/
-│          ├─ ui_lv_port_disp.c
-│          ├─ ui_lv_port_indev.c
-│          ├─ ui_lv_port_fs.c
-│          └─ ui_lv_port_psram.c
-├─ app/                          # 业务页面层
-│  ├─ page_home/
-│  │  ├─ page_home.c
-│  │  └─ page_home.h
-│  ├─ page_music/
-│  │  ├─ page_music.c
-│  │  └─ page_music.h
-│  ├─ page_playlist/
-│  │  ├─ page_playlist.c
-│  │  └─ page_playlist.h
-│  ├─ page_file_browser/
-│  │  ├─ page_file_browser.c
-│  │  └─ page_file_browser.h
-│  ├─ page_weather/
-│  │  ├─ page_weather.c
-│  │  └─ page_weather.h
-│  ├─ page_setting/
-│  │  ├─ page_setting.c
-│  │  └─ page_setting.h
-│  └─ page_about/
-│      ├─ page_about.c
-│      └─ page_about.h
-└─ resource/                     # 静态资源
-   ├─ font/                      # 字体
-   ├─ image/                     # 图片
-   ├─ icon/                      # 图标
-   ├─ theme/                     # Metro主题
-   └─ resource_export.h
+# STM32L471_FAN 仓库说明与 AI 编码约束
 
+## 项目总览
 
-架构分层规则（AI 编码约束）
-依赖流向：app 业务层 → widget/navigation/effects → core/event/datastore/animation/layer/popup → config → hal，禁止底层反向依赖业务页面。
-硬件适配：屏幕、输入、文件系统、PSRAM/DMA2D 相关移植代码统一放置 hal/backend_lvgl，业务层不直接调用 LVGL 底层接口。
-数据规范：全局状态统一存放 datastore/ui_model，页面禁止定义大量全局变量，数据变更通过 ui_binding 自动刷新控件。
-事件规范：跨页面、跨模块通讯全部使用 event 事件总线，禁止模块间直接函数耦合调用。
-控件开发：自定义控件继承 widget/base 基类，基础控件放入 basic，磁贴 / 虚拟列表等复杂组件放入 advanced。
-页面规范：所有业务页面统一放在 app/page_xxx，页面生命周期交由 navigation/page_manager 统一管理。
-资源管理：图片、字体、主题资源全部归入 resource，资源导出宏统一在 resource_export.h。
-代码编写约束
-全部采用 C 标准编写，头文件加头文件保护宏。
-结构体、枚举、接口统一加 ui_ 前缀区分 UI 模块。
-新增动画、特效优先复用 animation 调度器，不单独创建 LVGL 原生动画。
-弹窗使用 popup_pool 对象池，禁止动态频繁创建销毁控件。
-页面切换动画复用 transition 模块，自定义转场放入 effects。
-尺寸、帧率、缓存参数全部读取 ui_config.h，禁止代码内硬编码数值。
+本仓库是面向 STM32L471 的风扇控制器固件工程，不是纯 LVGL/Plain_UI 框架项目。实际结构为：
 
-禁止修改区域
-hal/backend_lvgl 下平台移植底层驱动，无硬件需求不改动。
-config 内全局宏配置，修改参数需同步注释说明影响范围。
-widget/base 控件基类核心逻辑，不可随意修改继承结构。
+- STM32CubeMX/HAL 生成的 MCU 工程基础。
+- FreeRTOS 多任务应用。
+- `USER/Middle/EmbeddedGUI` 图形中间件。
+- `USER/GUI` 基于 EmbeddedGUI 的业务页面。
+- `USER/APP` 风扇、传感器、天气、数据、EEPROM、LED、PSRAM、字体和资源等业务逻辑。
+- `USER/BSP` 板级外设驱动。
+
+图形栈以 EmbeddedGUI 的 `egui_*` API 为核心，业务页面包括启动页、首页、风扇页、天气页和设置页。请不要按 Plain_UI、LVGL backend、Metro widget/page_xxx 那套目录假设来生成代码。
+
+## 当前目录结构
+
+```text
+STM32L471_FAN/
+├─ Core/                         # STM32CubeMX 生成的 HAL 初始化、中断、外设入口
+│  ├─ Inc/
+│  └─ Src/
+├─ Drivers/                      # CMSIS 与 STM32L4 HAL Driver
+├─ MDK-ARM/                      # Keil MDK 工程文件
+│  └─ STM32L471_FAN.uvprojx
+├─ Tools/                        # 工具脚本或辅助资源
+├─ USER/
+│  ├─ APP/                       # 业务应用层
+│  │  ├─ fan_app.*               # 风扇控制业务
+│  │  ├─ data_app.*              # 应用数据中心
+│  │  ├─ weather_app.*           # 天气数据业务
+│  │  ├─ sensors_app.*           # 传感器采集业务
+│  │  ├─ led_app.*               # LED 状态业务
+│  │  ├─ eeprom_app.*            # EEPROM 数据业务
+│  │  ├─ psram_app.*             # PSRAM 初始化封装
+│  │  ├─ poetry_app.*            # 诗词数据业务
+│  │  └─ *_res.* / icons.*       # GUI 静态资源代码
+│  ├─ BSP/                       # 板级驱动与芯片寄存器封装
+│  │  ├─ lcd.* / lcd_init.*      # LCD 驱动
+│  │  ├─ key.*                   # 按键驱动
+│  │  ├─ rgb_led.* / multi_led.* # LED 驱动
+│  │  ├─ qspi_psram.*            # QSPI PSRAM
+│  │  ├─ spi_flash.*             # SPI Flash
+│  │  ├─ ee24.*                  # EEPROM
+│  │  ├─ *_reg.*                 # BQ24295、INA226、LIS3DH、MAX17048、SHT40 等器件寄存器封装
+│  │  └─ log.*                   # 串口日志
+│  ├─ GUI/                       # EmbeddedGUI 业务 UI 层
+│  │  ├─ ui.*                    # UI 注册入口
+│  │  ├─ page_manager.*          # 业务页面管理器
+│  │  ├─ ui_common.h             # UI 公共定义
+│  │  ├─ ui_poetry_popup.*       # 诗词弹窗
+│  │  └─ screens/
+│  │     ├─ ui_StartPage.*
+│  │     ├─ ui_HomePage.*
+│  │     ├─ ui_FanPage.*
+│  │     ├─ ui_WeatherPage.*
+│  │     └─ ui_SettingPage.*
+│  ├─ Middle/
+│  │  ├─ EmbeddedGUI/            # EmbeddedGUI 框架源码、平台适配和第三方渲染库
+│  │  ├─ FreeRTOS/               # FreeRTOS 内核源码
+│  │  └─ Transfer/               # I2C 总线、UART DMA、littlefs、ring buffer 等通用中间件
+│  ├─ Res/                       # 字库、天气图片、诗词索引等离线资源
+│  └─ TASK/                      # FreeRTOS 任务入口与任务间同步
+│     ├─ user_TasksInit.*        # 任务、队列、信号量创建
+│     ├─ user_HardwareInitTask.* # 硬件与应用初始化任务
+│     ├─ user_EGUITask.*         # EmbeddedGUI 轮询任务
+│     ├─ user_FanTask.*
+│     ├─ user_KeyTask.*
+│     ├─ user_KeyManllegeTask.*
+│     ├─ user_LEDTask.*
+│     ├─ user_AppDataTask.*
+│     ├─ user_TransmitTask.*
+│     └─ user_WeatherSyncTask.*
+├─ STM32L471_FAN.ioc             # 当前 CubeMX 配置
+└─ STM32L471_FAN.code-workspace
+```
+
+## 运行与初始化链路
+
+1. `Core/Src/main.c` 执行 HAL 初始化和 `MX_*` 外设初始化。
+2. `main.c` 调用 `User_Tasks_Init()` 创建 FreeRTOS 任务、队列和信号量。
+3. `HardwareInitTask` 初始化日志、LED、风扇、按键、传感器、数据、UART DMA、SPI Flash、littlefs、PSRAM 和 EmbeddedGUI port。
+4. 硬件准备完成后设置 `g_system_hw_ready`。
+5. `EGUIHandlerTask` 等待硬件就绪后循环调用 `egui_port_poll()`。
+6. `USER/GUI/ui.c` 注册业务页面，并由 `page_manager` 管理页面加载、切换和按键分发。
+
+## 架构边界
+
+- `Core/` 和 `Drivers/` 主要由 CubeMX、HAL 和 CMSIS 维护。除外设配置确实变化外，不要手工大改生成代码。
+- `USER/Middle/EmbeddedGUI` 是 GUI 框架层，包含 `egui_*` 核心、控件、动画、字体、图片、资源、平台适配和第三方渲染库。
+- `USER/GUI` 是本产品的页面层，只写风扇控制器相关 UI，不把通用 GUI 框架逻辑塞到页面里。
+- `USER/APP` 是业务状态和业务服务层，页面读取或触发业务时优先通过这里的接口完成。
+- `USER/BSP` 是板级外设驱动层，业务页面不要直接散落 HAL 寄存器操作。
+- `USER/TASK` 是任务调度层，跨任务通信优先使用已有队列、信号量和 APP 层接口。
+- `USER/Res` 放离线资源文件，生成后的 C 资源应放在合适的 `USER/APP` 或 GUI 资源文件中。
+
+## 编码约束
+
+- 全部使用 C 语言风格，头文件必须有 include guard，并保持现有命名风格。
+- 新增 EmbeddedGUI UI 代码优先使用 `egui_*` API 和现有页面管理器。
+- 新页面放在 `USER/GUI/screens/`，并在 `USER/GUI/ui.c` 的页面表注册。
+- 页面公共行为放在 `USER/GUI/page_manager.*` 或 `ui_common.h`，不要在各页面复制大量状态机。
+- 业务数据、传感器数据、天气数据、风扇状态等优先放在 `USER/APP` 对应模块，不要在页面文件里堆全局变量。
+- 外设驱动和芯片寄存器封装放在 `USER/BSP`，应用逻辑通过 `USER/APP` 调用。
+- 新增 FreeRTOS 任务需要在 `USER/TASK/user_TasksInit.*` 中集中创建和管理句柄。
+- 任务间通信优先复用现有队列、信号量、`User_Tasks_WaitForHardwareReady()` 和 APP 层接口。
+- LCD、QSPI、SPI Flash、EEPROM、传感器、充电/电量芯片等底层驱动无明确硬件需求不随意改。
+- 修改 CubeMX 相关外设配置时，同步检查 `STM32L471_FAN.ioc`、`Core/`、`MDK-ARM/` 工程配置。
+- 不要引入 LVGL/Plain_UI 专属目录、类型或依赖，除非用户明确要求迁移图形栈。
+- 不要把 `USER/Middle/EmbeddedGUI` 当作业务页面目录；框架改动应保持通用性。
+
+## 常见开发入口
+
+- 调整页面布局：`USER/GUI/screens/ui_*.c`
+- 注册或切换页面：`USER/GUI/ui.c`、`USER/GUI/page_manager.*`
+- 改风扇业务：`USER/APP/fan_app.*`、`USER/TASK/user_FanTask.*`
+- 改天气业务：`USER/APP/weather_app.*`、`USER/TASK/user_WeatherSyncTask.*`
+- 改数据同步：`USER/APP/data_app.*`、`USER/TASK/user_AppDataTask.*`
+- 改串口通信：`USER/Middle/Transfer/uart_dma.*`、`USER/TASK/user_TransmitTask.*`
+- 改 LCD/显示底层：`USER/BSP/lcd.*`、`USER/BSP/lcd_init.*`、`USER/Middle/EmbeddedGUI/porting/stm32l471_fan/`
+- 改资源：`USER/Res/`、`USER/APP/icons.*`、`USER/APP/home_scene_res.*`
+
+## 禁止误用的旧描述
+
+以下描述不适用于当前仓库：
+
+- 纯 LVGL 工程。
+- Plain_UI 框架。
+- `Plain_UI/config/core/event/datastore/widget/navigation/hal/backend_lvgl` 分层。
+- `app/page_home`、`page_music`、`page_playlist` 等页面目录。
+- STM32/ESP32 双平台 LVGL HAL backend。
+
+当前项目应按 STM32L471 固件、EmbeddedGUI 中间件、业务页面和 FreeRTOS 多任务应用来理解和维护。
