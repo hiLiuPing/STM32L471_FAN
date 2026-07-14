@@ -23,7 +23,7 @@ static float fan_random_float(void) {
     return (float)(fan_lcg_seed & 0xFFFFFF) / 16777216.0f; /* 生成 0.0 到 1.0 之间的均匀浮点数 */
 }
 
-void Fan_Init(FanController_t *fan) {
+void PwmFan_Init(PwmFanController_t *fan) {
     if (!fan) return;
 
     /* 1. 设置出厂默认的智能温控线 */
@@ -56,7 +56,7 @@ void Fan_Init(FanController_t *fan) {
     fan->config.absolute_max_duty = 100.0f;// 硬件上限
 
     /* 6. 重置运行状态机 */
-    fan->mode = FAN_MODE_NORMAL;
+    fan->mode = PWM_FAN_MODE_NORMAL;
     fan->user_base_speed = 50.0f;
     fan->active_base = 50.0f;
     fan->current_duty = 0.0f;
@@ -71,25 +71,25 @@ void Fan_Init(FanController_t *fan) {
     fan->gust_ticks = 0;
 }
 
-void Fan_Configure(FanController_t *fan, const FanConfig_t *config) {
+void PwmFan_Configure(PwmFanController_t *fan, const PwmFanConfig_t *config) {
     if (fan && config) {
         fan->config = *config;
     }
 }
 
-void Fan_SetTarget(FanController_t *fan, FanMode_t mode, float base_speed) {
+void PwmFan_SetTarget(PwmFanController_t *fan, PwmFanMode_t mode, float base_speed) {
     if (!fan) return;
     fan->mode = mode;
     fan->user_base_speed = CLAMP(base_speed, 0.0f, 100.0f);
 }
 
-float Fan_Process_Tick_100ms(FanController_t *fan, float ambient_temp) {
+float PwmFan_ProcessTick100ms(PwmFanController_t *fan, float ambient_temp) {
     if (!fan) return 0.0f;
 
     /* -------------------------------------------------------------------------
      * 步骤 1: 确定当前时间的基准风速 (Base Speed)
      * ------------------------------------------------------------------------- */
-    if (fan->mode == FAN_MODE_SMART) {
+    if (fan->mode == PWM_FAN_MODE_SMART) {
         /* 智能温控风：根据当前实时环境温度线性插值计算基准 */
         if (ambient_temp <= fan->config.temp_min) {
             fan->active_base = fan->config.min_base_duty;
@@ -105,7 +105,7 @@ float Fan_Process_Tick_100ms(FanController_t *fan, float ambient_temp) {
     }
 
     /* 步骤 2: 如果是普通模式或智能模式（不需要叠加自然风规律），直接通过斜率限制器追踪并返回 */
-    if (fan->mode != FAN_MODE_NATURAL) {
+    if (fan->mode != PWM_FAN_MODE_NATURAL) {
         float slew_step = fan->config.slew_rate_limit;
         fan->current_duty += CLAMP(fan->active_base - fan->current_duty, -slew_step, slew_step);
         fan->current_duty = CLAMP(fan->current_duty, fan->config.absolute_min_duty, fan->config.absolute_max_duty);

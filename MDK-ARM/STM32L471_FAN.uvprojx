@@ -1546,6 +1546,11 @@
               <FilePath>../USER/APP/fan_app.c</FilePath>
             </File>
             <File>
+              <FileName>pwm_fan_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/pwm_fan_control.c</FilePath>
+            </File>
+            <File>
               <FileName>fan_anim_res.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/fan_anim_res.c</FilePath>
