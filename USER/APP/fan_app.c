@@ -21,14 +21,14 @@
 
 static const char *const s_mode_names[FAN_MODE_COUNT] = {
     "Off",
-    "Manual",
-    "Natural",
     "Smart",
-    "Random",
-    "Sleep",
+    "Natural", 
+    "Manual",  
     "Turbo",
-    "Eco",
 };
+
+
+
 
 static QueueHandle_t s_command_queue = NULL;
 static fan_state_t s_state;
@@ -69,10 +69,10 @@ static uint16_t FanApp_PercentToCompare(uint8_t percent)
 {
     if (percent == 0U)
     {
-        return 0U;
+        return FAN_APP_PWM_PERIOD;
     }
 
-    return (uint16_t)(((uint32_t)percent * FAN_APP_PWM_PERIOD) / 100U);
+    return (uint16_t)(((uint32_t)(100U - percent) * FAN_APP_PWM_PERIOD) / 100U);
 }
 
 static void FanApp_ApplyHardware(uint8_t output_percent)

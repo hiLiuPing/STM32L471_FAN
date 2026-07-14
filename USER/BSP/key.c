@@ -239,19 +239,19 @@ bool Key_Scan(key_event_t* out_evt)
 }
 
 
-// KEY_ID_B   →  电源键
-// KEY_ID_L   →  中键
-// KEY_ID_R   →  下键
-// KEY_ID_N   →  上键
+// KEY_ID_PWR   →  电源键
+// KEY_ID_OK   →  中键
+// KEY_ID_DOWN   →  下键
+// KEY_ID_UP   →  上键
 /* 注册默认按键 */
 static bool Key_RegisterDefaultKeys(void)
 {
     bool ok = true;
-    ok &= Key_RegisterGPIO(KEY_ID_B, KEYB_PORT, KEYB_PIN, 0);
+    ok &= Key_RegisterGPIO(KEY_ID_PWR, KEYB_PORT, KEYB_PIN, 0);
     // ok &= Key_RegisterGPIO(KEY_ID_Y, KEYY_PORT, KEYY_PIN, 0);
-    ok &= Key_RegisterGPIO(KEY_ID_L, KEYL_PORT, KEYL_PIN, 0);
-    ok &= Key_RegisterGPIO(KEY_ID_R, KEYR_PORT, KEYR_PIN, 0);
-    ok &= Key_RegisterGPIO(KEY_ID_N, KEYN_PORT, KEYN_PIN, 0);
+    ok &= Key_RegisterGPIO(KEY_ID_OK, KEYL_PORT, KEYL_PIN, 0);
+    ok &= Key_RegisterGPIO(KEY_ID_DOWN, KEYR_PORT, KEYR_PIN, 0);
+    ok &= Key_RegisterGPIO(KEY_ID_UP, KEYN_PORT, KEYN_PIN, 0);
     return ok;
 }
 
@@ -264,5 +264,5 @@ void Key_Init(void)
     // Key_Port_Init();
     Key_RegisterDefaultKeys();
     Key_SetMode(KEY_MODE_CLICK_ON_RELEASE | KEY_MODE_LONG_ONCE | KEY_MODE_REPEAT);
-    Key_SetLongEnableMask(KEY_BIT(KEY_ID_R) | KEY_BIT(KEY_ID_N));
+    Key_SetLongEnableMask(KEY_BIT(KEY_ID_DOWN) | KEY_BIT(KEY_ID_UP));
 }

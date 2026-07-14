@@ -37,6 +37,7 @@ typedef struct
     AppSettings_t edit_backup;
     uint8_t selected_index;
     uint8_t editing;
+    uint8_t setting_active;
     char item_text[UI_SETTING_ITEM_COUNT][56];
 } ui_setting_page_t;
 
@@ -78,6 +79,7 @@ void ui_SettingPage_screen_init(void)
     SettingsApp_Get(&s_setting_page.settings);
     s_setting_page.selected_index = 0U;
     s_setting_page.editing = 0U;
+    s_setting_page.setting_active = 0U;
     ui_SettingPage_rebuild_items();
 
     egui_view_start_periodic(view, &s_setting_page.timer, view, ui_SettingPage_timer_cb, 1000U);
@@ -85,70 +87,98 @@ void ui_SettingPage_screen_init(void)
 
 void ui_SettingPage_screen_destroy(void)
 {
+    s_setting_page.setting_active = 0U;
+    s_setting_page.editing = 0U;
+    s_setting_page.selected_index = 0U;
+    ui_SettingPage_rebuild_items();
 }
 
 bool ui_SettingPage_key_handler(void *key_event)
 {
-    // const key_event_t *event = (const key_event_t *)key_event;
+    const key_event_t *event = (const key_event_t *)key_event;
 
-    // if (event == NULL)
-    // {
-    //     return false;
-    // }
+    if (event == NULL)
+    {
+        return false;
+    }
 
-    // if ((event->type != KEY_EVT_CLICK) && (event->type != KEY_EVT_REPEAT) && (event->type != KEY_EVT_LONG))
-    // {
-    //     return false;
-    // }
+    if ((event->type != KEY_EVT_CLICK) && (event->type != KEY_EVT_REPEAT) && (event->type != KEY_EVT_LONG))
+    {
+        return false;
+    }
 
-    // if (s_setting_page.editing != 0U)
-    // {
-    //     if (event->id == KEY_ID_N)
-    //     {
-    //         ui_SettingPage_adjust_selected(-1, (uint8_t)(event->type != KEY_EVT_CLICK));
-    //         return true;
-    //     }
-    //     if (event->id == KEY_ID_R)
-    //     {
-    //         ui_SettingPage_adjust_selected(1, (uint8_t)(event->type != KEY_EVT_CLICK));
-    //         return true;
-    //     }
-    //     if ((event->id == KEY_ID_L) && (event->type == KEY_EVT_CLICK))
-    //     {
-    //         return ui_SettingPage_commit_edit();
-    //     }
-    //     if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
-    //     {
-    //         s_setting_page.settings = s_setting_page.edit_backup;
-    //         s_setting_page.editing = 0U;
-    //         ui_SettingPage_rebuild_items();
-    //         egui_view_invalidate_full(ui_SettingPage);
-    //         return true;
-    //     }
-    //     return true;
-    // }
+    if (s_setting_page.setting_active == 0U)
+    {
+        if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
+        {
+            SettingsApp_Get(&s_setting_page.settings);
+            s_setting_page.setting_active = 1U;
+            s_setting_page.editing = 0U;
+            s_setting_page.selected_index = 0U;
+            ui_SettingPage_rebuild_items();
+            egui_view_invalidate_full(ui_SettingPage);
+            return true;
+        }
 
-    // if (event->id == KEY_ID_N)
-    // {
-    //     ui_SettingPage_move_selection(-1);
-    //     return true;
-    // }
-    // if (event->id == KEY_ID_R)
-    // {
-    //     ui_SettingPage_move_selection(1);
-    //     return true;
-    // }
-    // if ((event->id == KEY_ID_L) && (event->type == KEY_EVT_CLICK))
-    // {
-    //     s_setting_page.edit_backup = s_setting_page.settings;
-    //     s_setting_page.editing = 1U;
-    //     ui_SettingPage_rebuild_items();
-    //     egui_view_invalidate_full(ui_SettingPage);
-    //     return true;
-    // }
+        return ui_page_consume_nav_key_event(key_event);
+    }
 
-    // return ui_page_consume_nav_key_event(key_event);
-     return ui_page_consume_nav_key_event(key_event);
+    if (s_setting_page.editing != 0U)
+    {
+        if (event->id == KEY_ID_UP)
+        {
+            ui_SettingPage_adjust_selected(-1, (uint8_t)(event->type != KEY_EVT_CLICK));
+            return true;
+        }
+        if (event->id == KEY_ID_DOWN)
+        {
+            ui_SettingPage_adjust_selected(1, (uint8_t)(event->type != KEY_EVT_CLICK));
+            return true;
+        }
+        if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
+        {
+            return ui_SettingPage_commit_edit();
+        }
+        if ((event->id == KEY_ID_PWR) && (event->type == KEY_EVT_CLICK))
+        {
+            s_setting_page.settings = s_setting_page.edit_backup;
+            s_setting_page.editing = 0U;
+            ui_SettingPage_rebuild_items();
+            egui_view_invalidate_full(ui_SettingPage);
+            return true;
+        }
+        return true;
+    }
+
+    if (event->id == KEY_ID_UP)
+    {
+        ui_SettingPage_move_selection(-1);
+        return true;
+    }
+    if (event->id == KEY_ID_DOWN)
+    {
+        ui_SettingPage_move_selection(1);
+        return true;
+    }
+    if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
+    {
+        s_setting_page.edit_backup = s_setting_page.settings;
+        s_setting_page.editing = 1U;
+        ui_SettingPage_rebuild_items();
+        egui_view_invalidate_full(ui_SettingPage);
+        return true;
+    }
+    if ((event->id == KEY_ID_PWR) && (event->type == KEY_EVT_CLICK))
+    {
+        s_setting_page.setting_active = 0U;
+        s_setting_page.editing = 0U;
+        s_setting_page.selected_index = 0U;
+        ui_SettingPage_rebuild_items();
+        egui_view_invalidate_full(ui_SettingPage);
+        return true;
+    }
+
+    return ui_page_consume_nav_key_event(key_event);
 }
 
 static void ui_SettingPage_timer_cb(egui_timer_t *timer)
@@ -180,7 +210,14 @@ static void ui_SettingPage_rebuild_items(void)
         (void)egui_view_list_add_item(list_view, s_setting_page.item_text[i]);
     }
 
-    egui_view_list_set_selected_index(list_view, s_setting_page.selected_index);
+    if (s_setting_page.setting_active != 0U)
+    {
+        egui_view_list_set_selected_index(list_view, s_setting_page.selected_index);
+    }
+    else
+    {
+        egui_view_list_set_selected_index(list_view, EGUI_VIEW_LIST_SELECTED_NONE);
+    }
 }
 
 static void ui_SettingPage_format_item(uint8_t index, char *buf, uint16_t size)
@@ -193,7 +230,14 @@ static void ui_SettingPage_format_item(uint8_t index, char *buf, uint16_t size)
         return;
     }
 
-    prefix = (index == s_setting_page.selected_index) ? ((s_setting_page.editing != 0U) ? "* " : "> ") : "  ";
+    if (s_setting_page.setting_active == 0U)
+    {
+        prefix = "  ";
+    }
+    else
+    {
+        prefix = (index == s_setting_page.selected_index) ? ((s_setting_page.editing != 0U) ? "* " : "> ") : "  ";
+    }
 
     switch ((ui_setting_item_t)index)
     {

@@ -165,6 +165,19 @@ void ui_poetry_popup_set_enabled(bool enabled)
     }
 }
 
+bool ui_poetry_popup_is_visible(void)
+{
+    return (s_popup.phase == UI_POETRY_POPUP_PHASE_VISIBLE);
+}
+
+void ui_poetry_popup_dismiss(void)
+{
+    if (ui_poetry_popup_is_visible())
+    {
+        ui_poetry_popup_hide();
+    }
+}
+
 static void ui_poetry_popup_timer_cb(egui_timer_t *timer)
 {
     uint32_t now = egui_timer_get_current_time();
@@ -183,6 +196,10 @@ static void ui_poetry_popup_timer_cb(egui_timer_t *timer)
             if (ui_poetry_popup_is_home_active())
             {
                 ui_poetry_popup_show();
+            }
+            else
+            {
+                s_popup.next_show_ms = now + (uint32_t)s_popup.interval_s * 1000U;
             }
         }
         return;

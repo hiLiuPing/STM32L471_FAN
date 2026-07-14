@@ -19,6 +19,8 @@ extern "C" {
 void ui_poetry_popup_init(void);
 void ui_poetry_popup_set_timing(uint16_t interval_s, uint16_t duration_s);
 void ui_poetry_popup_set_enabled(bool enabled);
+bool ui_poetry_popup_is_visible(void);
+void ui_poetry_popup_dismiss(void);
 
 #ifdef __cplusplus
 }

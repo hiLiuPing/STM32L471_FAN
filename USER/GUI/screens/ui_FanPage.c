@@ -226,7 +226,7 @@ static void ui_FanPage_sync_from_state(void)
     (void)snprintf(s_fan_page.mode_text, sizeof(s_fan_page.mode_text), "%s", FanApp_GetModeName(display_mode));
     if (s_fan_page.setting_active == 0U)
     {
-        (void)snprintf(s_fan_page.hint_text, sizeof(s_fan_page.hint_text), "B SET  N/R PAGE");
+        (void)snprintf(s_fan_page.hint_text, sizeof(s_fan_page.hint_text), "L SET  N/R PAGE");
     }
     else if (s_fan_page.editing != 0U)
     {
@@ -453,7 +453,7 @@ bool ui_FanPage_key_handler(void *key_event)
 
     if (s_fan_page.setting_active == 0U)
     {
-        if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
+        if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
         {
             ui_FanPage_set_setting_active(1U);
             ui_FanPage_sync_from_state();
@@ -463,7 +463,7 @@ bool ui_FanPage_key_handler(void *key_event)
         return ui_page_consume_nav_key_event(key_event);
     }
 
-    if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
+    if ((event->id == KEY_ID_PWR) && (event->type == KEY_EVT_CLICK))
     {
         if (s_fan_page.editing != 0U)
         {
@@ -477,9 +477,9 @@ bool ui_FanPage_key_handler(void *key_event)
         return true;
     }
 
-    if ((event->id == KEY_ID_N) || (event->id == KEY_ID_R))
+    if ((event->id == KEY_ID_UP) || (event->id == KEY_ID_DOWN))
     {
-        int8_t direction = (event->id == KEY_ID_R) ? 1 : -1;
+        int8_t direction = (event->id == KEY_ID_DOWN) ? 1 : -1;
 
         if (s_fan_page.editing != 0U)
         {
@@ -501,7 +501,7 @@ bool ui_FanPage_key_handler(void *key_event)
         return true;
     }
 
-    if ((event->id == KEY_ID_L) && (event->type == KEY_EVT_CLICK))
+    if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
     {
         ui_FanPage_confirm_current();
         return true;

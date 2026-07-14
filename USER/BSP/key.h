@@ -54,19 +54,19 @@ extern "C" {
 // //KEYY
 // #define KEYY_PORT	GPIOA
 // #define KEYY_PIN	GPIO_PIN_1
-// KEY_ID_B   →  电源键
-// KEY_ID_L   →  中键
-// KEY_ID_R   →  下键
-// KEY_ID_N   →  上键
+// KEY_ID_PWR   →  电源键
+// KEY_ID_OK   →  中键
+// KEY_ID_DOWN   →  下键
+// KEY_ID_UP   →  上键
 /**
  * @brief 按键ID（与掩码位索引一致）
  */
 typedef enum {
-    KEY_ID_B = 0,  // KEYB
+    KEY_ID_PWR = 0,  // KEYB
     // KEY_ID_Y,      // KEYY
-    KEY_ID_L,      // KEYL
-    KEY_ID_R,      // KEYR
-    KEY_ID_N,      // KEYN
+    KEY_ID_OK,      // KEYL
+    KEY_ID_DOWN,      // KEYR
+    KEY_ID_UP,      // KEYN
     KEY_ID_MAX
 } key_id_t;
 

@@ -4,6 +4,7 @@
 
 #include "core/egui_timer.h"
 #include "key.h"
+#include "ui_poetry_popup.h"
 #include "widget/egui_view.h"
 
 typedef struct
@@ -79,6 +80,8 @@ static void ui_page_manager_load_page(uint8_t index)
         egui_core_force_refresh(s_page_manager.core);
         return;
     }
+
+    ui_poetry_popup_dismiss();
 
     if ((current_page != NULL) && (current_page->page_view != NULL) && (*current_page->page_view != NULL))
     {
@@ -218,18 +221,37 @@ ui_page_t *ui_page_manager_get_current(void)
     return s_page_manager.pages[s_page_manager.current_index];
 }
 
+static bool ui_page_manager_consume_global_key_event(void *key_event)
+{
+    const key_event_t *event = (const key_event_t *)key_event;
+
+    if (event == NULL)
+    {
+        return false;
+    }
+
+    if ((event->id == KEY_ID_PWR) && (event->type == KEY_EVT_CLICK))
+    {
+        ui_page_manager_goto("HOME", 1U);
+        return true;
+    }
+
+    return false;
+}
+
 void ui_page_manager_handle_key_event(void *key_event)
 {
     ui_page_t *current_page = ui_page_manager_get_current();
+    bool consumed = false;
 
-    if (current_page == NULL)
+    if ((current_page != NULL) && (current_page->key_consume != NULL))
     {
-        return;
+        consumed = current_page->key_consume(key_event);
     }
 
-    if (current_page->key_consume != NULL)
+    if (!consumed)
     {
-        (void)current_page->key_consume(key_event);
+        (void)ui_page_manager_consume_global_key_event(key_event);
     }
 }
 
@@ -257,18 +279,12 @@ bool ui_page_consume_nav_key_event(void *key_event)
         return false;
     }
 
-    if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
+    if (event->id == KEY_ID_DOWN)
     {
         ui_page_manager_next();
         return true;
     }
-
-    if (event->id == KEY_ID_R)
-    {
-        ui_page_manager_next();
-        return true;
-    }
-    else if (event->id == KEY_ID_N)
+    else if (event->id == KEY_ID_UP)
     {
         ui_page_manager_prev();
         return true;
