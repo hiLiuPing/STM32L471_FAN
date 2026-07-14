@@ -5,6 +5,7 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifndef UI_POETRY_POPUP_DEFAULT_INTERVAL_S
@@ -17,6 +18,7 @@ extern "C" {
 
 void ui_poetry_popup_init(void);
 void ui_poetry_popup_set_timing(uint16_t interval_s, uint16_t duration_s);
+void ui_poetry_popup_set_enabled(bool enabled);
 
 #ifdef __cplusplus
 }

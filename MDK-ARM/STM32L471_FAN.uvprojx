@@ -1506,6 +1506,11 @@
               <FilePath>../USER/APP/eeprom_app.c</FilePath>
             </File>
             <File>
+              <FileName>settings_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/settings_app.c</FilePath>
+            </File>
+            <File>
               <FileName>data_app.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/data_app.c</FilePath>
@@ -1539,6 +1544,11 @@
               <FileName>fan_app.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/fan_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>fan_anim_res.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/fan_anim_res.c</FilePath>
             </File>
             <File>
               <FileName>poetry_app.c</FileName>

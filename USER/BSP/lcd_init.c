@@ -4,6 +4,18 @@
 
 extern SPI_HandleTypeDef hspi1;
 // extern DMA_HandleTypeDef DMA_InitStructure;
+void LCD_SetBacklightPercent(uint8_t percent)
+{
+    if (percent == 0U)
+    {
+        LCD_BLK_Clr();
+    }
+    else
+    {
+        LCD_BLK_Set();
+    }
+}
+
 void LCD_WR_Bus(uint8_t dat)
 {
     LCD_CS_Clr();

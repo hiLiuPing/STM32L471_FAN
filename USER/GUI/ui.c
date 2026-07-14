@@ -4,11 +4,11 @@
 
 #include "core/egui_timer.h"
 #include "egui_port_stm32l471_fan.h"
+#include "settings_app.h"
 #include "screens/ui_FanPage.h"
 #include "screens/ui_HomePage.h"
 #include "screens/ui_SettingPage.h"
 #include "screens/ui_StartPage.h"
-#include "screens/ui_WeatherPage.h"
 #include "ui_poetry_popup.h"
 
 static ui_page_t s_pages[] = {
@@ -43,16 +43,6 @@ static ui_page_t s_pages[] = {
         .initialized = 0U,
     },
     {
-        .init = ui_WeatherPage_screen_init,
-        .deinit = ui_WeatherPage_screen_destroy,
-        .page_view = &ui_WeatherPage,
-        .key_consume = ui_WeatherPage_key_handler,
-        .service = NULL,
-        .name = "WEATHER",
-        .nav_enabled = true,
-        .initialized = 0U,
-    },
-    {
         .init = ui_SettingPage_screen_init,
         .deinit = ui_SettingPage_screen_destroy,
         .page_view = &ui_SettingPage,
@@ -78,4 +68,5 @@ void ui_init(void)
 
     ui_page_manager_load_init();
     ui_poetry_popup_init();
+    SettingsApp_Apply();
 }

@@ -7,11 +7,13 @@ extern "C" {
 
 #include "core/egui_core.h"
 #include "key.h"
+#include <stdbool.h>
 
 void egui_port_start(void);
 void egui_port_poll(void);
 egui_core_t *egui_port_get_core(void);
 void egui_port_handle_key_event(const key_event_t *key_event);
+void egui_port_set_display_power(bool on);
 
 #ifdef __cplusplus
 }

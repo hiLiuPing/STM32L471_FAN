@@ -23,6 +23,7 @@ extern eeprom_ctx_t g_ee_ctx;
 #define OFF_NET_CONFIG      0U
 #define OFF_CALIB_DATA      (EE_BLOCK_SIZE * 1U)
 #define OFF_WEATHER_CONFIG  (EE_BLOCK_SIZE * 2U)
+#define OFF_APP_SETTINGS    (EE_BLOCK_SIZE * 3U)
 
 #pragma pack(push, 1)
 typedef struct

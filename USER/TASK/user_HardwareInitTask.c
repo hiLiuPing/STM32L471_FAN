@@ -10,6 +10,7 @@
 #include "main.h"
 #include "psram_app.h"
 #include "sensors_app.h"
+#include "settings_app.h"
 #include "spi_flash.h"
 #include "systemMonitor_app.h"
 
@@ -35,6 +36,7 @@ void HardwareInitTask(void *argument)
     log_printf("step3: app init...");
     (void)APP_Sensors_Init();
     DataApp_Init();
+    SettingsApp_Init();
     UserMonitor_Init();
     uart_dma_init(&uart2_admin,
                   &huart2,

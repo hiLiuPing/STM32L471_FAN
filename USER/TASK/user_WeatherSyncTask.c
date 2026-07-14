@@ -2,6 +2,7 @@
 
 #include "FreeRTOS.h"
 #include "log.h"
+#include "settings_app.h"
 #include "task.h"
 #include "user_TasksInit.h"
 #include "weather_app.h"
@@ -77,7 +78,10 @@ void WeatherSyncTask(void *argument)
             continue;
         }
 
-        (void)xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, portMAX_DELAY);
+        {
+            uint32_t interval_ms = (uint32_t)SettingsApp_GetWeatherTimeSyncIntervalMin() * 60U * 1000U;
+            (void)xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, pdMS_TO_TICKS(interval_ms));
+        }
 
         if (g_weather_module.syncing != 0U)
         {

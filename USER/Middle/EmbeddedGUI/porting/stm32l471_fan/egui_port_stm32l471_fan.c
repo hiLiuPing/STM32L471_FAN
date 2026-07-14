@@ -7,16 +7,21 @@
 #include "core/egui_core.h"
 #include "core/egui_display_driver.h"
 #include "core/egui_platform.h"
+#include "core/egui_timer.h"
 #include "lcd.h"
 #include "log.h"
 #include "main.h"
 #include "page_manager.h"
+#include "settings_app.h"
 #include "ui.h"
 
 static egui_core_t s_egui_core;
 EGUI_CONFIG_PFB_BUFFER_DECLARE(s_egui_pfb);
 
 static bool s_egui_started = false;
+static bool s_egui_display_on = true;
+static uint32_t s_egui_last_activity_ms = 0U;
+static uint32_t s_egui_brightness_check_ms = 0U;
 
 static void egui_port_assert_handler(const char *file, int line)
 {
@@ -74,7 +79,7 @@ static void egui_lcd_init(egui_core_t *core)
     (void)core;
 
     LCD_Init();
-    LCD_BLK_Set();
+    LCD_SetBacklightPercent(100U);
     LCD_Fill(0U, 0U, (uint16_t)(LCD_W - 1U), (uint16_t)(LCD_H - 1U), BLACK);
 }
 
@@ -136,13 +141,25 @@ static void egui_lcd_set_power(egui_core_t *core, uint8_t on)
 {
     (void)core;
 
+    s_egui_display_on = (on != 0U);
     if (on != 0U)
     {
-        LCD_BLK_Set();
+        LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
     }
     else
     {
-        LCD_BLK_Clr();
+        LCD_SetBacklightPercent(0U);
+    }
+}
+
+static void egui_lcd_set_brightness(egui_core_t *core, uint8_t level)
+{
+    (void)core;
+
+    if (s_egui_display_on)
+    {
+        uint8_t percent = (uint8_t)(((uint16_t)level * 100U + 127U) / 255U);
+        LCD_SetBacklightPercent(percent);
     }
 }
 
@@ -151,7 +168,7 @@ static const egui_display_driver_ops_t s_egui_lcd_ops = {
     .draw_area = egui_lcd_draw_area,
     .wait_draw_complete = egui_lcd_wait_draw_complete,
     .flush = NULL,
-    .set_brightness = NULL,
+    .set_brightness = egui_lcd_set_brightness,
     .set_power = egui_lcd_set_power,
     .set_rotation = NULL,
     .fill_rect = NULL,
@@ -203,13 +220,31 @@ void egui_port_start(void)
     egui_setup_display(&s_egui_core, &setup);
 
     s_egui_started = true;
+    s_egui_display_on = true;
+    s_egui_last_activity_ms = egui_timer_get_current_time();
+    s_egui_brightness_check_ms = s_egui_last_activity_ms;
 }
 
 void egui_port_poll(void)
 {
+    uint32_t now;
+    uint32_t timeout_ms;
+
     if (!s_egui_started)
     {
         return;
+    }
+
+    now = egui_timer_get_current_time();
+    timeout_ms = (uint32_t)SettingsApp_GetScreenIdleTimeoutMin() * 60U * 1000U;
+    if (s_egui_display_on && (timeout_ms > 0U) && ((uint32_t)(now - s_egui_last_activity_ms) >= timeout_ms))
+    {
+        egui_port_set_display_power(false);
+    }
+    else if (s_egui_display_on && ((uint32_t)(now - s_egui_brightness_check_ms) >= 60000U))
+    {
+        s_egui_brightness_check_ms = now;
+        LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
     }
 
     egui_polling_work(&s_egui_core);
@@ -227,5 +262,35 @@ void egui_port_handle_key_event(const key_event_t *key_event)
         return;
     }
 
+    s_egui_last_activity_ms = egui_timer_get_current_time();
+    if (!s_egui_display_on)
+    {
+        egui_port_set_display_power(true);
+    }
+
     ui_page_manager_handle_key_event((void *)key_event);
+}
+
+void egui_port_set_display_power(bool on)
+{
+    if (!s_egui_started)
+    {
+        if (on)
+        {
+            LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
+        }
+        else
+        {
+            LCD_SetBacklightPercent(0U);
+        }
+        s_egui_display_on = on;
+        return;
+    }
+
+    egui_display_set_power(&s_egui_core, on ? 1U : 0U);
+    if (on)
+    {
+        s_egui_brightness_check_ms = egui_timer_get_current_time();
+        egui_core_force_refresh(&s_egui_core);
+    }
 }

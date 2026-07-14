@@ -35,6 +35,7 @@ void LCD_SetCursor(uint16_t x, uint16_t y);                                     
 void LCD_Address_Set(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye);          // �������꺯��
 void LCD_Fill(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, uint16_t color); // ��亯��
 void LCD_Init(void);                                                               // ����LCD��ʼ��
+void LCD_SetBacklightPercent(uint8_t percent);
 typedef void (*lcd_dma_done_cb_t)(void *user_data);
 void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const uint16_t *color_p);
 bool LCD_Color_Render_DMA(uint16_t xs,

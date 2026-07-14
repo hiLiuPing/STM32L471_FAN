@@ -21,6 +21,7 @@
 #endif
 
 #define UI_POETRY_POPUP_TIMER_MS       50U
+#define UI_POETRY_POPUP_COLLECTION     POETRY_COLL_SONG_3000
 #define UI_POETRY_POPUP_PANEL_X        54
 #define UI_POETRY_POPUP_PANEL_Y        6
 #define UI_POETRY_POPUP_PANEL_W        320
@@ -31,9 +32,16 @@
 #define UI_POETRY_POPUP_LINE_STEP      22
 #define UI_POETRY_POPUP_FONT_H         UI_POETRY_POPUP_FONT_SIZE
 #define UI_POETRY_POPUP_ANIM_MS        300U
-#define UI_POETRY_POPUP_TEXT_AREA_H    (UI_POETRY_POPUP_PANEL_H - 2 * UI_POETRY_POPUP_TEXT_PAD_Y)
-#define UI_POETRY_POPUP_MAX_VISIBLE_LINES \
-    (((UI_POETRY_POPUP_TEXT_AREA_H - UI_POETRY_POPUP_FONT_H) / UI_POETRY_POPUP_LINE_STEP) + 1)
+#define UI_POETRY_POPUP_DISPLAY_W      (UI_POETRY_POPUP_PANEL_W - 2 * UI_POETRY_POPUP_TEXT_PAD_X)
+#define UI_POETRY_POPUP_DISPLAY_H      (UI_POETRY_POPUP_PANEL_H - 2 * UI_POETRY_POPUP_TEXT_PAD_Y)
+#define UI_POETRY_POPUP_TITLE_LINE_H   UI_POETRY_POPUP_LINE_STEP
+#define UI_POETRY_POPUP_TITLE_BODY_GAP 2
+#define UI_POETRY_POPUP_BODY_W         UI_POETRY_POPUP_DISPLAY_W
+#define UI_POETRY_POPUP_BODY_H \
+    (UI_POETRY_POPUP_DISPLAY_H - UI_POETRY_POPUP_TITLE_LINE_H - UI_POETRY_POPUP_TITLE_BODY_GAP)
+#define UI_POETRY_POPUP_BODY_INDENT_SPACES 2U
+#define UI_POETRY_POPUP_MAX_LAYOUT_LINES   96U
+#define UI_POETRY_POPUP_TITLE_TEXT_SIZE    128U
 
 typedef enum
 {
@@ -49,6 +57,7 @@ typedef struct
     egui_timer_t timer;
     uint16_t interval_s;
     uint16_t duration_s;
+    uint8_t enabled;
     uint32_t next_show_ms;
     uint32_t shown_at_ms;
     uint32_t anim_start_ms;
@@ -56,13 +65,16 @@ typedef struct
     int16_t panel_y;
     int16_t target_panel_y;
     int16_t hidden_panel_y;
-    uint16_t text_total_h;
+    uint16_t body_total_h;
     uint8_t line_count;
+    egui_dim_t title_width;
+    egui_dim_t body_indent_w;
     uint8_t home_anim_was_enabled;
     uint8_t poem_buf[POETRY_APP_MAX_TEXT_SIZE];
-    const char *lines[POETRY_APP_MAX_POEM_LINES];
-    egui_dim_t line_widths[POETRY_APP_MAX_POEM_LINES];
-    char text[1024];
+    const char *lines[UI_POETRY_POPUP_MAX_LAYOUT_LINES];
+    egui_dim_t line_widths[UI_POETRY_POPUP_MAX_LAYOUT_LINES];
+    char title[UI_POETRY_POPUP_TITLE_TEXT_SIZE];
+    char text[POETRY_APP_MAX_TEXT_SIZE];
 } ui_poetry_popup_state_t;
 
 static ui_poetry_popup_state_t s_popup;
@@ -71,7 +83,14 @@ static egui_view_api_t s_popup_api;
 static void ui_poetry_popup_timer_cb(egui_timer_t *timer);
 static bool ui_poetry_popup_time_reached(uint32_t now, uint32_t target);
 static bool ui_poetry_popup_prepare_text(void);
-static void ui_poetry_popup_append_line(const char *line, uint16_t *pos);
+static void ui_poetry_popup_set_message(const char *title, const char *body);
+static const char *ui_poetry_popup_find_title(const PoetryApp_Poem_t *poem, uint8_t *title_idx);
+static void ui_poetry_popup_copy_utf8_text(char *dst, uint16_t dst_size, const char *src);
+static uint8_t ui_poetry_popup_utf8_bytes(const char *text);
+static egui_dim_t ui_poetry_popup_measure_glyph(const egui_font_t *font, const char *text, uint8_t bytes);
+static egui_dim_t ui_poetry_popup_measure_indent(const egui_font_t *font);
+static void ui_poetry_popup_layout_body(const PoetryApp_Poem_t *poem, uint8_t body_start_idx);
+static egui_dim_t ui_poetry_popup_get_body_scroll(void);
 static void ui_poetry_popup_show(void);
 static void ui_poetry_popup_start_leave(void);
 static void ui_poetry_popup_hide(void);
@@ -80,7 +99,7 @@ static int16_t ui_poetry_popup_lerp_i16(int16_t from, int16_t to, uint32_t elaps
 static void ui_poetry_popup_invalidate_panel(egui_dim_t panel_y);
 static void ui_poetry_popup_invalidate_panel_sweep(egui_dim_t old_y, egui_dim_t new_y);
 static void ui_poetry_popup_collect_lines(void);
-static void ui_poetry_popup_draw_lines(egui_canvas_t *canvas, int16_t panel_y);
+static void ui_poetry_popup_draw_text(egui_canvas_t *canvas, int16_t panel_y);
 static void ui_poetry_popup_on_draw(egui_view_t *self);
 
 void ui_poetry_popup_init(void)
@@ -90,6 +109,7 @@ void ui_poetry_popup_init(void)
     memset(&s_popup, 0, sizeof(s_popup));
     s_popup.interval_s = UI_POETRY_POPUP_DEFAULT_INTERVAL_S;
     s_popup.duration_s = UI_POETRY_POPUP_DEFAULT_DURATION_S;
+    s_popup.enabled = 1U;
     s_popup.next_show_ms = egui_timer_get_current_time() + (uint32_t)s_popup.interval_s * 1000U;
     s_popup.phase = UI_POETRY_POPUP_PHASE_WAITING;
     s_popup.target_panel_y = UI_POETRY_POPUP_PANEL_Y;
@@ -127,11 +147,45 @@ void ui_poetry_popup_set_timing(uint16_t interval_s, uint16_t duration_s)
     }
 }
 
+void ui_poetry_popup_set_enabled(bool enabled)
+{
+    uint8_t next = enabled ? 1U : 0U;
+
+    if (s_popup.enabled == next)
+    {
+        return;
+    }
+
+    s_popup.enabled = next;
+    if (s_popup.enabled != 0U)
+    {
+        if (s_popup.phase == UI_POETRY_POPUP_PHASE_WAITING)
+        {
+            s_popup.next_show_ms = egui_timer_get_current_time() + (uint32_t)s_popup.interval_s * 1000U;
+        }
+        return;
+    }
+
+    if (s_popup.phase != UI_POETRY_POPUP_PHASE_WAITING)
+    {
+        ui_poetry_popup_hide();
+    }
+    else
+    {
+        egui_view_set_visible(EGUI_VIEW_OF(&s_popup.base), 0);
+    }
+}
+
 static void ui_poetry_popup_timer_cb(egui_timer_t *timer)
 {
     uint32_t now = egui_timer_get_current_time();
 
     (void)timer;
+
+    if (s_popup.enabled == 0U)
+    {
+        return;
+    }
 
     if (s_popup.phase == UI_POETRY_POPUP_PHASE_WAITING)
     {
@@ -152,6 +206,7 @@ static void ui_poetry_popup_timer_cb(egui_timer_t *timer)
         {
             s_popup.phase = UI_POETRY_POPUP_PHASE_VISIBLE;
             s_popup.panel_y = s_popup.target_panel_y;
+            s_popup.shown_at_ms = now;
         }
         if (s_popup.panel_y != old_y)
         {
@@ -165,6 +220,10 @@ static void ui_poetry_popup_timer_cb(egui_timer_t *timer)
         if (ui_poetry_popup_elapsed(now, s_popup.shown_at_ms) >= (uint32_t)s_popup.duration_s * 1000U)
         {
             ui_poetry_popup_start_leave();
+            ui_poetry_popup_invalidate_panel(s_popup.panel_y);
+        }
+        else if (s_popup.body_total_h > UI_POETRY_POPUP_BODY_H)
+        {
             ui_poetry_popup_invalidate_panel(s_popup.panel_y);
         }
         return;
@@ -196,26 +255,30 @@ static bool ui_poetry_popup_time_reached(uint32_t now, uint32_t target)
 static bool ui_poetry_popup_prepare_text(void)
 {
     PoetryApp_Poem_t poem;
-    PoetryApp_Collection_t coll;
-    uint16_t pos = 0U;
-    uint8_t copied_lines = 0U;
+    PoetryApp_Collection_t coll = UI_POETRY_POPUP_COLLECTION;
+    const char *title;
+    uint8_t title_idx = 0U;
     int ret;
+
+    s_popup.title[0] = '\0';
+    s_popup.text[0] = '\0';
+    s_popup.line_count = 0U;
+    s_popup.title_width = 0;
+    s_popup.body_indent_w = 0;
+    s_popup.body_total_h = 0U;
 
     if (!ui_heiti_font_is_ready(UI_POETRY_POPUP_FONT_SIZE))
     {
-        (void)snprintf(s_popup.text, sizeof(s_popup.text), "Poetry font missing\n%s", ui_heiti_font_get_path(UI_POETRY_POPUP_FONT_SIZE));
-        ui_poetry_popup_collect_lines();
+        ui_poetry_popup_set_message("Poetry font missing", ui_heiti_font_get_path(UI_POETRY_POPUP_FONT_SIZE));
         return true;
     }
-
-    coll = (PoetryApp_Collection_t)(rand() % POETRY_COLL_COUNT);
 
     ret = PoetryApp_OpenCollection(coll);
     if (ret != POETRY_APP_OK)
     {
         log_printf("[UI_POETRY] open coll=%u ret=%d", (unsigned)coll, ret);
-        (void)snprintf(s_popup.text, sizeof(s_popup.text), "Poetry data missing\ncollection %u", (unsigned)coll);
-        ui_poetry_popup_collect_lines();
+        (void)snprintf(s_popup.text, sizeof(s_popup.text), "collection %u", (unsigned)coll);
+        ui_poetry_popup_set_message("Poetry data missing", s_popup.text);
         return true;
     }
 
@@ -223,87 +286,263 @@ static bool ui_poetry_popup_prepare_text(void)
     if (ret != POETRY_APP_OK)
     {
         log_printf("[UI_POETRY] get poem coll=%u ret=%d", (unsigned)coll, ret);
-        (void)snprintf(s_popup.text, sizeof(s_popup.text), "Poetry read failed\ncollection %u", (unsigned)coll);
-        ui_poetry_popup_collect_lines();
+        (void)snprintf(s_popup.text, sizeof(s_popup.text), "collection %u", (unsigned)coll);
+        ui_poetry_popup_set_message("Poetry read failed", s_popup.text);
         return true;
     }
 
-    for (uint8_t i = 0U;
-         (i < poem.line_count) && (copied_lines < UI_POETRY_POPUP_MAX_VISIBLE_LINES) && (pos < sizeof(s_popup.text) - 2U);
-         i++)
+    title = ui_poetry_popup_find_title(&poem, &title_idx);
+    if (title != NULL)
     {
-        const char *line = poem.lines[i];
-
-        if ((line == NULL) || (line[0] == '\0'))
-        {
-            continue;
-        }
-
-        ui_poetry_popup_append_line(line, &pos);
-        copied_lines++;
+        ui_poetry_popup_copy_utf8_text(s_popup.title, sizeof(s_popup.title), title);
+        ui_poetry_popup_layout_body(&poem, (uint8_t)(title_idx + 1U));
     }
 
-    s_popup.text[pos] = '\0';
-    if (pos == 0U)
+    if ((s_popup.title[0] == '\0') && (s_popup.text[0] == '\0'))
     {
-        (void)snprintf(s_popup.text, sizeof(s_popup.text), "Poetry popup\ncollection %u", (unsigned)coll);
+        (void)snprintf(s_popup.text, sizeof(s_popup.text), "collection %u", (unsigned)coll);
+        ui_poetry_popup_set_message("Poetry popup", s_popup.text);
     }
-    ui_poetry_popup_collect_lines();
+    else
+    {
+        ui_poetry_popup_collect_lines();
+    }
 
     return true;
 }
 
-static void ui_poetry_popup_append_line(const char *line, uint16_t *pos)
+static void ui_poetry_popup_set_message(const char *title, const char *body)
 {
-    if ((line == NULL) || (pos == NULL) || (*pos >= sizeof(s_popup.text) - 1U))
+    ui_poetry_popup_copy_utf8_text(s_popup.title, sizeof(s_popup.title), title);
+
+    if (body == NULL)
+    {
+        s_popup.text[0] = '\0';
+    }
+    else
+    {
+        ui_poetry_popup_copy_utf8_text(s_popup.text, sizeof(s_popup.text), body);
+    }
+
+    ui_poetry_popup_collect_lines();
+}
+
+static const char *ui_poetry_popup_find_title(const PoetryApp_Poem_t *poem, uint8_t *title_idx)
+{
+    if ((poem == NULL) || (title_idx == NULL))
+    {
+        return NULL;
+    }
+
+    for (uint8_t i = 0U; i < poem->line_count; i++)
+    {
+        const char *line = poem->lines[i];
+
+        if (line == NULL)
+        {
+            continue;
+        }
+
+        while ((*line == ' ') || (*line == '\t'))
+        {
+            line++;
+        }
+
+        if (*line != '\0')
+        {
+            *title_idx = i;
+            return line;
+        }
+    }
+
+    return NULL;
+}
+
+static void ui_poetry_popup_copy_utf8_text(char *dst, uint16_t dst_size, const char *src)
+{
+    uint16_t pos = 0U;
+
+    if ((dst == NULL) || (dst_size == 0U))
     {
         return;
     }
 
-    if ((*pos > 0U) && (*pos < sizeof(s_popup.text) - 1U))
+    if (src == NULL)
     {
-        s_popup.text[(*pos)++] = '\n';
+        dst[0] = '\0';
+        return;
     }
 
-    while ((*line != '\0') && (*pos < sizeof(s_popup.text) - 1U))
+    while ((*src != '\0') && (pos < (uint16_t)(dst_size - 1U)))
     {
-        uint8_t ch = (uint8_t)*line;
-        uint8_t bytes = 1U;
+        uint8_t bytes = ui_poetry_popup_utf8_bytes(src);
 
-        if ((ch & 0x80U) == 0U)
-        {
-            bytes = 1U;
-        }
-        else if ((ch & 0xE0U) == 0xC0U)
-        {
-            bytes = 2U;
-        }
-        else if ((ch & 0xF0U) == 0xE0U)
-        {
-            bytes = 3U;
-        }
-        else if ((ch & 0xF8U) == 0xF0U)
-        {
-            bytes = 4U;
-        }
-
-        if ((uint16_t)(*pos + bytes) >= sizeof(s_popup.text))
+        if ((uint16_t)(pos + bytes) >= dst_size)
         {
             break;
         }
 
         for (uint8_t i = 0U; i < bytes; i++)
         {
-            if (line[i] == '\0')
-            {
-                line += i;
-                return;
-            }
-            s_popup.text[(*pos)++] = line[i];
+            dst[pos++] = src[i];
+        }
+        src += bytes;
+    }
+
+    dst[pos] = '\0';
+}
+
+static uint8_t ui_poetry_popup_utf8_bytes(const char *text)
+{
+    uint8_t ch;
+    uint8_t bytes = 1U;
+
+    if ((text == NULL) || (text[0] == '\0'))
+    {
+        return 0U;
+    }
+
+    ch = (uint8_t)text[0];
+    if ((ch & 0x80U) == 0U)
+    {
+        bytes = 1U;
+    }
+    else if ((ch & 0xE0U) == 0xC0U)
+    {
+        bytes = 2U;
+    }
+    else if ((ch & 0xF0U) == 0xE0U)
+    {
+        bytes = 3U;
+    }
+    else if ((ch & 0xF8U) == 0xF0U)
+    {
+        bytes = 4U;
+    }
+
+    for (uint8_t i = 1U; i < bytes; i++)
+    {
+        if (text[i] == '\0')
+        {
+            return i;
+        }
+    }
+
+    return bytes;
+}
+
+static egui_dim_t ui_poetry_popup_measure_glyph(const egui_font_t *font, const char *text, uint8_t bytes)
+{
+    char glyph[8];
+    egui_dim_t width = 0;
+    egui_dim_t height = 0;
+
+    if ((font == NULL) || (text == NULL) || (bytes == 0U))
+    {
+        return 0;
+    }
+
+    if (bytes >= sizeof(glyph))
+    {
+        bytes = (uint8_t)(sizeof(glyph) - 1U);
+    }
+
+    memcpy(glyph, text, bytes);
+    glyph[bytes] = '\0';
+    (void)egui_font_get_str_size_with_core(font, egui_port_get_core(), glyph, 0, 0, &width, &height);
+
+    return width;
+}
+
+static egui_dim_t ui_poetry_popup_measure_indent(const egui_font_t *font)
+{
+    egui_dim_t indent = 0;
+
+    for (uint8_t i = 0U; i < UI_POETRY_POPUP_BODY_INDENT_SPACES; i++)
+    {
+        indent = (egui_dim_t)(indent + ui_poetry_popup_measure_glyph(font, " ", 1U));
+    }
+
+    return indent;
+}
+
+static void ui_poetry_popup_layout_body(const PoetryApp_Poem_t *poem, uint8_t body_start_idx)
+{
+    const egui_font_t *font = ui_heiti_font_get(UI_POETRY_POPUP_FONT_SIZE);
+    uint16_t pos = 0U;
+    uint8_t line_idx = 0U;
+    egui_dim_t line_width = 0;
+    egui_dim_t line_limit;
+
+    if (poem == NULL)
+    {
+        return;
+    }
+
+    s_popup.body_indent_w = ui_poetry_popup_measure_indent(font);
+    line_limit = (UI_POETRY_POPUP_BODY_W > s_popup.body_indent_w) ? (egui_dim_t)(UI_POETRY_POPUP_BODY_W - s_popup.body_indent_w) : UI_POETRY_POPUP_BODY_W;
+
+    for (uint8_t i = body_start_idx; (i < poem->line_count) && (pos < sizeof(s_popup.text) - 1U); i++)
+    {
+        const char *line = poem->lines[i];
+
+        if (line == NULL)
+        {
+            continue;
         }
 
-        line += bytes;
+        while ((*line == ' ') || (*line == '\t'))
+        {
+            line++;
+        }
+
+        while ((*line != '\0') && (pos < sizeof(s_popup.text) - 1U))
+        {
+            uint8_t bytes;
+            egui_dim_t glyph_w;
+
+            if ((*line == '\r') || (*line == '\n'))
+            {
+                line++;
+                continue;
+            }
+
+            bytes = ui_poetry_popup_utf8_bytes(line);
+            if (bytes == 0U)
+            {
+                break;
+            }
+
+            glyph_w = ui_poetry_popup_measure_glyph(font, line, bytes);
+            if ((line_width > 0) && ((egui_dim_t)(line_width + glyph_w) > line_limit))
+            {
+                if (line_idx >= (uint8_t)(UI_POETRY_POPUP_MAX_LAYOUT_LINES - 1U))
+                {
+                    s_popup.text[pos] = '\0';
+                    return;
+                }
+
+                s_popup.text[pos++] = '\n';
+                line_idx++;
+                line_width = 0;
+                line_limit = UI_POETRY_POPUP_BODY_W;
+            }
+
+            if ((uint16_t)(pos + bytes) >= sizeof(s_popup.text))
+            {
+                break;
+            }
+
+            for (uint8_t j = 0U; j < bytes; j++)
+            {
+                s_popup.text[pos++] = line[j];
+            }
+            line_width = (egui_dim_t)(line_width + glyph_w);
+            line += bytes;
+        }
     }
+
+    s_popup.text[pos] = '\0';
 }
 
 static void ui_poetry_popup_show(void)
@@ -380,6 +619,42 @@ static int16_t ui_poetry_popup_lerp_i16(int16_t from, int16_t to, uint32_t elaps
     return (int16_t)((int32_t)from + (delta * (int32_t)elapsed) / (int32_t)duration);
 }
 
+static egui_dim_t ui_poetry_popup_get_body_scroll(void)
+{
+    uint32_t duration_ms;
+    uint32_t elapsed;
+    egui_dim_t max_scroll;
+
+    if (s_popup.body_total_h <= UI_POETRY_POPUP_BODY_H)
+    {
+        return 0;
+    }
+
+    max_scroll = (egui_dim_t)(s_popup.body_total_h - UI_POETRY_POPUP_BODY_H);
+    duration_ms = (uint32_t)s_popup.duration_s * 1000U;
+    if (duration_ms == 0U)
+    {
+        return max_scroll;
+    }
+
+    if (s_popup.phase == UI_POETRY_POPUP_PHASE_LEAVING)
+    {
+        return max_scroll;
+    }
+    if (s_popup.phase != UI_POETRY_POPUP_PHASE_VISIBLE)
+    {
+        return 0;
+    }
+
+    elapsed = ui_poetry_popup_elapsed(egui_timer_get_current_time(), s_popup.shown_at_ms);
+    if (elapsed >= duration_ms)
+    {
+        return max_scroll;
+    }
+
+    return (egui_dim_t)(((uint32_t)max_scroll * elapsed) / duration_ms);
+}
+
 static void ui_poetry_popup_invalidate_panel(egui_dim_t panel_y)
 {
     egui_region_t dirty_region;
@@ -412,7 +687,15 @@ static void ui_poetry_popup_collect_lines(void)
     char *line = s_popup.text;
     uint8_t count = 0U;
 
-    while ((*line != '\0') && (count < POETRY_APP_MAX_POEM_LINES) && (count < UI_POETRY_POPUP_MAX_VISIBLE_LINES))
+    s_popup.title_width = 0;
+    if (s_popup.title[0] != '\0')
+    {
+        egui_dim_t title_h = 0;
+
+        (void)egui_font_get_str_size_with_core(font, egui_port_get_core(), s_popup.title, 0, 0, &s_popup.title_width, &title_h);
+    }
+
+    while ((*line != '\0') && (count < UI_POETRY_POPUP_MAX_LAYOUT_LINES))
     {
         s_popup.lines[count++] = line;
 
@@ -428,7 +711,7 @@ static void ui_poetry_popup_collect_lines(void)
     }
 
     s_popup.line_count = count;
-    s_popup.text_total_h = (count == 0U) ? 0U : (uint16_t)((uint16_t)(count - 1U) * UI_POETRY_POPUP_LINE_STEP + UI_POETRY_POPUP_FONT_H);
+    s_popup.body_total_h = (count == 0U) ? 0U : (uint16_t)((uint16_t)(count - 1U) * UI_POETRY_POPUP_LINE_STEP + UI_POETRY_POPUP_FONT_H);
 
     for (uint8_t i = 0U; i < count; i++)
     {
@@ -439,38 +722,53 @@ static void ui_poetry_popup_collect_lines(void)
     }
 }
 
-static void ui_poetry_popup_draw_lines(egui_canvas_t *canvas, int16_t panel_y)
+static void ui_poetry_popup_draw_text(egui_canvas_t *canvas, int16_t panel_y)
 {
     const egui_font_t *font = ui_heiti_font_get(UI_POETRY_POPUP_FONT_SIZE);
-    egui_dim_t text_x = UI_POETRY_POPUP_PANEL_X + UI_POETRY_POPUP_TEXT_PAD_X;
-    egui_dim_t text_y = (egui_dim_t)(panel_y + UI_POETRY_POPUP_TEXT_PAD_Y);
-    egui_dim_t text_w = UI_POETRY_POPUP_PANEL_W - 2 * UI_POETRY_POPUP_TEXT_PAD_X;
-    egui_dim_t text_h = UI_POETRY_POPUP_PANEL_H - 2 * UI_POETRY_POPUP_TEXT_PAD_Y;
+    egui_dim_t display_x = UI_POETRY_POPUP_PANEL_X + UI_POETRY_POPUP_TEXT_PAD_X;
+    egui_dim_t display_y = (egui_dim_t)(panel_y + UI_POETRY_POPUP_TEXT_PAD_Y);
+    egui_dim_t title_y = display_y;
+    egui_dim_t body_x = display_x;
+    egui_dim_t body_y = (egui_dim_t)(display_y + UI_POETRY_POPUP_TITLE_LINE_H + UI_POETRY_POPUP_TITLE_BODY_GAP);
     egui_dim_t line_h = UI_POETRY_POPUP_FONT_H;
     egui_dim_t start_y;
+    egui_dim_t scroll_y;
     egui_region_t text_clip;
     egui_region_t prev_work;
     egui_region_t clipped_work;
     egui_region_t *work_region;
+
+    if (s_popup.title[0] != '\0')
+    {
+        egui_dim_t title_x = display_x;
+
+        if (s_popup.title_width < UI_POETRY_POPUP_DISPLAY_W)
+        {
+            title_x = (egui_dim_t)(display_x + (UI_POETRY_POPUP_DISPLAY_W - s_popup.title_width) / 2U);
+        }
+
+        egui_canvas_draw_text(canvas, font, s_popup.title, title_x, title_y, ui_color(0xF8FAFC), EGUI_ALPHA_100);
+    }
 
     if (s_popup.line_count == 0U)
     {
         return;
     }
 
-    if (s_popup.text_total_h < text_h)
+    if (s_popup.body_total_h < UI_POETRY_POPUP_BODY_H)
     {
-        start_y = (egui_dim_t)(text_y + (text_h - s_popup.text_total_h) / 2U);
+        start_y = (egui_dim_t)(body_y + (UI_POETRY_POPUP_BODY_H - s_popup.body_total_h) / 2U);
     }
     else
     {
-        start_y = text_y;
+        start_y = body_y;
     }
+    scroll_y = ui_poetry_popup_get_body_scroll();
 
-    text_clip.location.x = text_x;
-    text_clip.location.y = text_y;
-    text_clip.size.width = text_w;
-    text_clip.size.height = text_h;
+    text_clip.location.x = body_x;
+    text_clip.location.y = body_y;
+    text_clip.size.width = UI_POETRY_POPUP_BODY_W;
+    text_clip.size.height = UI_POETRY_POPUP_BODY_H;
     work_region = egui_canvas_get_base_view_work_region(canvas);
     prev_work = *work_region;
     egui_region_intersect(&prev_work, &text_clip, &clipped_work);
@@ -478,22 +776,17 @@ static void ui_poetry_popup_draw_lines(egui_canvas_t *canvas, int16_t panel_y)
 
     for (uint8_t i = 0U; i < s_popup.line_count; i++)
     {
-        egui_dim_t line_y = (egui_dim_t)(start_y + (egui_dim_t)i * UI_POETRY_POPUP_LINE_STEP);
-        egui_dim_t line_w = s_popup.line_widths[i];
-        egui_dim_t line_x;
+        egui_dim_t line_y = (egui_dim_t)(start_y + (egui_dim_t)i * UI_POETRY_POPUP_LINE_STEP - scroll_y);
+        egui_dim_t line_x = body_x;
 
-        if (((egui_dim_t)(line_y + line_h) <= text_y) || (line_y >= (egui_dim_t)(text_y + text_h)))
+        if (((egui_dim_t)(line_y + line_h) <= body_y) || (line_y >= (egui_dim_t)(body_y + UI_POETRY_POPUP_BODY_H)))
         {
             continue;
         }
 
-        if (line_w < text_w)
+        if (i == 0U)
         {
-            line_x = (egui_dim_t)(text_x + (text_w - line_w) / 2U);
-        }
-        else
-        {
-            line_x = text_x;
+            line_x = (egui_dim_t)(line_x + s_popup.body_indent_w);
         }
 
         egui_canvas_draw_text(canvas, font, s_popup.lines[i], line_x, line_y, ui_color(0xE2E8F0), EGUI_ALPHA_100);
@@ -512,5 +805,5 @@ static void ui_poetry_popup_on_draw(egui_view_t *self)
     }
 
     ui_draw_round_panel(canvas, UI_POETRY_POPUP_PANEL_X, s_popup.panel_y, UI_POETRY_POPUP_PANEL_W, UI_POETRY_POPUP_PANEL_H, 12, 0x4A90E2, 0xFFFFFF);
-    ui_poetry_popup_draw_lines(canvas, s_popup.panel_y);
+    ui_poetry_popup_draw_text(canvas, s_popup.panel_y);
 }

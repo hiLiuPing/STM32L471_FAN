@@ -66,7 +66,7 @@ typedef enum
 #define POETRY_APP_PATH_TANG_300   "tang_300.idx"
 #define POETRY_APP_PATH_SONG_3000  "song_3000.idx"
 
-#define POETRY_APP_MAX_POEM_LINES  24U
+#define POETRY_APP_MAX_POEM_LINES  96U
 
 typedef struct
 {
