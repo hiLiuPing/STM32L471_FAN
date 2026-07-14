@@ -37,8 +37,8 @@ typedef struct
     char time_text[8];
     char date_text[DATA_APP_HOME_TEXT_LEN];
     char week_text[DATA_APP_HOME_TEXT_LEN];
-    char temp_high_text[DATA_APP_HOME_TEXT_LEN];
-    char temp_low_text[DATA_APP_HOME_TEXT_LEN];
+    char temp_range_text[DATA_APP_HOME_TEXT_LEN];
+    char pm25_text[DATA_APP_HOME_TEXT_LEN];
     char env_text[DATA_APP_HOME_TEXT_LEN];
     uint16_t weather_icon_id;
     uint32_t version;

@@ -15,7 +15,7 @@
 #define EGUI_CONFIG_PFB_BUFFER_COUNT 2
 
 #define EGUI_CONFIG_MAX_FPS          30
-#define EGUI_CONFIG_DIRTY_AREA_COUNT 4
+#define EGUI_CONFIG_DIRTY_AREA_COUNT 8
 
 /* Enable 8-bit alpha channel pixel accessor for egui_image_std */
 #define EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565_8 1

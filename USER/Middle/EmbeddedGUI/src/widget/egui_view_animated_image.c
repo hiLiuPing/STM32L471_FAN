@@ -37,7 +37,14 @@ void egui_view_animated_image_on_draw(egui_view_t *self)
         return;
     }
 
-    egui_canvas_draw_image(canvas, image, region.location.x, region.location.y);
+    if (local->fit_to_view != 0U)
+    {
+        egui_canvas_draw_image_resize(canvas, image, region.location.x, region.location.y, region.size.width, region.size.height);
+    }
+    else
+    {
+        egui_canvas_draw_image(canvas, image, region.location.x, region.location.y);
+    }
 }
 
 /**
@@ -147,6 +154,30 @@ uint8_t egui_view_animated_image_get_loop(egui_view_t *self)
     }
     EGUI_LOCAL_INIT(egui_view_animated_image_t);
     return local->is_loop;
+}
+
+void egui_view_animated_image_set_fit_to_view(egui_view_t *self, uint8_t enable)
+{
+    EGUI_LOCAL_INIT(egui_view_animated_image_t);
+    uint8_t fit_to_view = enable ? 1U : 0U;
+
+    if (local->fit_to_view == fit_to_view)
+    {
+        return;
+    }
+
+    local->fit_to_view = fit_to_view;
+    egui_view_invalidate(self);
+}
+
+uint8_t egui_view_animated_image_get_fit_to_view(egui_view_t *self)
+{
+    if (self == NULL)
+    {
+        return 0;
+    }
+    EGUI_LOCAL_INIT(egui_view_animated_image_t);
+    return local->fit_to_view;
 }
 
 /**
@@ -271,6 +302,7 @@ void egui_view_animated_image_init(egui_view_t *self, egui_core_t *core)
     local->current_frame = 0;
     local->is_playing = 0;
     local->is_loop = 1;
+    local->fit_to_view = 0;
     local->frame_interval_ms = 100;
     local->elapsed_ms = 0;
 }

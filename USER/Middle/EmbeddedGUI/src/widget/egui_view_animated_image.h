@@ -26,6 +26,7 @@ struct egui_view_animated_image
     uint8_t current_frame;
     uint8_t is_playing;
     uint8_t is_loop;
+    uint8_t fit_to_view;
     uint16_t frame_interval_ms;
     uint16_t elapsed_ms;
 };
@@ -70,6 +71,10 @@ uint8_t egui_view_animated_image_is_playing(egui_view_t *self);
 void egui_view_animated_image_set_loop(egui_view_t *self, uint8_t enable);
 /** Return whether playback wraps back to the first frame. */
 uint8_t egui_view_animated_image_get_loop(egui_view_t *self);
+/** Draw each frame resized to the view work-region when enabled. */
+void egui_view_animated_image_set_fit_to_view(egui_view_t *self, uint8_t enable);
+/** Return whether frames are resized to the view work-region. */
+uint8_t egui_view_animated_image_get_fit_to_view(egui_view_t *self);
 /** Switch to one frame immediately. Out-of-range indices are ignored. */
 void egui_view_animated_image_set_current_frame(egui_view_t *self, uint8_t index);
 /** Return the current frame index. */

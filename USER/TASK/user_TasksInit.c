@@ -25,6 +25,7 @@ TaskHandle_t AppDataTaskHandle = NULL;
 TaskHandle_t WeatherSyncTaskHandle = NULL;
 
 QueueHandle_t Key_Power_queue = NULL;
+QueueHandle_t EGUI_Key_queue = NULL;
 QueueHandle_t Fan_Command_queue = NULL;
 
 SemaphoreHandle_t xKeyScanTaskWakeSemaphore = NULL;
@@ -81,6 +82,8 @@ void User_Tasks_Init(void)
 
     Key_Power_queue = xQueueCreate(8U, sizeof(key_event_t));
     User_Tasks_RequireHandle(Key_Power_queue);
+    EGUI_Key_queue = xQueueCreate(16U, sizeof(key_event_t));
+    User_Tasks_RequireHandle(EGUI_Key_queue);
     Fan_Command_queue = xQueueCreate(8U, sizeof(fan_cmd_t));
     User_Tasks_RequireHandle(Fan_Command_queue);
     FanApp_AttachCommandQueue(Fan_Command_queue);

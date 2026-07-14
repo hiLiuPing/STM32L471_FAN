@@ -94,8 +94,8 @@ static uint8_t DataApp_HomeStatusEquals(const DataApp_HomeStatus_t *a, const Dat
                      (strcmp(a->time_text, b->time_text) == 0) &&
                      (strcmp(a->date_text, b->date_text) == 0) &&
                      (strcmp(a->week_text, b->week_text) == 0) &&
-                     (strcmp(a->temp_high_text, b->temp_high_text) == 0) &&
-                     (strcmp(a->temp_low_text, b->temp_low_text) == 0) &&
+                     (strcmp(a->temp_range_text, b->temp_range_text) == 0) &&
+                     (strcmp(a->pm25_text, b->pm25_text) == 0) &&
                      (strcmp(a->env_text, b->env_text) == 0));
 }
 
@@ -195,8 +195,8 @@ void DataApp_HomeStatus_Update(void)
     (void)snprintf(next.time_text, sizeof(next.time_text), "%02u:%02u", t.hour, t.min);
     (void)snprintf(next.date_text, sizeof(next.date_text), "%u\346\234\210%u\346\227\245", t.month, t.date);
     (void)snprintf(next.week_text, sizeof(next.week_text), "%s", week_text[weekday]);
-    (void)snprintf(next.temp_high_text, sizeof(next.temp_high_text), "\351\253\230%dC", today->temp_high);
-    (void)snprintf(next.temp_low_text, sizeof(next.temp_low_text), "\344\275\216%dC", today->temp_low);
+    (void)snprintf(next.temp_range_text, sizeof(next.temp_range_text), "%d~%d\302\260C", today->temp_low, today->temp_high);
+    (void)snprintf(next.pm25_text, sizeof(next.pm25_text), "PM2.5 %d", g_air_detail.pm25);
     DataApp_FormatEnv(next.env_text, sizeof(next.env_text));
     next.weather_icon_id = (uint16_t)today->icon_id;
 

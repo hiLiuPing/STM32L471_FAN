@@ -21,7 +21,12 @@ STM32L471_FAN/
 │  ├─ Inc/
 │  └─ Src/
 ├─ Drivers/                      # CMSIS 与 STM32L4 HAL Driver
-├─ MDK-ARM/                      # Keil MDK 工程文件
+├─ .eide/                        # VSCode EIDE 插件工程配置
+│  ├─ eide.yml
+│  ├─ env.ini
+│  └─ files.options.yml
+├─ .vscode/                      # VSCode 辅助任务配置
+├─ MDK-ARM/                      # Keil MDK 工程文件，当前主要作为兼容/参考入口
 │  └─ STM32L471_FAN.uvprojx
 ├─ Tools/                        # 工具脚本或辅助资源
 ├─ USER/
@@ -84,6 +89,14 @@ STM32L471_FAN/
 5. `EGUIHandlerTask` 等待硬件就绪后循环调用 `egui_port_poll()`。
 6. `USER/GUI/ui.c` 注册业务页面，并由 `page_manager` 管理页面加载、切换和按键分发。
 
+## 构建与工程入口
+
+- 当前主要使用 VSCode 的 EIDE 插件编译、清理和下载项目。
+- EIDE 工程配置位于 `.eide/eide.yml`，文件选项位于 `.eide/files.options.yml`。
+- 打开 `STM32L471_FAN.code-workspace` 后，应优先通过 EIDE 的 Project Explorer / Build / Rebuild / Download 操作工程。
+- `MDK-ARM/STM32L471_FAN.uvprojx` 保留为 Keil MDK 兼容或参考入口，不是当前首选构建路径。
+- 使用 `STM32L471_FAN.ioc` 调整 CubeMX 外设配置后，需要同步检查 `Core/`、`MDK-ARM/`、`.eide/` 和 `USER` 层适配。
+
 ## 架构边界
 
 - `Core/` 和 `Drivers/` 主要由 CubeMX、HAL 和 CMSIS 维护。除外设配置确实变化外，不要手工大改生成代码。
@@ -105,7 +118,8 @@ STM32L471_FAN/
 - 新增 FreeRTOS 任务需要在 `USER/TASK/user_TasksInit.*` 中集中创建和管理句柄。
 - 任务间通信优先复用现有队列、信号量、`User_Tasks_WaitForHardwareReady()` 和 APP 层接口。
 - LCD、QSPI、SPI Flash、EEPROM、传感器、充电/电量芯片等底层驱动无明确硬件需求不随意改。
-- 修改 CubeMX 相关外设配置时，同步检查 `STM32L471_FAN.ioc`、`Core/`、`MDK-ARM/` 工程配置。
+- 修改 CubeMX 相关外设配置时，同步检查 `STM32L471_FAN.ioc`、`Core/`、`.eide/`、`MDK-ARM/` 工程配置。
+- 新增或移除源文件、头文件 include path、宏定义时，优先同步 EIDE 配置，避免 VSCode/EIDE 构建遗漏文件。
 - 不要引入 LVGL/Plain_UI 专属目录、类型或依赖，除非用户明确要求迁移图形栈。
 - 不要把 `USER/Middle/EmbeddedGUI` 当作业务页面目录；框架改动应保持通用性。
 

@@ -27,6 +27,8 @@
 #define FAN_AUTO_OFF_STEP_MIN          5U
 #define FAN_PERCENT_STEP               5U
 #define FAN_STATUS_REFRESH_MS          100U
+#define FAN_ANIM_VIEW_SIZE             104U
+#define FAN_GAUGE_SIZE                 116U
 
 typedef struct
 {
@@ -151,19 +153,30 @@ static void ui_FanPage_set_setting_active(uint8_t active)
 
 static void ui_FanPage_update_rows(const fan_state_t *state)
 {
+    const char *edit_mark;
+
     if (state == NULL)
     {
         return;
     }
 
-    (void)snprintf(s_fan_page.row_text[FAN_SETTING_POWER], sizeof(s_fan_page.row_text[FAN_SETTING_POWER]), "Power");
-    (void)snprintf(s_fan_page.row_text[FAN_SETTING_MODE], sizeof(s_fan_page.row_text[FAN_SETTING_MODE]), "Mode");
+    edit_mark = (s_fan_page.editing != 0U) ? "*" : " ";
+
+    (void)snprintf(s_fan_page.row_text[FAN_SETTING_POWER], sizeof(s_fan_page.row_text[FAN_SETTING_POWER]),
+                   "%sPower %s", ((s_fan_page.setting_active != 0U) && (s_fan_page.focus_index == FAN_SETTING_POWER)) ? ">" : " ",
+                   state->power_on ? "ON" : "OFF");
+    (void)snprintf(s_fan_page.row_text[FAN_SETTING_MODE], sizeof(s_fan_page.row_text[FAN_SETTING_MODE]),
+                   "%sMode %s", ((s_fan_page.setting_active != 0U) && (s_fan_page.focus_index == FAN_SETTING_MODE)) ? ">" : " ",
+                   FanApp_GetModeName(ui_FanPage_visible_mode(state)));
     (void)snprintf(s_fan_page.row_text[FAN_SETTING_SPEED], sizeof(s_fan_page.row_text[FAN_SETTING_SPEED]),
-                   "Speed: %u%%", state->base_speed_percent);
+                   "%sSpeed%s %u%%", ((s_fan_page.setting_active != 0U) && (s_fan_page.focus_index == FAN_SETTING_SPEED)) ? ">" : " ",
+                   (s_fan_page.focus_index == FAN_SETTING_SPEED) ? edit_mark : " ", state->base_speed_percent);
     (void)snprintf(s_fan_page.row_text[FAN_SETTING_INTENSITY], sizeof(s_fan_page.row_text[FAN_SETTING_INTENSITY]),
-                   "Intensity: %u%%", state->intensity_percent);
+                   "%sBoost%s %u%%", ((s_fan_page.setting_active != 0U) && (s_fan_page.focus_index == FAN_SETTING_INTENSITY)) ? ">" : " ",
+                   (s_fan_page.focus_index == FAN_SETTING_INTENSITY) ? edit_mark : " ", state->intensity_percent);
     (void)snprintf(s_fan_page.row_text[FAN_SETTING_AUTO_OFF], sizeof(s_fan_page.row_text[FAN_SETTING_AUTO_OFF]),
-                   "Auto: %umin", state->auto_off_min);
+                   "%sTimer%s %umin", ((s_fan_page.setting_active != 0U) && (s_fan_page.focus_index == FAN_SETTING_AUTO_OFF)) ? ">" : " ",
+                   (s_fan_page.focus_index == FAN_SETTING_AUTO_OFF) ? edit_mark : " ", state->auto_off_min);
 }
 
 static void ui_FanPage_sync_anim(fan_mode_t mode)
@@ -254,44 +267,45 @@ void ui_FanPage_screen_init(void)
     ui_FanPage_update_rows(&state);
 
     egui_view_animated_image_init(EGUI_VIEW_OF(&s_fan_page.fan_image), core);
-    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.fan_image), 48, 38);
-    egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.fan_image), FAN_ANIM_ICON_SIZE, FAN_ANIM_ICON_SIZE);
+    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.fan_image), 19, 26);
+    egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.fan_image), FAN_ANIM_VIEW_SIZE, FAN_ANIM_VIEW_SIZE);
+    egui_view_animated_image_set_fit_to_view(EGUI_VIEW_OF(&s_fan_page.fan_image), 1U);
 
     egui_view_gauge_init(EGUI_VIEW_OF(&s_fan_page.speed_gauge), core);
-    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 143, 12);
-    egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 112, 112);
-    egui_view_gauge_set_start_angle(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 180);
-    egui_view_gauge_set_sweep_angle(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 180);
-    egui_view_gauge_set_stroke_width(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 7);
-    egui_view_gauge_set_needle_width(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 2);
+    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 155, 10);
+    egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.speed_gauge), FAN_GAUGE_SIZE, FAN_GAUGE_SIZE);
+    egui_view_gauge_set_start_angle(EGUI_VIEW_OF(&s_fan_page.speed_gauge), -90);
+    egui_view_gauge_set_sweep_angle(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 360);
+    egui_view_gauge_set_stroke_width(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 11);
+    egui_view_gauge_set_needle_width(EGUI_VIEW_OF(&s_fan_page.speed_gauge), 1);
     egui_view_gauge_set_bk_color(EGUI_VIEW_OF(&s_fan_page.speed_gauge), ui_color(0xB9E6FF));
-    egui_view_gauge_set_progress_color(EGUI_VIEW_OF(&s_fan_page.speed_gauge), ui_color(0x0EA5E9));
-    egui_view_gauge_set_needle_color(EGUI_VIEW_OF(&s_fan_page.speed_gauge), ui_color(0x0F172A));
-    egui_view_gauge_set_text_color(EGUI_VIEW_OF(&s_fan_page.speed_gauge), ui_color(0x0F172A));
-    egui_view_gauge_set_font(EGUI_VIEW_OF(&s_fan_page.speed_gauge), EGUI_FONT_OF(&egui_res_font_montserrat_20_4));
+    egui_view_gauge_set_progress_color(EGUI_VIEW_OF(&s_fan_page.speed_gauge), ui_color(0x06B6D4));
+    egui_view_gauge_set_needle_color(EGUI_VIEW_OF(&s_fan_page.speed_gauge), ui_color(0x7DD3FC));
+    egui_view_gauge_set_text_color(EGUI_VIEW_OF(&s_fan_page.speed_gauge), ui_color(0xE0F7FA));
+    egui_view_gauge_set_font(EGUI_VIEW_OF(&s_fan_page.speed_gauge), EGUI_FONT_OF(&egui_res_font_montserrat_10_4));
 
-    ui_FanPage_init_label(&s_fan_page.speed_label, core, 156, 90, 86, 24, EGUI_FONT_OF(&egui_res_font_montserrat_24_4),
+    ui_FanPage_init_label(&s_fan_page.speed_label, core, 166, 48, 94, 34, EGUI_FONT_OF(&egui_res_font_montserrat_24_4),
                           0x0F172A, EGUI_ALIGN_CENTER, s_fan_page.speed_text);
-    ui_FanPage_init_label(&s_fan_page.mode_label, core, 137, 116, 124, 18, EGUI_FONT_OF(&egui_res_font_montserrat_14_4),
+    ui_FanPage_init_label(&s_fan_page.mode_label, core, 154, 113, 118, 18, EGUI_FONT_OF(&egui_res_font_montserrat_14_4),
                           0x155E75, EGUI_ALIGN_CENTER, s_fan_page.mode_text);
-    ui_FanPage_init_label(&s_fan_page.hint_label, core, 8, 118, 128, 18, EGUI_FONT_OF(&egui_res_font_montserrat_10_4),
+    ui_FanPage_init_label(&s_fan_page.hint_label, core, 10, 118, 122, 18, EGUI_FONT_OF(&egui_res_font_montserrat_10_4),
                           0x0F766E, EGUI_ALIGN_CENTER, s_fan_page.hint_text);
 
     egui_view_list_init(EGUI_VIEW_OF(&s_fan_page.settings_list), core);
-    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.settings_list), 284, 8);
-    egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.settings_list), 138, 128);
-    egui_view_list_set_item_height(EGUI_VIEW_OF(&s_fan_page.settings_list), 24);
+    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.settings_list), 292, 60);
+    egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.settings_list), 122, 74);
+    egui_view_list_set_item_height(EGUI_VIEW_OF(&s_fan_page.settings_list), 15);
     for (uint8_t i = 0U; i < FAN_SETTING_COUNT; i++)
     {
         (void)egui_view_list_add_item(EGUI_VIEW_OF(&s_fan_page.settings_list), s_fan_page.row_text[i]);
     }
 
     egui_view_switch_init(EGUI_VIEW_OF(&s_fan_page.power_switch), core);
-    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.power_switch), 372, 13);
-    egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.power_switch), 42, 18);
+    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.power_switch), 372, 16);
+    egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.power_switch), 40, 18);
 
     egui_view_segmented_control_init(EGUI_VIEW_OF(&s_fan_page.mode_segments), core);
-    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.mode_segments), 294, 38);
+    egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.mode_segments), 294, 36);
     egui_view_set_size(EGUI_VIEW_OF(&s_fan_page.mode_segments), 118, 20);
     egui_view_segmented_control_set_segments(EGUI_VIEW_OF(&s_fan_page.mode_segments), s_mode_segment_texts,
                                              (uint8_t)(sizeof(s_mode_segment_texts) / sizeof(s_mode_segment_texts[0])));
@@ -425,76 +439,75 @@ static void ui_FanPage_confirm_current(void)
 
 bool ui_FanPage_key_handler(void *key_event)
 {
-     return ui_page_consume_nav_key_event(key_event);
-    // const key_event_t *event = (const key_event_t *)key_event;
+    const key_event_t *event = (const key_event_t *)key_event;
 
-    // if (event == NULL)
-    // {
-    //     return false;
-    // }
+    if (event == NULL)
+    {
+        return false;
+    }
 
-    // if ((event->type != KEY_EVT_CLICK) && (event->type != KEY_EVT_REPEAT))
-    // {
-    //     return false;
-    // }
+    if ((event->type != KEY_EVT_CLICK) && (event->type != KEY_EVT_REPEAT))
+    {
+        return false;
+    }
 
-    // if (s_fan_page.setting_active == 0U)
-    // {
-    //     if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
-    //     {
-    //         ui_FanPage_set_setting_active(1U);
-    //         ui_FanPage_sync_from_state();
-    //         return true;
-    //     }
+    if (s_fan_page.setting_active == 0U)
+    {
+        if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
+        {
+            ui_FanPage_set_setting_active(1U);
+            ui_FanPage_sync_from_state();
+            return true;
+        }
 
-    //     return ui_page_consume_nav_key_event(key_event);
-    // }
+        return ui_page_consume_nav_key_event(key_event);
+    }
 
-    // if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
-    // {
-    //     if (s_fan_page.editing != 0U)
-    //     {
-    //         s_fan_page.editing = 0U;
-    //         ui_FanPage_sync_from_state();
-    //     }
-    //     else
-    //     {
-    //         ui_FanPage_set_setting_active(0U);
-    //     }
-    //     return true;
-    // }
+    if ((event->id == KEY_ID_B) && (event->type == KEY_EVT_CLICK))
+    {
+        if (s_fan_page.editing != 0U)
+        {
+            s_fan_page.editing = 0U;
+            ui_FanPage_sync_from_state();
+        }
+        else
+        {
+            ui_FanPage_set_setting_active(0U);
+        }
+        return true;
+    }
 
-    // if ((event->id == KEY_ID_N) || (event->id == KEY_ID_R))
-    // {
-    //     int8_t direction = (event->id == KEY_ID_R) ? 1 : -1;
+    if ((event->id == KEY_ID_N) || (event->id == KEY_ID_R))
+    {
+        int8_t direction = (event->id == KEY_ID_R) ? 1 : -1;
 
-    //     if (s_fan_page.editing != 0U)
-    //     {
-    //         ui_FanPage_adjust_current(direction);
-    //     }
-    //     else
-    //     {
-    //         if (direction > 0)
-    //         {
-    //             s_fan_page.focus_index = (uint8_t)((s_fan_page.focus_index + 1U) % FAN_SETTING_COUNT);
-    //         }
-    //         else
-    //         {
-    //             s_fan_page.focus_index = (s_fan_page.focus_index == 0U) ? (FAN_SETTING_COUNT - 1U) : (uint8_t)(s_fan_page.focus_index - 1U);
-    //         }
-    //         egui_view_list_set_selected_index(EGUI_VIEW_OF(&s_fan_page.settings_list), s_fan_page.focus_index);
-    //         ui_FanPage_sync_from_state();
-    //     }
-    //     return true;
-    // }
+        if (s_fan_page.editing != 0U)
+        {
+            ui_FanPage_adjust_current(direction);
+        }
+        else
+        {
+            if (direction > 0)
+            {
+                s_fan_page.focus_index = (uint8_t)((s_fan_page.focus_index + 1U) % FAN_SETTING_COUNT);
+            }
+            else
+            {
+                s_fan_page.focus_index = (s_fan_page.focus_index == 0U) ? (FAN_SETTING_COUNT - 1U) : (uint8_t)(s_fan_page.focus_index - 1U);
+            }
+            egui_view_list_set_selected_index(EGUI_VIEW_OF(&s_fan_page.settings_list), s_fan_page.focus_index);
+            ui_FanPage_sync_from_state();
+        }
+        return true;
+    }
 
-    // if ((event->id == KEY_ID_L) && (event->type == KEY_EVT_CLICK))
-    // {
-    //     ui_FanPage_confirm_current();
-    //     return true;
-    // }
+    if ((event->id == KEY_ID_L) && (event->type == KEY_EVT_CLICK))
+    {
+        ui_FanPage_confirm_current();
+        return true;
+    }
 
-    // return true;
+    return true;
 }
 
 static void ui_FanPage_timer_cb(egui_timer_t *timer)
@@ -515,14 +528,16 @@ static void ui_FanPage_on_draw(egui_view_t *self)
 {
     egui_canvas_t *canvas = egui_view_get_canvas(self);
 
-    ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, 0x111827);
+    ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, 0x87CEEB);
 
-    ui_draw_round_panel(canvas, 8, 12, 124, 104, 8, 0xE0F2FE, 0x38BDF8);
-    ui_draw_round_panel(canvas, 138, 8, 128, 128, 8, 0xE0F7FA, 0x22D3EE);
-    ui_draw_round_panel(canvas, 280, 4, 146, 134, 8, 0xECFEFF, 0x06B6D4);
+    ui_draw_round_panel(canvas, 8, 6, 126, 130, 8, 0xE0F2FE, 0x38BDF8);
+    ui_draw_round_panel(canvas, 145, 6, 136, 130, 8, 0xE0F7FA, 0x22D3EE);
+    ui_draw_round_panel(canvas, 287, 6, 133, 130, 8, 0xECFEFF, 0x06B6D4);
 
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_14_4), "FAN", 20, 18, 54, 18,
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_14_4), "FAN", 20, 12, 54, 18,
                  EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0x0F766E);
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4), s_fan_page.setting_active ? "SETTING" : "LIVE", 74, 19, 48, 16,
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4), s_fan_page.setting_active ? "SETTING" : "LIVE", 74, 13, 48, 16,
                  EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER, s_fan_page.setting_active ? 0xDC2626 : 0x0284C7);
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_12_4), "CTRL", 296, 14, 64, 16,
+                 EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0x0F766E);
 }

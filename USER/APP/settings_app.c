@@ -8,7 +8,8 @@
 #include "log.h"
 #include "ui_poetry_popup.h"
 
-#define SETTINGS_APP_STORAGE_VERSION 1U
+#define SETTINGS_APP_STORAGE_VERSION     2U
+#define SETTINGS_APP_STORAGE_VERSION_OLD 1U
 
 #pragma pack(push, 1)
 typedef struct
@@ -139,23 +140,35 @@ static bool SettingsApp_SaveCurrent(void)
 void SettingsApp_Init(void)
 {
     SettingsApp_Storage_t storage;
+    bool need_save = false;
 
     SettingsApp_LoadDefaults(&s_settings);
 
     if (AppConfig_Load(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage)) &&
-        (storage.version == SETTINGS_APP_STORAGE_VERSION))
+        ((storage.version == SETTINGS_APP_STORAGE_VERSION) ||
+         (storage.version == SETTINGS_APP_STORAGE_VERSION_OLD)))
     {
         SettingsApp_FromStorage(&storage, &s_settings);
+        if (storage.version == SETTINGS_APP_STORAGE_VERSION_OLD)
+        {
+            s_settings.poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT;
+            SettingsApp_Normalize(&s_settings);
+            need_save = true;
+        }
         log_printf("[Settings] load ok");
     }
     else
     {
         SettingsApp_Normalize(&s_settings);
-        (void)SettingsApp_SaveCurrent();
+        need_save = true;
         log_printf("[Settings] use defaults");
     }
 
     s_settings_initialized = 1U;
+    if (need_save)
+    {
+        (void)SettingsApp_SaveCurrent();
+    }
 }
 
 void SettingsApp_Get(AppSettings_t *out)
