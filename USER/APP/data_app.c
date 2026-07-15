@@ -210,7 +210,7 @@ void DataApp_HomeStatus_Update(void)
     (void)snprintf(next.time_text, sizeof(next.time_text), "%02u:%02u", t.hour, t.min);
     (void)snprintf(next.date_text, sizeof(next.date_text), "%u\346\234\210%u\346\227\245", t.month, t.date);
     (void)snprintf(next.week_text, sizeof(next.week_text), "%s", week_text[weekday]);
-    (void)snprintf(next.temp_range_text, sizeof(next.temp_range_text), "%d~%d\302\260C", today->temp_low, today->temp_high);
+    (void)snprintf(next.temp_range_text, sizeof(next.temp_range_text), "%d/%d\302\260C", today->temp_low, today->temp_high);
     (void)snprintf(next.pm25_text, sizeof(next.pm25_text), "PM2.5 %d", g_air_detail.pm25);
     DataApp_FormatEnv(next.env_text, sizeof(next.env_text));
     next.weather_icon_id = Weather_GetDisplayIcon();

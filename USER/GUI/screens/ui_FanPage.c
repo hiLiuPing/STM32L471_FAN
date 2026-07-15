@@ -300,7 +300,7 @@ void ui_FanPage_screen_init(void)
                           0x0F172A, EGUI_ALIGN_CENTER, s_fan_page.speed_text);
     ui_FanPage_init_label(&s_fan_page.mode_label, core, 10, 118, 122, 18, EGUI_FONT_OF(&egui_res_font_montserrat_12_4),
                           0x155E75, EGUI_ALIGN_CENTER, s_fan_page.mode_text);
-    ui_FanPage_init_label(&s_fan_page.rpm_label, core, 154, 113, 118, 18, EGUI_FONT_OF(&egui_res_font_montserrat_14_4),
+    ui_FanPage_init_label(&s_fan_page.rpm_label, core, 154, 106, 118, 28, EGUI_FONT_OF(&egui_res_font_montserrat_20_4),
                           0x155E75, EGUI_ALIGN_CENTER, s_fan_page.rpm_text);
 
     egui_view_list_init(EGUI_VIEW_OF(&s_fan_page.settings_list), core);
