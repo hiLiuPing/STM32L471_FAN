@@ -41,6 +41,8 @@ typedef struct
     char pm25_text[DATA_APP_HOME_TEXT_LEN];
     char env_text[DATA_APP_HOME_TEXT_LEN];
     uint16_t weather_icon_id;
+    uint8_t weather_scene;
+    uint8_t is_day;
     uint32_t version;
 } DataApp_HomeStatus_t;
 
@@ -82,6 +84,7 @@ void DataApp_Init(void);
 void Time_Init(void);
 void Time_Get(app_time_t *out);
 uint8_t Time_GetColon(void);
+uint8_t Time_IsDaytime(void);
 void Time_BlinkUpdate(void);
 void RTC_ReadToBuffer(void);
 void Buffer_Swap(void);

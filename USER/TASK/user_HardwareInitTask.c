@@ -86,6 +86,7 @@ void HardwareInitTask(void *argument)
     User_Tasks_SetHardwareReady();
     log_printf("step6: delete self");
     Weather_FillDemoData();
+    SettingsApp_ApplyActiveBrightness();
     log_printf("fill demo weather data");
     vTaskDelete(NULL);
 }

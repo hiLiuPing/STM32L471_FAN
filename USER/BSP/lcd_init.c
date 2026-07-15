@@ -1,19 +1,66 @@
 #include "lcd_init.h"
 // #include "dma.h"
 #include "stdio.h"
+#include "tim.h"
 
 extern SPI_HandleTypeDef hspi1;
 // extern DMA_HandleTypeDef DMA_InitStructure;
+
+#define LCD_BACKLIGHT_PERCENT_MAX       100U
+#define LCD_BACKLIGHT_MIN_DUTY_PERCENT  1U
+#define LCD_BACKLIGHT_GAMMA_RANGE       99U
+
+static bool s_lcd_backlight_pwm_started = false;
+
 void LCD_SetBacklightPercent(uint8_t percent)
 {
+    uint32_t pwm_counts;
+    uint32_t compare = 0U;
+
+    if (!s_lcd_backlight_pwm_started)
+    {
+        if (HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1) != HAL_OK)
+        {
+            return;
+        }
+        s_lcd_backlight_pwm_started = true;
+    }
+
+    if (percent > LCD_BACKLIGHT_PERCENT_MAX)
+    {
+        percent = LCD_BACKLIGHT_PERCENT_MAX;
+    }
+
     if (percent == 0U)
     {
-        LCD_BLK_Clr();
+        __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 0U);
+        return;
     }
-    else
+
     {
-        LCD_BLK_Set();
+        uint32_t min_compare;
+        uint32_t level = (uint32_t)percent - 1U;
+        uint32_t gamma_denominator = LCD_BACKLIGHT_GAMMA_RANGE * LCD_BACKLIGHT_GAMMA_RANGE;
+        uint32_t linear_floor;
+
+        pwm_counts = __HAL_TIM_GET_AUTORELOAD(&htim16) + 1U;
+        min_compare = (pwm_counts * LCD_BACKLIGHT_MIN_DUTY_PERCENT + 50U) / 100U;
+        compare = min_compare +
+                  (((pwm_counts - min_compare) * level * level) + (gamma_denominator / 2U)) /
+                      gamma_denominator;
+
+        linear_floor = min_compare + level;
+        if (compare < linear_floor)
+        {
+            compare = linear_floor;
+        }
+        if (compare > pwm_counts)
+        {
+            compare = pwm_counts;
+        }
     }
+
+    __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, compare);
 }
 
 void LCD_WR_Bus(uint8_t dat)
@@ -180,13 +227,13 @@ void LCD_Fill(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, uint16_t color
 void LCD_Init(void)
 {
 
+    LCD_SetBacklightPercent(0U);
     LCD_RES_Set();
     HAL_Delay(50);
     LCD_RES_Clr();
     HAL_Delay(50);
     LCD_RES_Set();
     HAL_Delay(120);
-    LCD_BLK_Set();
     LCD_WR_REG(0xff);
     LCD_WR_DATA8(0xa5);
     LCD_WR_REG(0x9a);

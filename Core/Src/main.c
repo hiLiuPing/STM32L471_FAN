@@ -120,6 +120,8 @@ int main(void)
   MX_QUADSPI_Init();
   MX_RTC_Init();
   MX_SPI2_Init();
+  MX_TIM2_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
   User_Tasks_Init();
   vTaskStartScheduler();

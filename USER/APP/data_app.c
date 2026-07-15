@@ -91,6 +91,8 @@ static uint8_t DataApp_HomeStatusEquals(const DataApp_HomeStatus_t *a, const Dat
     }
 
     return (uint8_t)((a->weather_icon_id == b->weather_icon_id) &&
+                     (a->weather_scene == b->weather_scene) &&
+                     (a->is_day == b->is_day) &&
                      (strcmp(a->time_text, b->time_text) == 0) &&
                      (strcmp(a->date_text, b->date_text) == 0) &&
                      (strcmp(a->week_text, b->week_text) == 0) &&
@@ -150,6 +152,19 @@ uint8_t Time_GetColon(void)
     return s_colon;
 }
 
+uint8_t Time_IsDaytime(void)
+{
+    app_time_t now;
+
+    Time_Get(&now);
+    if (now.year < 2020U)
+    {
+        return 1U;
+    }
+
+    return (uint8_t)((now.hour >= 7U) && (now.hour < 19U));
+}
+
 void Time_Format(char *out)
 {
     app_time_t t;
@@ -198,7 +213,9 @@ void DataApp_HomeStatus_Update(void)
     (void)snprintf(next.temp_range_text, sizeof(next.temp_range_text), "%d~%d\302\260C", today->temp_low, today->temp_high);
     (void)snprintf(next.pm25_text, sizeof(next.pm25_text), "PM2.5 %d", g_air_detail.pm25);
     DataApp_FormatEnv(next.env_text, sizeof(next.env_text));
-    next.weather_icon_id = (uint16_t)today->icon_id;
+    next.weather_icon_id = Weather_GetDisplayIcon();
+    next.weather_scene = (uint8_t)Weather_GetScene();
+    next.is_day = Time_IsDaytime();
 
     if (!DataApp_HomeStatusEquals(&next, current))
     {

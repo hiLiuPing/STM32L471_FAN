@@ -8,6 +8,7 @@
 #include "page_manager.h"
 #include "ui_common.h"
 #include "ui_heiti_font.h"
+#include "weather_app.h"
 
 typedef struct
 {
@@ -24,6 +25,51 @@ typedef struct
     uint8_t is_valid;
 } ui_home_scene_state_t;
 
+typedef struct
+{
+    int16_t x;
+    int16_t y;
+    int16_t prev_x;
+    int16_t prev_y;
+    int8_t drift;
+    uint8_t speed;
+    uint8_t size;
+    uint8_t alpha;
+    uint16_t age_ms;
+    uint16_t duration_ms;
+} ui_home_particle_t;
+
+typedef struct
+{
+    int min_x;
+    int min_y;
+    int max_x;
+    int max_y;
+    uint8_t valid;
+} ui_home_dirty_bounds_t;
+
+typedef struct
+{
+    WeatherScene_t scene;
+    uint8_t is_day;
+    uint8_t particle_count;
+    uint8_t is_valid;
+    uint8_t lightning_active;
+    uint8_t lightning_shape;
+    int16_t lightning_x;
+    uint32_t last_particle_tick;
+    uint32_t lightning_start_tick;
+    uint32_t next_lightning_tick;
+} ui_home_weather_state_t;
+
+typedef struct
+{
+    uint32_t background_rgb;
+    uint32_t text_rgb;
+    uint32_t tint_rgb;
+    uint8_t tint_alpha;
+} ui_home_style_t;
+
 static ui_home_page_t s_home_page;
 static egui_view_api_t s_home_api;
 
@@ -33,12 +79,16 @@ static uint32_t s_home_scene_tick = 0U;
 static uint32_t s_home_status_tick = 0U;
 static uint32_t s_home_status_version = 0xFFFFFFFFU;
 static ui_home_scene_state_t s_home_scene_state;
+static ui_home_weather_state_t s_home_weather_state;
+static ui_home_particle_t s_home_particles[30];
+static uint32_t s_home_random_state = 0x6D2B79F5U;
 static const egui_font_t *s_home_heiti_16 = NULL;
 
 static void ui_HomePage_on_draw(egui_view_t *self);
 static void ui_HomePage_draw_scene(egui_canvas_t *canvas);
-static void ui_HomePage_draw_status(egui_canvas_t *canvas);
+static void ui_HomePage_draw_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status);
 static void ui_HomePage_timer_cb(egui_timer_t *timer);
+static void ui_HomePage_weather_reset(WeatherScene_t scene, uint8_t is_day, uint32_t now);
 
 /* Screen bounds for culling */
 #define SCREEN_W (int)UI_SCREEN_W
@@ -62,6 +112,15 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer);
 #define HOME_SCENE_BIKE_STEP_MS 100U
 #define HOME_BIKE_CYCLE_MS 3600000U
 #define HOME_SCENE_RESUME_GAP_MS 250U
+#define HOME_WEATHER_STEP_MS 100U
+#define HOME_WEATHER_BOTTOM_Y 122
+#define HOME_WEATHER_DIRTY_GROUPS 4U
+#define HOME_RAIN_LIGHT_COUNT 12U
+#define HOME_RAIN_MODERATE_COUNT 20U
+#define HOME_RAIN_HEAVY_COUNT 30U
+#define HOME_SNOW_COUNT 18U
+#define HOME_STAR_CLEAR_COUNT 14U
+#define HOME_STAR_CLOUDY_COUNT 8U
 
 #define HOME_CLOUD1_X 20
 #define HOME_CLOUD1_Y 8
@@ -163,6 +222,384 @@ static void ui_HomePage_invalidate_clipped_rect(egui_view_t *view,
     if ((x2 > x) && (y2 > y))
     {
         ui_HomePage_invalidate_rect(view, (egui_dim_t)x, (egui_dim_t)y, (egui_dim_t)(x2 - x), (egui_dim_t)(y2 - y));
+    }
+}
+
+static WeatherScene_t ui_HomePage_normalize_scene(uint8_t scene)
+{
+    if (scene <= (uint8_t)WEATHER_SCENE_SNOW)
+    {
+        return (WeatherScene_t)scene;
+    }
+
+    return WEATHER_SCENE_UNKNOWN;
+}
+
+static uint8_t ui_HomePage_is_rain_scene(WeatherScene_t scene)
+{
+    return (uint8_t)((scene == WEATHER_SCENE_LIGHT_RAIN) ||
+                     (scene == WEATHER_SCENE_MODERATE_RAIN) ||
+                     (scene == WEATHER_SCENE_HEAVY_RAIN));
+}
+
+static uint32_t ui_HomePage_random_next(void)
+{
+    uint32_t value = s_home_random_state;
+
+    value ^= value << 13;
+    value ^= value >> 17;
+    value ^= value << 5;
+    if (value == 0U)
+    {
+        value = 0x6D2B79F5U;
+    }
+    s_home_random_state = value;
+    return value;
+}
+
+static uint32_t ui_HomePage_random_range(uint32_t min_value, uint32_t max_value)
+{
+    if (max_value <= min_value)
+    {
+        return min_value;
+    }
+
+    return min_value + (ui_HomePage_random_next() % (max_value - min_value + 1U));
+}
+
+static uint8_t ui_HomePage_weather_particle_count(WeatherScene_t scene, uint8_t is_day)
+{
+    switch (scene)
+    {
+    case WEATHER_SCENE_LIGHT_RAIN:
+        return HOME_RAIN_LIGHT_COUNT;
+    case WEATHER_SCENE_MODERATE_RAIN:
+        return HOME_RAIN_MODERATE_COUNT;
+    case WEATHER_SCENE_HEAVY_RAIN:
+        return HOME_RAIN_HEAVY_COUNT;
+    case WEATHER_SCENE_SNOW:
+        return HOME_SNOW_COUNT;
+    case WEATHER_SCENE_CLOUDY:
+        return (is_day == 0U) ? HOME_STAR_CLOUDY_COUNT : 0U;
+    case WEATHER_SCENE_CLEAR:
+    case WEATHER_SCENE_UNKNOWN:
+    default:
+        return (is_day == 0U) ? HOME_STAR_CLEAR_COUNT : 0U;
+    }
+}
+
+static uint8_t ui_HomePage_is_star_scene(WeatherScene_t scene, uint8_t is_day)
+{
+    return (uint8_t)((is_day == 0U) &&
+                     ((scene == WEATHER_SCENE_CLEAR) ||
+                      (scene == WEATHER_SCENE_CLOUDY) ||
+                      (scene == WEATHER_SCENE_UNKNOWN)));
+}
+
+static uint8_t ui_HomePage_rain_length(WeatherScene_t scene)
+{
+    switch (scene)
+    {
+    case WEATHER_SCENE_HEAVY_RAIN:
+        return 18U;
+    case WEATHER_SCENE_MODERATE_RAIN:
+        return 13U;
+    case WEATHER_SCENE_LIGHT_RAIN:
+    default:
+        return 8U;
+    }
+}
+
+static void ui_HomePage_particle_init(ui_home_particle_t *particle,
+                                      WeatherScene_t scene,
+                                      uint8_t is_day,
+                                      uint8_t random_y)
+{
+    if (particle == NULL)
+    {
+        return;
+    }
+
+    particle->x = (int16_t)ui_HomePage_random_range(2U, UI_SCREEN_W - 3U);
+    particle->y = (int16_t)((random_y != 0U) ?
+                                ui_HomePage_random_range(0U, HOME_WEATHER_BOTTOM_Y) :
+                                -(int16_t)ui_HomePage_random_range(2U, 24U));
+    particle->drift = 0;
+    particle->speed = 0U;
+    particle->size = 1U;
+    particle->alpha = 255U;
+    particle->age_ms = 0U;
+    particle->duration_ms = 0U;
+
+    if (scene == WEATHER_SCENE_LIGHT_RAIN)
+    {
+        particle->drift = -1;
+        particle->speed = (uint8_t)ui_HomePage_random_range(4U, 6U);
+        particle->alpha = 150U;
+    }
+    else if (scene == WEATHER_SCENE_MODERATE_RAIN)
+    {
+        particle->drift = -1;
+        particle->speed = (uint8_t)ui_HomePage_random_range(7U, 9U);
+        particle->alpha = 190U;
+    }
+    else if (scene == WEATHER_SCENE_HEAVY_RAIN)
+    {
+        particle->drift = (int8_t)(-(int8_t)ui_HomePage_random_range(1U, 2U));
+        particle->speed = (uint8_t)ui_HomePage_random_range(10U, 14U);
+        particle->alpha = 225U;
+    }
+    else if (scene == WEATHER_SCENE_SNOW)
+    {
+        particle->drift = (int8_t)((int32_t)ui_HomePage_random_range(0U, 2U) - 1);
+        particle->speed = (uint8_t)ui_HomePage_random_range(1U, 3U);
+        particle->size = (uint8_t)ui_HomePage_random_range(1U, 2U);
+        particle->alpha = (uint8_t)ui_HomePage_random_range(180U, 255U);
+    }
+    else if (ui_HomePage_is_star_scene(scene, is_day) != 0U)
+    {
+        particle->y = (int16_t)ui_HomePage_random_range(4U, 106U);
+        particle->size = (uint8_t)ui_HomePage_random_range(1U, 2U);
+        particle->duration_ms = (uint16_t)ui_HomePage_random_range(1200U, 3000U);
+    }
+
+    particle->prev_x = particle->x;
+    particle->prev_y = particle->y;
+}
+
+static void ui_HomePage_schedule_lightning(WeatherScene_t scene, uint32_t now)
+{
+    uint32_t min_ms;
+    uint32_t max_ms;
+
+    switch (scene)
+    {
+    case WEATHER_SCENE_HEAVY_RAIN:
+        min_ms = 4000U;
+        max_ms = 12000U;
+        break;
+    case WEATHER_SCENE_MODERATE_RAIN:
+        min_ms = 8000U;
+        max_ms = 18000U;
+        break;
+    case WEATHER_SCENE_LIGHT_RAIN:
+    default:
+        min_ms = 12000U;
+        max_ms = 24000U;
+        break;
+    }
+
+    s_home_weather_state.next_lightning_tick = now + ui_HomePage_random_range(min_ms, max_ms);
+}
+
+static void ui_HomePage_weather_reset(WeatherScene_t scene, uint8_t is_day, uint32_t now)
+{
+    uint8_t count = ui_HomePage_weather_particle_count(scene, is_day);
+
+    s_home_random_state ^= now ^ ((uint32_t)scene << 24) ^ ((uint32_t)is_day << 16);
+    if (s_home_random_state == 0U)
+    {
+        s_home_random_state = 0x6D2B79F5U;
+    }
+
+    s_home_weather_state.scene = scene;
+    s_home_weather_state.is_day = (is_day != 0U) ? 1U : 0U;
+    s_home_weather_state.particle_count = count;
+    s_home_weather_state.is_valid = 1U;
+    s_home_weather_state.lightning_active = 0U;
+    s_home_weather_state.last_particle_tick = now;
+    s_home_weather_state.lightning_start_tick = 0U;
+    s_home_weather_state.next_lightning_tick = 0U;
+
+    for (uint8_t i = 0U; i < count; i++)
+    {
+        ui_HomePage_particle_init(&s_home_particles[i], scene, is_day, 1U);
+    }
+
+    if (ui_HomePage_is_rain_scene(scene) != 0U)
+    {
+        ui_HomePage_schedule_lightning(scene, now);
+    }
+}
+
+static void ui_HomePage_dirty_add(ui_home_dirty_bounds_t *groups,
+                                  int x,
+                                  int y,
+                                  int w,
+                                  int h)
+{
+    int center_x;
+    uint8_t group_index;
+    ui_home_dirty_bounds_t *bounds;
+
+    if ((groups == NULL) || (w <= 0) || (h <= 0))
+    {
+        return;
+    }
+
+    center_x = x + (w / 2);
+    if (center_x < 0)
+    {
+        center_x = 0;
+    }
+    else if (center_x >= (int)UI_SCREEN_W)
+    {
+        center_x = (int)UI_SCREEN_W - 1;
+    }
+    group_index = (uint8_t)(((uint32_t)center_x * HOME_WEATHER_DIRTY_GROUPS) / UI_SCREEN_W);
+    if (group_index >= HOME_WEATHER_DIRTY_GROUPS)
+    {
+        group_index = HOME_WEATHER_DIRTY_GROUPS - 1U;
+    }
+
+    bounds = &groups[group_index];
+    if (bounds->valid == 0U)
+    {
+        bounds->min_x = x;
+        bounds->min_y = y;
+        bounds->max_x = x + w;
+        bounds->max_y = y + h;
+        bounds->valid = 1U;
+        return;
+    }
+
+    if (x < bounds->min_x) bounds->min_x = x;
+    if (y < bounds->min_y) bounds->min_y = y;
+    if ((x + w) > bounds->max_x) bounds->max_x = x + w;
+    if ((y + h) > bounds->max_y) bounds->max_y = y + h;
+}
+
+static void ui_HomePage_particle_dirty_add(ui_home_dirty_bounds_t *groups,
+                                           const ui_home_particle_t *particle,
+                                           WeatherScene_t scene)
+{
+    int radius;
+    int length;
+
+    if ((groups == NULL) || (particle == NULL))
+    {
+        return;
+    }
+
+    if (ui_HomePage_is_rain_scene(scene) != 0U)
+    {
+        length = ui_HomePage_rain_length(scene);
+        ui_HomePage_dirty_add(groups, particle->prev_x - 4, particle->prev_y - 2, 9, length + 5);
+        ui_HomePage_dirty_add(groups, particle->x - 4, particle->y - 2, 9, length + 5);
+    }
+    else
+    {
+        radius = (int)particle->size + 2;
+        ui_HomePage_dirty_add(groups, particle->prev_x - radius, particle->prev_y - radius,
+                              (radius * 2) + 1, (radius * 2) + 1);
+        ui_HomePage_dirty_add(groups, particle->x - radius, particle->y - radius,
+                              (radius * 2) + 1, (radius * 2) + 1);
+    }
+}
+
+static void ui_HomePage_weather_update_particles(egui_view_t *view, uint32_t now)
+{
+    ui_home_dirty_bounds_t dirty[HOME_WEATHER_DIRTY_GROUPS] = {0};
+    WeatherScene_t scene = s_home_weather_state.scene;
+    uint8_t is_star_scene = ui_HomePage_is_star_scene(scene, s_home_weather_state.is_day);
+
+    if ((uint32_t)(now - s_home_weather_state.last_particle_tick) < HOME_WEATHER_STEP_MS)
+    {
+        return;
+    }
+    s_home_weather_state.last_particle_tick = now;
+
+    for (uint8_t i = 0U; i < s_home_weather_state.particle_count; i++)
+    {
+        ui_home_particle_t *particle = &s_home_particles[i];
+
+        particle->prev_x = particle->x;
+        particle->prev_y = particle->y;
+
+        if (ui_HomePage_is_rain_scene(scene) != 0U)
+        {
+            particle->x = (int16_t)(particle->x + particle->drift);
+            particle->y = (int16_t)(particle->y + particle->speed);
+            if ((particle->y > HOME_WEATHER_BOTTOM_Y) || (particle->x < -4))
+            {
+                int16_t old_x = particle->prev_x;
+                int16_t old_y = particle->prev_y;
+
+                ui_HomePage_particle_init(particle, scene, s_home_weather_state.is_day, 0U);
+                particle->prev_x = old_x;
+                particle->prev_y = old_y;
+            }
+        }
+        else if (scene == WEATHER_SCENE_SNOW)
+        {
+            particle->x = (int16_t)(particle->x + particle->drift);
+            particle->y = (int16_t)(particle->y + particle->speed);
+            if ((particle->y > HOME_WEATHER_BOTTOM_Y) || (particle->x < -3) || (particle->x > ((int)UI_SCREEN_W + 3)))
+            {
+                int16_t old_x = particle->prev_x;
+                int16_t old_y = particle->prev_y;
+
+                ui_HomePage_particle_init(particle, scene, s_home_weather_state.is_day, 0U);
+                particle->prev_x = old_x;
+                particle->prev_y = old_y;
+            }
+        }
+        else if (is_star_scene != 0U)
+        {
+            particle->age_ms = (uint16_t)(particle->age_ms + HOME_WEATHER_STEP_MS);
+            if (particle->age_ms >= particle->duration_ms)
+            {
+                int16_t old_x = particle->prev_x;
+                int16_t old_y = particle->prev_y;
+
+                ui_HomePage_particle_init(particle, scene, s_home_weather_state.is_day, 1U);
+                particle->prev_x = old_x;
+                particle->prev_y = old_y;
+            }
+        }
+
+        ui_HomePage_particle_dirty_add(dirty, particle, scene);
+    }
+
+    for (uint8_t i = 0U; i < HOME_WEATHER_DIRTY_GROUPS; i++)
+    {
+        if (dirty[i].valid != 0U)
+        {
+            ui_HomePage_invalidate_clipped_rect(view,
+                                                dirty[i].min_x,
+                                                dirty[i].min_y,
+                                                dirty[i].max_x - dirty[i].min_x,
+                                                dirty[i].max_y - dirty[i].min_y);
+        }
+    }
+}
+
+static void ui_HomePage_weather_update_lightning(egui_view_t *view, uint32_t now)
+{
+    if (ui_HomePage_is_rain_scene(s_home_weather_state.scene) == 0U)
+    {
+        s_home_weather_state.lightning_active = 0U;
+        return;
+    }
+
+    if (s_home_weather_state.lightning_active != 0U)
+    {
+        if ((uint32_t)(now - s_home_weather_state.lightning_start_tick) >= 260U)
+        {
+            s_home_weather_state.lightning_active = 0U;
+            ui_HomePage_schedule_lightning(s_home_weather_state.scene, now);
+        }
+        egui_view_invalidate_full(view);
+        return;
+    }
+
+    if ((int32_t)(now - s_home_weather_state.next_lightning_tick) >= 0)
+    {
+        s_home_weather_state.lightning_active = 1U;
+        s_home_weather_state.lightning_start_tick = now;
+        s_home_weather_state.lightning_x = (int16_t)ui_HomePage_random_range(70U, UI_SCREEN_W - 70U);
+        s_home_weather_state.lightning_shape = (uint8_t)ui_HomePage_random_range(0U, 3U);
+        egui_view_invalidate_full(view);
     }
 }
 
@@ -331,6 +768,7 @@ static void ui_HomePage_invalidate_status_regions(egui_view_t *view)
 void ui_HomePage_screen_init(void)
 {
     egui_view_t *view = EGUI_VIEW_OF(&s_home_page.base);
+    DataApp_HomeStatus_t status;
 
     ui_HomePage = view;
     egui_view_init(view, egui_port_get_core());
@@ -345,7 +783,10 @@ void ui_HomePage_screen_init(void)
     s_home_status_tick = s_home_scene_tick;
     s_home_status_version = 0xFFFFFFFFU;
     s_home_scene_state.is_valid = 0U;
+    s_home_weather_state.is_valid = 0U;
     s_home_heiti_16 = NULL;
+    DataApp_HomeStatus_Get(&status);
+    ui_HomePage_weather_reset(ui_HomePage_normalize_scene(status.weather_scene), status.is_day, s_home_scene_tick);
     egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 50U);
 }
 
@@ -370,8 +811,12 @@ void ui_HomePage_set_animation_enabled(bool enable)
     s_home_animation_enabled = next;
     if (s_home_animation_enabled)
     {
+        DataApp_HomeStatus_t status;
+
         s_home_scene_tick = egui_timer_get_current_time();
         s_home_scene_state.is_valid = 0U;
+        DataApp_HomeStatus_Get(&status);
+        ui_HomePage_weather_reset(ui_HomePage_normalize_scene(status.weather_scene), status.is_day, s_home_scene_tick);
         if ((ui_HomePage != NULL) && egui_view_get_visible(ui_HomePage))
         {
             egui_view_invalidate_full(ui_HomePage);
@@ -390,15 +835,26 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer)
     DataApp_HomeStatus_t status;
     uint32_t now;
     uint8_t refresh_status = 0U;
+    uint8_t refresh_full = 0U;
+    WeatherScene_t scene;
 
     if ((view == NULL) || !egui_view_get_visible(view))
     {
         s_home_scene_state.is_valid = 0U;
+        s_home_weather_state.is_valid = 0U;
         return;
     }
 
     now = egui_timer_get_current_time();
     DataApp_HomeStatus_Get(&status);
+    scene = ui_HomePage_normalize_scene(status.weather_scene);
+    if ((s_home_weather_state.is_valid == 0U) ||
+        (s_home_weather_state.scene != scene) ||
+        (s_home_weather_state.is_day != status.is_day))
+    {
+        ui_HomePage_weather_reset(scene, status.is_day, now);
+        refresh_full = 1U;
+    }
     if (status.version != s_home_status_version)
     {
         s_home_status_version = status.version;
@@ -430,10 +886,22 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer)
         s_home_scene_state = next_scene_state;
         s_home_scene_tick = now;
 
-        if (refresh_status != 0U)
+        ui_HomePage_weather_update_particles(view, now);
+        ui_HomePage_weather_update_lightning(view, now);
+
+        if (refresh_full != 0U)
+        {
+            egui_view_invalidate_full(view);
+        }
+        else if (refresh_status != 0U)
         {
             ui_HomePage_invalidate_status_regions(view);
         }
+    }
+    else if (refresh_full != 0U)
+    {
+        s_home_scene_tick = now;
+        egui_view_invalidate_full(view);
     }
     else if (refresh_status != 0U)
     {
@@ -513,6 +981,227 @@ static void ui_HomePage_draw_scene(egui_canvas_t *canvas)
 #endif
 }
 
+static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_day)
+{
+    ui_home_style_t style;
+
+    if (is_day != 0U)
+    {
+        style.background_rgb = 0x87CEEB;
+        style.text_rgb = 0x174A6E;
+        style.tint_rgb = 0x000000;
+        style.tint_alpha = 0U;
+
+        switch (scene)
+        {
+        case WEATHER_SCENE_CLOUDY:
+            style.background_rgb = 0x8AA0AD;
+            style.tint_alpha = 28U;
+            break;
+        case WEATHER_SCENE_LIGHT_RAIN:
+            style.background_rgb = 0x6F8FA3;
+            style.text_rgb = 0xE6F4FF;
+            style.tint_rgb = 0x183244;
+            style.tint_alpha = 42U;
+            break;
+        case WEATHER_SCENE_MODERATE_RAIN:
+            style.background_rgb = 0x536F82;
+            style.text_rgb = 0xEFF8FF;
+            style.tint_rgb = 0x102536;
+            style.tint_alpha = 58U;
+            break;
+        case WEATHER_SCENE_HEAVY_RAIN:
+            style.background_rgb = 0x364B5C;
+            style.text_rgb = 0xF4FAFF;
+            style.tint_rgb = 0x081724;
+            style.tint_alpha = 78U;
+            break;
+        case WEATHER_SCENE_SNOW:
+            style.background_rgb = 0xB7D0DA;
+            style.text_rgb = 0x24485A;
+            style.tint_rgb = 0xEAF7FF;
+            style.tint_alpha = 30U;
+            break;
+        case WEATHER_SCENE_CLEAR:
+        case WEATHER_SCENE_UNKNOWN:
+        default:
+            break;
+        }
+    }
+    else
+    {
+        style.background_rgb = 0x07162F;
+        style.text_rgb = 0xD8ECFF;
+        style.tint_rgb = 0x020817;
+        style.tint_alpha = 128U;
+
+        switch (scene)
+        {
+        case WEATHER_SCENE_CLOUDY:
+            style.background_rgb = 0x111827;
+            style.tint_alpha = 142U;
+            break;
+        case WEATHER_SCENE_LIGHT_RAIN:
+            style.background_rgb = 0x102638;
+            style.tint_alpha = 148U;
+            break;
+        case WEATHER_SCENE_MODERATE_RAIN:
+            style.background_rgb = 0x0B1D2B;
+            style.tint_alpha = 158U;
+            break;
+        case WEATHER_SCENE_HEAVY_RAIN:
+            style.background_rgb = 0x07131F;
+            style.tint_alpha = 170U;
+            break;
+        case WEATHER_SCENE_SNOW:
+            style.background_rgb = 0x263848;
+            style.tint_rgb = 0x102034;
+            style.tint_alpha = 118U;
+            break;
+        case WEATHER_SCENE_CLEAR:
+        case WEATHER_SCENE_UNKNOWN:
+        default:
+            break;
+        }
+    }
+
+    return style;
+}
+
+static egui_alpha_t ui_HomePage_star_alpha(const ui_home_particle_t *particle)
+{
+    uint16_t fade_ms;
+
+    if ((particle == NULL) || (particle->duration_ms == 0U))
+    {
+        return EGUI_ALPHA_0;
+    }
+
+    fade_ms = (uint16_t)(particle->duration_ms / 4U);
+    if (fade_ms == 0U)
+    {
+        return EGUI_ALPHA_100;
+    }
+    if (particle->age_ms < fade_ms)
+    {
+        return (egui_alpha_t)(((uint32_t)particle->age_ms * EGUI_ALPHA_100) / fade_ms);
+    }
+    if (particle->age_ms > (uint16_t)(particle->duration_ms - fade_ms))
+    {
+        return (egui_alpha_t)(((uint32_t)(particle->duration_ms - particle->age_ms) * EGUI_ALPHA_100) / fade_ms);
+    }
+
+    return EGUI_ALPHA_100;
+}
+
+static void ui_HomePage_draw_weather_particles(egui_canvas_t *canvas)
+{
+    WeatherScene_t scene = s_home_weather_state.scene;
+    uint8_t is_star_scene = ui_HomePage_is_star_scene(scene, s_home_weather_state.is_day);
+
+    if ((canvas == NULL) || (s_home_weather_state.is_valid == 0U))
+    {
+        return;
+    }
+
+    for (uint8_t i = 0U; i < s_home_weather_state.particle_count; i++)
+    {
+        const ui_home_particle_t *particle = &s_home_particles[i];
+
+        if (ui_HomePage_is_rain_scene(scene) != 0U)
+        {
+            uint8_t length = ui_HomePage_rain_length(scene);
+            uint32_t color = (s_home_weather_state.is_day != 0U) ? 0xD9F2FF : 0x9FD8FF;
+
+            egui_canvas_draw_line(canvas,
+                                  particle->x,
+                                  particle->y,
+                                  (egui_dim_t)(particle->x - 3),
+                                  (egui_dim_t)(particle->y + length),
+                                  1,
+                                  ui_color(color),
+                                  particle->alpha);
+        }
+        else if (scene == WEATHER_SCENE_SNOW)
+        {
+            egui_canvas_draw_circle_fill_basic(canvas,
+                                               particle->x,
+                                               particle->y,
+                                               particle->size,
+                                               ui_color(0xF5FBFF),
+                                               particle->alpha);
+            if (particle->size > 1U)
+            {
+                egui_canvas_draw_hline(canvas, (egui_dim_t)(particle->x - 2), particle->y, 5, ui_color(0xFFFFFF), particle->alpha);
+                egui_canvas_draw_vline(canvas, particle->x, (egui_dim_t)(particle->y - 2), 5, ui_color(0xFFFFFF), particle->alpha);
+            }
+        }
+        else if (is_star_scene != 0U)
+        {
+            egui_alpha_t alpha = ui_HomePage_star_alpha(particle);
+
+            egui_canvas_draw_circle_fill_basic(canvas,
+                                               particle->x,
+                                               particle->y,
+                                               particle->size,
+                                               ui_color(0xFFF4C2),
+                                               alpha);
+            if (particle->size > 1U)
+            {
+                egui_canvas_draw_hline(canvas, (egui_dim_t)(particle->x - 3), particle->y, 7, ui_color(0xFFFFFF), alpha);
+                egui_canvas_draw_vline(canvas, particle->x, (egui_dim_t)(particle->y - 3), 7, ui_color(0xFFFFFF), alpha);
+            }
+        }
+    }
+}
+
+static void ui_HomePage_draw_lightning(egui_canvas_t *canvas, uint32_t now)
+{
+    uint32_t elapsed;
+    egui_alpha_t flash_alpha;
+    int direction;
+    int x0;
+    int x1;
+    int x2;
+    int x3;
+
+    if ((canvas == NULL) || (s_home_weather_state.lightning_active == 0U))
+    {
+        return;
+    }
+
+    elapsed = now - s_home_weather_state.lightning_start_tick;
+    if (elapsed < 70U)
+    {
+        flash_alpha = 115U;
+    }
+    else if ((elapsed >= 120U) && (elapsed < 210U))
+    {
+        flash_alpha = 72U;
+    }
+    else
+    {
+        flash_alpha = EGUI_ALPHA_0;
+    }
+
+    if (flash_alpha == EGUI_ALPHA_0)
+    {
+        return;
+    }
+
+    egui_canvas_draw_rectangle_fill(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H,
+                                    ui_color(0xF4FAFF), flash_alpha);
+
+    direction = ((s_home_weather_state.lightning_shape & 1U) != 0U) ? 1 : -1;
+    x0 = s_home_weather_state.lightning_x;
+    x1 = x0 + direction * (9 + (s_home_weather_state.lightning_shape & 3U));
+    x2 = x1 - direction * 15;
+    x3 = x2 + direction * 8;
+    egui_canvas_draw_line(canvas, x0, 3, x1, 33, 2, ui_color(0xFFFFFF), 240U);
+    egui_canvas_draw_line(canvas, x1, 33, x2, 62, 2, ui_color(0xFFFFFF), 240U);
+    egui_canvas_draw_line(canvas, x2, 62, x3, 94, 2, ui_color(0xFFFFFF), 220U);
+}
+
 static void ui_HomePage_draw_raw_text(egui_canvas_t *canvas,
                                       const egui_font_t *font,
                                       const char *text,
@@ -551,7 +1240,9 @@ static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
     return (uint8_t)((clipped.size.width > 0) && (clipped.size.height > 0));
 }
 
-static void ui_HomePage_draw_top_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status)
+static void ui_HomePage_draw_top_status(egui_canvas_t *canvas,
+                                        const DataApp_HomeStatus_t *status,
+                                        uint32_t text_rgb)
 {
     const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
@@ -571,10 +1262,10 @@ static void ui_HomePage_draw_top_status(egui_canvas_t *canvas, const DataApp_Hom
     }
     heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_30_4), status->time_text, 10, 1, 86, 32, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0x4A90E2);
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->date_text, 104, 9, 0x4A90E2);
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->week_text, 194, 9, 0x4A90E2);
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->temp_range_text, 270, 9, 0x4A90E2);
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_30_4), status->time_text, 10, 1, 86, 32, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, text_rgb);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->date_text, 104, 9, text_rgb);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->week_text, 194, 9, text_rgb);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->temp_range_text, 270, 9, text_rgb);
 
 #if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565
     weather_icon = ui_weather_icon_get(status->weather_icon_id);
@@ -585,7 +1276,9 @@ static void ui_HomePage_draw_top_status(egui_canvas_t *canvas, const DataApp_Hom
 #endif
 }
 
-static void ui_HomePage_draw_pm25_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status)
+static void ui_HomePage_draw_pm25_status(egui_canvas_t *canvas,
+                                         const DataApp_HomeStatus_t *status,
+                                         uint32_t text_rgb)
 {
     const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
@@ -602,10 +1295,12 @@ static void ui_HomePage_draw_pm25_status(egui_canvas_t *canvas, const DataApp_Ho
     }
     heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->pm25_text, HOME_STATUS_PM25_X, HOME_STATUS_PM25_Y, 0x4A90E2);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->pm25_text, HOME_STATUS_PM25_X, HOME_STATUS_PM25_Y, text_rgb);
 }
 
-static void ui_HomePage_draw_env_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status)
+static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
+                                        const DataApp_HomeStatus_t *status,
+                                        uint32_t text_rgb)
 {
     const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
@@ -622,24 +1317,43 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas, const DataApp_Hom
     }
     heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->env_text, 316, 116, 0x4A90E2);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->env_text, 316, 116, text_rgb);
 }
 
-static void ui_HomePage_draw_status(egui_canvas_t *canvas)
+static void ui_HomePage_draw_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status)
 {
-    DataApp_HomeStatus_t status;
+    ui_home_style_t style;
 
-    DataApp_HomeStatus_Get(&status);
-    ui_HomePage_draw_top_status(canvas, &status);
-    ui_HomePage_draw_pm25_status(canvas, &status);
-    ui_HomePage_draw_env_status(canvas, &status);
+    if (status == NULL)
+    {
+        return;
+    }
+
+    style = ui_HomePage_get_style(ui_HomePage_normalize_scene(status->weather_scene), status->is_day);
+    ui_HomePage_draw_top_status(canvas, status, style.text_rgb);
+    ui_HomePage_draw_pm25_status(canvas, status, style.text_rgb);
+    ui_HomePage_draw_env_status(canvas, status, style.text_rgb);
 }
 
 static void ui_HomePage_on_draw(egui_view_t *self)
 {
     egui_canvas_t *canvas = egui_view_get_canvas(self);
+    DataApp_HomeStatus_t status;
+    ui_home_style_t style;
+    WeatherScene_t scene;
 
-    ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, 0x87CEEB);
+    DataApp_HomeStatus_Get(&status);
+    scene = ui_HomePage_normalize_scene(status.weather_scene);
+    style = ui_HomePage_get_style(scene, status.is_day);
+
+    ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, style.background_rgb);
     ui_HomePage_draw_scene(canvas);
-    ui_HomePage_draw_status(canvas);
+    if (style.tint_alpha != 0U)
+    {
+        egui_canvas_draw_rectangle_fill(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H,
+                                        ui_color(style.tint_rgb), style.tint_alpha);
+    }
+    ui_HomePage_draw_weather_particles(canvas);
+    ui_HomePage_draw_lightning(canvas, s_home_scene_tick);
+    ui_HomePage_draw_status(canvas, &status);
 }

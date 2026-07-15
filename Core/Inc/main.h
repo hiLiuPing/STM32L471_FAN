@@ -97,6 +97,8 @@ void Error_Handler(void);
 #define LED1_R_GPIO_Port GPIOD
 #define SW_MIDLE_Pin GPIO_PIN_6
 #define SW_MIDLE_GPIO_Port GPIOC
+#define PG_Pin GPIO_PIN_15
+#define PG_GPIO_Port GPIOA
 #define FAN_PWM_Pin GPIO_PIN_9
 #define FAN_PWM_GPIO_Port GPIOB
 

@@ -42,6 +42,8 @@ void SettingsApp_Apply(void);
 uint16_t SettingsApp_GetWeatherTimeSyncIntervalMin(void);
 uint16_t SettingsApp_GetScreenIdleTimeoutMin(void);
 uint8_t SettingsApp_GetActiveBrightnessPercent(void);
+void SettingsApp_PreviewBrightnessPercent(uint8_t percent);
+void SettingsApp_ApplyActiveBrightness(void);
 
 #ifdef __cplusplus
 }

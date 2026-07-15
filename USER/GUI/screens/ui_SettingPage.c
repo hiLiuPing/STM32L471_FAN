@@ -87,6 +87,13 @@ void ui_SettingPage_screen_init(void)
 
 void ui_SettingPage_screen_destroy(void)
 {
+    if ((s_setting_page.editing != 0U) &&
+        ((s_setting_page.selected_index == UI_SETTING_ITEM_BRIGHTNESS_DAY) ||
+         (s_setting_page.selected_index == UI_SETTING_ITEM_BRIGHTNESS_NIGHT)))
+    {
+        SettingsApp_ApplyActiveBrightness();
+    }
+
     s_setting_page.setting_active = 0U;
     s_setting_page.editing = 0U;
     s_setting_page.selected_index = 0U;
@@ -142,6 +149,11 @@ bool ui_SettingPage_key_handler(void *key_event)
         if ((event->id == KEY_ID_PWR) && (event->type == KEY_EVT_CLICK))
         {
             s_setting_page.settings = s_setting_page.edit_backup;
+            if ((s_setting_page.selected_index == UI_SETTING_ITEM_BRIGHTNESS_DAY) ||
+                (s_setting_page.selected_index == UI_SETTING_ITEM_BRIGHTNESS_NIGHT))
+            {
+                SettingsApp_ApplyActiveBrightness();
+            }
             s_setting_page.editing = 0U;
             ui_SettingPage_rebuild_items();
             egui_view_invalidate_full(ui_SettingPage);
@@ -345,16 +357,18 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
     case UI_SETTING_ITEM_BRIGHTNESS_DAY:
         settings->brightness_day_percent = ui_setting_adjust_u8(settings->brightness_day_percent,
                                                                 delta,
-                                                                (uint8_t)step,
+                                                                UI_SETTING_VALUE_STEP,
                                                                 SETTINGS_APP_BRIGHTNESS_MIN,
                                                                 SETTINGS_APP_BRIGHTNESS_MAX);
+        SettingsApp_PreviewBrightnessPercent(settings->brightness_day_percent);
         break;
     case UI_SETTING_ITEM_BRIGHTNESS_NIGHT:
         settings->brightness_night_percent = ui_setting_adjust_u8(settings->brightness_night_percent,
                                                                   delta,
-                                                                  (uint8_t)step,
+                                                                  UI_SETTING_VALUE_STEP,
                                                                   SETTINGS_APP_BRIGHTNESS_MIN,
                                                                   SETTINGS_APP_BRIGHTNESS_MAX);
+        SettingsApp_PreviewBrightnessPercent(settings->brightness_night_percent);
         break;
     case UI_SETTING_ITEM_IDLE_TIMEOUT:
         settings->screen_idle_timeout_min = ui_setting_adjust_u16(settings->screen_idle_timeout_min,

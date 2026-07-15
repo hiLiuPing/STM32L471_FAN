@@ -22,6 +22,57 @@ static uint8_t s_weather_cycle_has_now = 0U;
 static uint8_t s_weather_cycle_has_air = 0U;
 static uint8_t s_weather_cycle_has_future = 0U;
 
+static WeatherScene_t Weather_ClassifyIcon(int icon)
+{
+    if ((icon == 100) || (icon == 150))
+    {
+        return WEATHER_SCENE_CLEAR;
+    }
+    if (((icon >= 101) && (icon <= 104)) ||
+        ((icon >= 151) && (icon <= 153)))
+    {
+        return WEATHER_SCENE_CLOUDY;
+    }
+    if ((icon == 305) || (icon == 309))
+    {
+        return WEATHER_SCENE_LIGHT_RAIN;
+    }
+    if ((icon == 306) || (icon == 314))
+    {
+        return WEATHER_SCENE_MODERATE_RAIN;
+    }
+    if (((icon >= 300) && (icon <= 304)) ||
+        ((icon >= 307) && (icon <= 313)) ||
+        ((icon >= 315) && (icon <= 318)) ||
+        ((icon >= 350) && (icon <= 351)) ||
+        (icon == 399))
+    {
+        return WEATHER_SCENE_HEAVY_RAIN;
+    }
+    if (((icon >= 400) && (icon <= 410)) ||
+        ((icon >= 456) && (icon <= 457)) ||
+        (icon == 499))
+    {
+        return WEATHER_SCENE_SNOW;
+    }
+
+    return WEATHER_SCENE_UNKNOWN;
+}
+
+static int Weather_GetEffectiveIcon(void)
+{
+    int icon = g_now_weather.icon;
+    int fallback_icon = g_future_weather[0].icon_id;
+
+    if (((icon <= 0) || (Weather_ClassifyIcon(icon) == WEATHER_SCENE_UNKNOWN)) &&
+        (fallback_icon > 0))
+    {
+        icon = fallback_icon;
+    }
+
+    return icon;
+}
+
 static int extract_int(char *str)
 {
     char *p = str;
@@ -64,10 +115,27 @@ uint8_t Weather_HasCompletedSync(void)
                      (s_weather_cycle_has_future != 0U));
 }
 
+uint16_t Weather_GetDisplayIcon(void)
+{
+    int icon = Weather_GetEffectiveIcon();
+
+    if (icon <= 0)
+    {
+        return 0U;
+    }
+
+    return (uint16_t)icon;
+}
+
+WeatherScene_t Weather_GetScene(void)
+{
+    return Weather_ClassifyIcon(Weather_GetEffectiveIcon());
+}
+
 void Weather_FillDemoData(void)
 {
     strcpy(g_now_weather.text, "Rain");
-    g_now_weather.icon = 100;
+    g_now_weather.icon = 307;
     g_now_weather.temp = 22;
     g_now_weather.feelsLike = 24;
     strcpy(g_now_weather.windDir, "East");

@@ -26,9 +26,6 @@
 #define LCD_CS_Clr() HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET)
 #define LCD_CS_Set() HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET)
 
-#define LCD_BLK_Clr() HAL_GPIO_WritePin(SPI1_PWM_GPIO_Port, SPI1_PWM_Pin, GPIO_PIN_RESET)
-#define LCD_BLK_Set() HAL_GPIO_WritePin(SPI1_PWM_GPIO_Port, SPI1_PWM_Pin, GPIO_PIN_SET)
-
 /* ����˵�� */
 // uint16_t LCD_ReadID(void);                                                         // ��ȡ��ĻID
 void LCD_SetCursor(uint16_t x, uint16_t y);                                        // ���ù��λ��

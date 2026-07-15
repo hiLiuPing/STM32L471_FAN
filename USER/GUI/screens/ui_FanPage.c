@@ -45,6 +45,7 @@ typedef struct
     egui_view_segmented_control_t mode_segments;
     char power_text[16];
     char speed_text[16];
+    char rpm_text[16];
     char mode_text[24];
     char row_text[FAN_SETTING_COUNT][32];
     fan_mode_t anim_mode;
@@ -245,9 +246,11 @@ static void ui_FanPage_sync_from_state(void)
     egui_view_segmented_control_set_current_index(EGUI_VIEW_OF(&s_fan_page.mode_segments), ui_FanPage_mode_to_segment(display_mode));
 
     (void)snprintf(s_fan_page.speed_text, sizeof(s_fan_page.speed_text), "%u%%", state.current_speed_percent);
+    (void)snprintf(s_fan_page.rpm_text, sizeof(s_fan_page.rpm_text), "%u RPM", (unsigned)state.current_rpm);
     (void)snprintf(s_fan_page.mode_text, sizeof(s_fan_page.mode_text), "%s", FanApp_GetModeName(display_mode));
 
     egui_view_label_set_text(EGUI_VIEW_OF(&s_fan_page.speed_label), s_fan_page.speed_text);
+    egui_view_label_set_text(EGUI_VIEW_OF(&s_fan_page.rpm_label), s_fan_page.rpm_text);
     egui_view_label_set_text(EGUI_VIEW_OF(&s_fan_page.mode_label), s_fan_page.mode_text);
     egui_view_invalidate(EGUI_VIEW_OF(&s_fan_page.settings_list));
 }
@@ -298,7 +301,7 @@ void ui_FanPage_screen_init(void)
     ui_FanPage_init_label(&s_fan_page.mode_label, core, 10, 118, 122, 18, EGUI_FONT_OF(&egui_res_font_montserrat_12_4),
                           0x155E75, EGUI_ALIGN_CENTER, s_fan_page.mode_text);
     ui_FanPage_init_label(&s_fan_page.rpm_label, core, 154, 113, 118, 18, EGUI_FONT_OF(&egui_res_font_montserrat_14_4),
-                          0x155E75, EGUI_ALIGN_CENTER, "-- RPM");
+                          0x155E75, EGUI_ALIGN_CENTER, s_fan_page.rpm_text);
 
     egui_view_list_init(EGUI_VIEW_OF(&s_fan_page.settings_list), core);
     egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.settings_list), 292, 60);

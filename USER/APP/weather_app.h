@@ -46,6 +46,17 @@ typedef enum
     STATE_TAIL
 } ProtocolState_t;
 
+typedef enum
+{
+    WEATHER_SCENE_UNKNOWN = 0,
+    WEATHER_SCENE_CLEAR,
+    WEATHER_SCENE_CLOUDY,
+    WEATHER_SCENE_LIGHT_RAIN,
+    WEATHER_SCENE_MODERATE_RAIN,
+    WEATHER_SCENE_HEAVY_RAIN,
+    WEATHER_SCENE_SNOW
+} WeatherScene_t;
+
 typedef struct
 {
     char date[16];
@@ -113,6 +124,8 @@ void Weather_SendCommand(Weather_cmd_t cmd);
 void Weather_FillDemoData(void);
 void Weather_BeginSyncCycle(void);
 uint8_t Weather_HasCompletedSync(void);
+WeatherScene_t Weather_GetScene(void);
+uint16_t Weather_GetDisplayIcon(void);
 void Weather_DebugPrintAll(void);
 
 #ifdef __cplusplus

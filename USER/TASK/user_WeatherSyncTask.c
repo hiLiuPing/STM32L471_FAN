@@ -70,10 +70,16 @@ void WeatherSyncTask(void *argument)
     {
         if (g_weather_module.first_sync_done == 0U)
         {
+            uint8_t sync_ok;
+
             Weather_PowerOn();
             Weather_DelayAbortable(6000U);
-            (void)Weather_RunSyncWithRetry("first");
+            sync_ok = Weather_RunSyncWithRetry("first");
             Weather_PowerOff();
+            if (sync_ok != 0U)
+            {
+                SettingsApp_ApplyActiveBrightness();
+            }
             g_weather_module.first_sync_done = 1U;
             continue;
         }
@@ -93,7 +99,10 @@ void WeatherSyncTask(void *argument)
         Weather_DelayAbortable(6000U);
         if (g_weather_module.abort_requested == 0U)
         {
-            (void)Weather_RunSyncWithRetry("sync");
+            if (Weather_RunSyncWithRetry("sync") != 0U)
+            {
+                SettingsApp_ApplyActiveBrightness();
+            }
         }
         Weather_PowerOff();
         g_weather_module.syncing = 0U;

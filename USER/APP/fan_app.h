@@ -44,6 +44,7 @@ typedef struct {
     uint8_t base_speed_percent;
     uint8_t target_speed_percent;
     uint8_t current_speed_percent;
+    uint16_t current_rpm;
     uint8_t intensity_percent;
     uint16_t smart_temp_threshold_x10;
     uint8_t smart_hum_threshold_percent;
@@ -69,6 +70,7 @@ bool FanApp_SetNaturalAmplitude(uint8_t percent, TickType_t timeout);
 bool FanApp_SetAutoOffMinutes(uint16_t minutes, TickType_t timeout);
 
 void FanApp_GetState(fan_state_t *out_state);
+void FanApp_UpdateRpm(TickType_t now);
 uint8_t FanApp_GetModeCount(void);
 const char *FanApp_GetModeName(fan_mode_t mode);
 fan_mode_t FanApp_ModeFromIndex(uint8_t index);

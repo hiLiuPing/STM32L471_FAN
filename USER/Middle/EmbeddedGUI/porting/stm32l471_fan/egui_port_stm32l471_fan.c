@@ -79,7 +79,6 @@ static void egui_lcd_init(egui_core_t *core)
     (void)core;
 
     LCD_Init();
-    LCD_SetBacklightPercent(100U);
     LCD_Fill(0U, 0U, (uint16_t)(LCD_W - 1U), (uint16_t)(LCD_H - 1U), BLACK);
 }
 
@@ -193,6 +192,7 @@ void egui_port_start(void)
 {
     egui_color_int_t *pfb_buffers[EGUI_CONFIG_PFB_BUFFER_COUNT];
     egui_display_setup_t setup;
+    uint8_t brightness_percent;
 
     if (s_egui_started)
     {
@@ -217,6 +217,9 @@ void egui_port_start(void)
     setup.touch_register = NULL;
     setup.uicode_init = egui_port_ui_init;
     setup.display_id = 0U;
+
+    brightness_percent = SettingsApp_GetActiveBrightnessPercent();
+    s_egui_lcd_driver.brightness = (uint8_t)(((uint16_t)brightness_percent * 255U + 50U) / 100U);
     egui_setup_display(&s_egui_core, &setup);
 
     s_egui_started = true;

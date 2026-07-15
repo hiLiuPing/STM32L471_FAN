@@ -2,6 +2,7 @@
 
 #include "FreeRTOS.h"
 #include "data_app.h"
+#include "fan_app.h"
 #include "log.h"
 #include "sensors_app.h"
 #include "task.h"
@@ -77,6 +78,7 @@ void AppDataTask(void *argument)
             Update_Battery(&g_sensors_battery);
             Update_Charger(&g_sensors_charger);
             Update_INA226(&g_sensors_ina226);
+            FanApp_UpdateRpm(xTaskGetTickCount());
             DataApp_HomeStatus_Update();
         }
 

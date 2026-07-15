@@ -7,6 +7,7 @@
 #include "lcd_init.h"
 #include "log.h"
 #include "ui_poetry_popup.h"
+#include "weather_app.h"
 
 #define SETTINGS_APP_STORAGE_VERSION     2U
 #define SETTINGS_APP_STORAGE_VERSION_OLD 1U
@@ -206,7 +207,9 @@ bool SettingsApp_Update(const AppSettings_t *next)
 
 uint8_t SettingsApp_GetActiveBrightnessPercent(void)
 {
-    app_time_t now;
+    uint8_t base_percent;
+    uint8_t weather_factor;
+    uint16_t adjusted_percent;
 
     if (s_settings_initialized == 0U)
     {
@@ -214,18 +217,51 @@ uint8_t SettingsApp_GetActiveBrightnessPercent(void)
         SettingsApp_Normalize(&s_settings);
     }
 
-    Time_Get(&now);
-    if (now.year < 2020U)
+    base_percent = (Time_IsDaytime() != 0U) ?
+                       s_settings.brightness_day_percent :
+                       s_settings.brightness_night_percent;
+
+    switch (Weather_GetScene())
     {
-        return s_settings.brightness_day_percent;
+    case WEATHER_SCENE_CLOUDY:
+    case WEATHER_SCENE_SNOW:
+        weather_factor = 90U;
+        break;
+    case WEATHER_SCENE_LIGHT_RAIN:
+        weather_factor = 85U;
+        break;
+    case WEATHER_SCENE_MODERATE_RAIN:
+        weather_factor = 75U;
+        break;
+    case WEATHER_SCENE_HEAVY_RAIN:
+        weather_factor = 65U;
+        break;
+    case WEATHER_SCENE_CLEAR:
+    case WEATHER_SCENE_UNKNOWN:
+    default:
+        weather_factor = 100U;
+        break;
     }
 
-    if ((now.hour >= 7U) && (now.hour < 19U))
+    adjusted_percent = (uint16_t)(((uint16_t)base_percent * weather_factor + 50U) / 100U);
+    if (adjusted_percent < SETTINGS_APP_BRIGHTNESS_MIN)
     {
-        return s_settings.brightness_day_percent;
+        adjusted_percent = SETTINGS_APP_BRIGHTNESS_MIN;
     }
 
-    return s_settings.brightness_night_percent;
+    return (uint8_t)adjusted_percent;
+}
+
+void SettingsApp_PreviewBrightnessPercent(uint8_t percent)
+{
+    LCD_SetBacklightPercent(SettingsApp_ClampU8(percent,
+                                                SETTINGS_APP_BRIGHTNESS_MIN,
+                                                SETTINGS_APP_BRIGHTNESS_MAX));
+}
+
+void SettingsApp_ApplyActiveBrightness(void)
+{
+    LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
 }
 
 void SettingsApp_Apply(void)
@@ -246,7 +282,7 @@ void SettingsApp_Apply(void)
 
     ui_poetry_popup_set_timing((uint16_t)interval_s, UI_POETRY_POPUP_DEFAULT_DURATION_S);
     ui_poetry_popup_set_enabled(s_settings.poetry_popup_enabled != 0U);
-    LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
+    SettingsApp_ApplyActiveBrightness();
 }
 
 uint16_t SettingsApp_GetWeatherTimeSyncIntervalMin(void)

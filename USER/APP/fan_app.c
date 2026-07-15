@@ -20,6 +20,9 @@
 #define FAN_APP_PWM_PERIOD                  3199U
 #define FAN_APP_SMART_TEMP_SPAN_X10         40
 #define FAN_APP_NATURAL_AMPLITUDE_DEFAULT   FAN_APP_DEFAULT_NATURAL_AMPLITUDE
+#define FAN_APP_TACH_TIMER_HZ               1000000UL
+#define FAN_APP_TACH_PULSES_PER_REV         2UL
+#define FAN_APP_TACH_TIMEOUT_MS              1000U
 
 
 static const char *const s_mode_names[FAN_MODE_COUNT] = {
@@ -37,6 +40,13 @@ static TickType_t s_auto_off_deadline_tick = 0U;
 static PwmFanController_t s_pwm_fan;
 static TickType_t s_pwm_last_tick = 0U;
 static uint8_t s_pwm_cached_percent = 0U;
+static volatile uint32_t s_tach_last_capture = 0U;
+static volatile uint32_t s_tach_period_ticks = 0U;
+static volatile TickType_t s_tach_last_edge_tick = 0U;
+static volatile uint32_t s_tach_sequence = 0U;
+static volatile uint8_t s_tach_capture_seen = 0U;
+static uint32_t s_tach_processed_sequence = 0U;
+static uint32_t s_tach_filtered_period_ticks = 0U;
 
 static uint8_t FanApp_ClampPercent(uint16_t value)
 {
@@ -78,6 +88,26 @@ static void FanApp_ResetPwmAlgorithm(void)
     PwmFan_Init(&s_pwm_fan);
     s_pwm_last_tick = 0U;
     s_pwm_cached_percent = 0U;
+}
+
+static void FanApp_ResetTachState(void)
+{
+    s_tach_last_capture = 0U;
+    s_tach_period_ticks = 0U;
+    s_tach_last_edge_tick = 0U;
+    s_tach_sequence = 0U;
+    s_tach_capture_seen = 0U;
+    s_tach_processed_sequence = 0U;
+    s_tach_filtered_period_ticks = 0U;
+}
+
+static void FanApp_ResetTachCapture(void)
+{
+    s_tach_last_capture = 0U;
+    s_tach_period_ticks = 0U;
+    s_tach_last_edge_tick = 0U;
+    s_tach_capture_seen = 0U;
+    s_tach_sequence++;
 }
 
 static uint8_t FanApp_IsPwmAlgorithmMode(fan_mode_t mode)
@@ -242,6 +272,8 @@ static void FanApp_SetPowerInternal(bool enable, TickType_t now)
         s_state.mode = FAN_MODE_OFF;
         s_state.target_speed_percent = 0U;
         s_state.current_speed_percent = 0U;
+        s_state.current_rpm = 0U;
+        FanApp_ResetTachCapture();
         s_boost_until_tick = 0U;
         s_auto_off_deadline_tick = 0U;
         s_state.auto_off_remaining_min = 0U;
@@ -348,8 +380,11 @@ static void FanApp_UpdateAutoOff(TickType_t now)
 void FanApp_Init(void)
 {
     FanApp_SetDefaults();
+    FanApp_ResetTachState();
 
     (void)HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);
+    __HAL_TIM_SET_COUNTER(&htim2, 0U);
+    (void)HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
     FanApp_ApplyHardware(0U);
 }
 
@@ -426,6 +461,111 @@ void FanApp_GetState(fan_state_t *out_state)
     taskENTER_CRITICAL();
     *out_state = s_state;
     taskEXIT_CRITICAL();
+}
+
+void FanApp_UpdateRpm(TickType_t now)
+{
+    uint32_t period_ticks;
+    uint32_t sequence;
+    TickType_t last_edge_tick;
+    int32_t edge_age_ticks;
+    uint8_t capture_seen;
+    uint8_t power_on;
+    uint16_t rpm = 0U;
+
+    taskENTER_CRITICAL();
+    period_ticks = s_tach_period_ticks;
+    sequence = s_tach_sequence;
+    last_edge_tick = s_tach_last_edge_tick;
+    capture_seen = s_tach_capture_seen;
+    power_on = s_state.power_on;
+    taskEXIT_CRITICAL();
+
+    edge_age_ticks = (int32_t)(now - last_edge_tick);
+
+    if ((power_on == 0U) ||
+        ((capture_seen != 0U) &&
+         (edge_age_ticks >= (int32_t)pdMS_TO_TICKS(FAN_APP_TACH_TIMEOUT_MS))))
+    {
+        taskENTER_CRITICAL();
+        s_tach_capture_seen = 0U;
+        s_tach_period_ticks = 0U;
+        s_state.current_rpm = 0U;
+        taskEXIT_CRITICAL();
+        s_tach_filtered_period_ticks = 0U;
+        s_tach_processed_sequence = sequence;
+        return;
+    }
+
+    if ((capture_seen == 0U) || (period_ticks == 0U))
+    {
+        s_tach_filtered_period_ticks = 0U;
+        s_tach_processed_sequence = sequence;
+        taskENTER_CRITICAL();
+        s_state.current_rpm = 0U;
+        taskEXIT_CRITICAL();
+        return;
+    }
+
+    if (sequence != s_tach_processed_sequence)
+    {
+        if (s_tach_filtered_period_ticks == 0U)
+        {
+            s_tach_filtered_period_ticks = period_ticks;
+        }
+        else
+        {
+            s_tach_filtered_period_ticks =
+                (uint32_t)((((uint64_t)s_tach_filtered_period_ticks * 3ULL) +
+                            (uint64_t)period_ticks + 2ULL) /
+                           4ULL);
+        }
+        s_tach_processed_sequence = sequence;
+    }
+
+    if (s_tach_filtered_period_ticks > 0U)
+    {
+        uint64_t denominator = (uint64_t)s_tach_filtered_period_ticks * FAN_APP_TACH_PULSES_PER_REV;
+        uint64_t rpm_value = ((uint64_t)FAN_APP_TACH_TIMER_HZ * 60ULL + (denominator / 2ULL)) /
+                             denominator;
+
+        rpm = (rpm_value > UINT16_MAX) ? UINT16_MAX : (uint16_t)rpm_value;
+    }
+
+    taskENTER_CRITICAL();
+    s_state.current_rpm = rpm;
+    taskEXIT_CRITICAL();
+}
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    uint32_t capture;
+
+    if ((htim == NULL) || (htim->Instance != TIM2) ||
+        (htim->Channel != HAL_TIM_ACTIVE_CHANNEL_1))
+    {
+        return;
+    }
+
+    capture = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    if (s_tach_capture_seen != 0U)
+    {
+        uint32_t period_ticks = capture - s_tach_last_capture;
+
+        if (period_ticks > 0U)
+        {
+            s_tach_period_ticks = period_ticks;
+            s_tach_last_edge_tick = xTaskGetTickCountFromISR();
+            s_tach_sequence++;
+        }
+    }
+    else
+    {
+        s_tach_capture_seen = 1U;
+        s_tach_last_edge_tick = xTaskGetTickCountFromISR();
+    }
+
+    s_tach_last_capture = capture;
 }
 
 uint8_t FanApp_GetModeCount(void)
@@ -515,6 +655,7 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
 
     case FAN_CMD_RESET_DEFAULTS:
         FanApp_SetDefaults();
+        FanApp_ResetTachCapture();
         FanApp_ApplyHardware(0U);
         break;
 
