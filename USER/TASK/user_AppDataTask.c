@@ -67,9 +67,9 @@ void AppDataTask(void *argument)
 
         DataApp_QuoteServiceUpdate(now);
 
-        if ((TickType_t)(now - last_1s_tick) >= pdMS_TO_TICKS(1000U))
+        if ((TickType_t)(now - last_1s_tick) >= pdMS_TO_TICKS(100U))
         {
-            last_1s_tick += pdMS_TO_TICKS(1000U);
+            last_1s_tick += pdMS_TO_TICKS(100U);
             Time_BlinkUpdate();
             RTC_ReadToBuffer();
             Buffer_Swap();
@@ -80,14 +80,7 @@ void AppDataTask(void *argument)
             DataApp_HomeStatus_Update();
         }
 
-        // if ((TickType_t)(now - last_log_tick) >= pdMS_TO_TICKS(5000U))
-        // {
-        //     last_log_tick += pdMS_TO_TICKS(5000U);
-        //     log_printf("[Sensor] t=%ld h=%ld soc=%lu",
-        //                (long)(g_sensors_environment.temp * 10.0f),
-        //                (long)(g_sensors_environment.hum * 10.0f),
-        //                (unsigned long)(g_sensors_battery.soc + 0.5f));
-        // }
+
 
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(30U));
     }

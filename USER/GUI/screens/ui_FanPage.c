@@ -8,6 +8,7 @@
 #include "fan_app.h"
 #include "key.h"
 #include "page_manager.h"
+#include "sensors_app.h"
 #include "ui_common.h"
 #include "widget/egui_view_animated_image.h"
 #include "widget/egui_view_gauge.h"
@@ -38,13 +39,13 @@ typedef struct
     egui_view_gauge_t speed_gauge;
     egui_view_label_t speed_label;
     egui_view_label_t mode_label;
-    egui_view_label_t hint_label;
+    egui_view_label_t rpm_label;
     egui_view_list_t settings_list;
     egui_view_switch_t power_switch;
     egui_view_segmented_control_t mode_segments;
+    char power_text[16];
     char speed_text[16];
     char mode_text[24];
-    char hint_text[32];
     char row_text[FAN_SETTING_COUNT][32];
     fan_mode_t anim_mode;
     uint8_t setting_active;
@@ -61,10 +62,6 @@ static const char *s_mode_segment_texts[] = {
     "M",
     "N",
     "S",
-    "R",
-    "Sl",
-    "T",
-    "E",
 };
 
 static void ui_FanPage_on_draw(egui_view_t *self);
@@ -151,6 +148,30 @@ static void ui_FanPage_set_setting_active(uint8_t active)
     egui_view_invalidate_full(ui_FanPage);
 }
 
+static void ui_FanPage_update_power_text(void)
+{
+    float power_mw = g_sensors_ina226.power;
+    uint32_t power_x10 = 0U;
+
+    if (power_mw > 0.0f)
+    {
+        if (power_mw >= 999900.0f)
+        {
+            power_x10 = 9999U;
+        }
+        else
+        {
+            power_x10 = (uint32_t)((power_mw + 50.0f) / 100.0f);
+        }
+    }
+
+    (void)snprintf(s_fan_page.power_text,
+                   sizeof(s_fan_page.power_text),
+                   "%lu.%luW",
+                   (unsigned long)(power_x10 / 10U),
+                   (unsigned long)(power_x10 % 10U));
+}
+
 static void ui_FanPage_update_rows(const fan_state_t *state)
 {
     const char *edit_mark;
@@ -217,6 +238,7 @@ static void ui_FanPage_sync_from_state(void)
 
     ui_FanPage_sync_anim(anim_mode);
     ui_FanPage_update_rows(&state);
+    ui_FanPage_update_power_text();
 
     egui_view_gauge_set_value(EGUI_VIEW_OF(&s_fan_page.speed_gauge), state.current_speed_percent);
     egui_view_switch_set_checked(EGUI_VIEW_OF(&s_fan_page.power_switch), state.power_on);
@@ -224,22 +246,9 @@ static void ui_FanPage_sync_from_state(void)
 
     (void)snprintf(s_fan_page.speed_text, sizeof(s_fan_page.speed_text), "%u%%", state.current_speed_percent);
     (void)snprintf(s_fan_page.mode_text, sizeof(s_fan_page.mode_text), "%s", FanApp_GetModeName(display_mode));
-    if (s_fan_page.setting_active == 0U)
-    {
-        (void)snprintf(s_fan_page.hint_text, sizeof(s_fan_page.hint_text), "L SET  N/R PAGE");
-    }
-    else if (s_fan_page.editing != 0U)
-    {
-        (void)snprintf(s_fan_page.hint_text, sizeof(s_fan_page.hint_text), "N/R ADJ  L OK  B BACK");
-    }
-    else
-    {
-        (void)snprintf(s_fan_page.hint_text, sizeof(s_fan_page.hint_text), "N/R SEL  L OK  B EXIT");
-    }
 
     egui_view_label_set_text(EGUI_VIEW_OF(&s_fan_page.speed_label), s_fan_page.speed_text);
     egui_view_label_set_text(EGUI_VIEW_OF(&s_fan_page.mode_label), s_fan_page.mode_text);
-    egui_view_label_set_text(EGUI_VIEW_OF(&s_fan_page.hint_label), s_fan_page.hint_text);
     egui_view_invalidate(EGUI_VIEW_OF(&s_fan_page.settings_list));
 }
 
@@ -286,10 +295,10 @@ void ui_FanPage_screen_init(void)
 
     ui_FanPage_init_label(&s_fan_page.speed_label, core, 166, 48, 94, 34, EGUI_FONT_OF(&egui_res_font_montserrat_24_4),
                           0x0F172A, EGUI_ALIGN_CENTER, s_fan_page.speed_text);
-    ui_FanPage_init_label(&s_fan_page.mode_label, core, 154, 113, 118, 18, EGUI_FONT_OF(&egui_res_font_montserrat_14_4),
+    ui_FanPage_init_label(&s_fan_page.mode_label, core, 10, 118, 122, 18, EGUI_FONT_OF(&egui_res_font_montserrat_12_4),
                           0x155E75, EGUI_ALIGN_CENTER, s_fan_page.mode_text);
-    ui_FanPage_init_label(&s_fan_page.hint_label, core, 10, 118, 122, 18, EGUI_FONT_OF(&egui_res_font_montserrat_10_4),
-                          0x0F766E, EGUI_ALIGN_CENTER, s_fan_page.hint_text);
+    ui_FanPage_init_label(&s_fan_page.rpm_label, core, 154, 113, 118, 18, EGUI_FONT_OF(&egui_res_font_montserrat_14_4),
+                          0x155E75, EGUI_ALIGN_CENTER, "-- RPM");
 
     egui_view_list_init(EGUI_VIEW_OF(&s_fan_page.settings_list), core);
     egui_view_set_position(EGUI_VIEW_OF(&s_fan_page.settings_list), 292, 60);
@@ -318,7 +327,7 @@ void ui_FanPage_screen_init(void)
     egui_view_group_add_child(view, EGUI_VIEW_OF(&s_fan_page.speed_gauge));
     egui_view_group_add_child(view, EGUI_VIEW_OF(&s_fan_page.speed_label));
     egui_view_group_add_child(view, EGUI_VIEW_OF(&s_fan_page.mode_label));
-    egui_view_group_add_child(view, EGUI_VIEW_OF(&s_fan_page.hint_label));
+    egui_view_group_add_child(view, EGUI_VIEW_OF(&s_fan_page.rpm_label));
     egui_view_group_add_child(view, EGUI_VIEW_OF(&s_fan_page.settings_list));
     egui_view_group_add_child(view, EGUI_VIEW_OF(&s_fan_page.power_switch));
     egui_view_group_add_child(view, EGUI_VIEW_OF(&s_fan_page.mode_segments));
@@ -534,7 +543,7 @@ static void ui_FanPage_on_draw(egui_view_t *self)
     ui_draw_round_panel(canvas, 145, 6, 136, 130, 8, 0xE0F7FA, 0x22D3EE);
     ui_draw_round_panel(canvas, 287, 6, 133, 130, 8, 0xECFEFF, 0x06B6D4);
 
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_14_4), "FAN", 20, 12, 54, 18,
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_18_4), s_fan_page.power_text, 12, 10, 60, 22,
                  EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, 0x0F766E);
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4), s_fan_page.setting_active ? "SETTING" : "LIVE", 74, 13, 48, 16,
                  EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER, s_fan_page.setting_active ? 0xDC2626 : 0x0284C7);

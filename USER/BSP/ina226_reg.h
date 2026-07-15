@@ -13,6 +13,17 @@
 
 #define INA226_ADDR 0x40
 
+#define INA226_CONFIG_RESERVED_BITS          0x4000U
+#define INA226_CONFIG_AVG_128                 (0x04U << 9U)
+#define INA226_CONFIG_VBUS_CT_1100_US         (0x04U << 6U)
+#define INA226_CONFIG_VSHUNT_CT_1100_US       (0x04U << 3U)
+#define INA226_CONFIG_MODE_SHUNT_BUS_CONT     0x07U
+#define INA226_CONFIG_STABLE_POWER            (INA226_CONFIG_RESERVED_BITS |      \
+                                               INA226_CONFIG_AVG_128 |             \
+                                               INA226_CONFIG_VBUS_CT_1100_US |     \
+                                               INA226_CONFIG_VSHUNT_CT_1100_US |   \
+                                               INA226_CONFIG_MODE_SHUNT_BUS_CONT)
+
 typedef struct {
     void *handle;
     uint16_t dev_addr;

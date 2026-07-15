@@ -12,12 +12,10 @@
 #define FAN_APP_DEFAULT_SMART_TEMP_X10      280U
 #define FAN_APP_DEFAULT_SMART_HUM_PERCENT   65U
 #define FAN_APP_DEFAULT_NATURAL_AMPLITUDE   18U
-#define FAN_APP_DEFAULT_RANDOM_AMPLITUDE    12U
 
 #define FAN_APP_START_BOOST_PERCENT         35U
 #define FAN_APP_START_BOOST_MS              300U
 #define FAN_APP_PWM_ALGO_PERIOD_MS          100U
-#define FAN_APP_RANDOM_UPDATE_MS            350U
 #define FAN_APP_AUTO_OFF_MAX_MIN            120U
 #define FAN_APP_PWM_PERIOD                  3199U
 #define FAN_APP_SMART_TEMP_SPAN_X10         40
@@ -29,10 +27,6 @@ static const char *const s_mode_names[FAN_MODE_COUNT] = {
     "Manual",
     "Natural",
     "Smart",
-    "Random",
-    "Sleep",
-    "Turbo",
-    "Eco",
 };
 
 
@@ -40,9 +34,6 @@ static QueueHandle_t s_command_queue = NULL;
 static fan_state_t s_state;
 static TickType_t s_boost_until_tick = 0U;
 static TickType_t s_auto_off_deadline_tick = 0U;
-static TickType_t s_last_random_tick = 0U;
-static uint32_t s_rng_state = 0x21524111UL;
-static int16_t s_random_offset = 0;
 static PwmFanController_t s_pwm_fan;
 static TickType_t s_pwm_last_tick = 0U;
 static uint8_t s_pwm_cached_percent = 0U;
@@ -80,12 +71,6 @@ static uint16_t FanApp_ClampRangeU16(uint16_t value, uint16_t min, uint16_t max)
     }
 
     return value;
-}
-
-static uint32_t FanApp_NextRandom(void)
-{
-    s_rng_state = (s_rng_state * 1664525UL) + 1013904223UL;
-    return s_rng_state;
 }
 
 static void FanApp_ResetPwmAlgorithm(void)
@@ -220,11 +205,8 @@ static void FanApp_SetDefaults(void)
     s_state.smart_temp_threshold_x10 = FAN_APP_DEFAULT_SMART_TEMP_X10;
     s_state.smart_hum_threshold_percent = FAN_APP_DEFAULT_SMART_HUM_PERCENT;
     s_state.natural_amplitude_percent = FAN_APP_DEFAULT_NATURAL_AMPLITUDE;
-    s_state.random_amplitude_percent = FAN_APP_DEFAULT_RANDOM_AMPLITUDE;
     s_boost_until_tick = 0U;
     s_auto_off_deadline_tick = 0U;
-    s_last_random_tick = 0U;
-    s_random_offset = 0;
     FanApp_ResetPwmAlgorithm();
 }
 
@@ -281,7 +263,7 @@ static void FanApp_SetPowerInternal(bool enable, TickType_t now)
 
 static void FanApp_SetModeInternal(fan_mode_t mode, TickType_t now)
 {
-    if (mode >= FAN_MODE_COUNT)
+    if ((uint32_t)mode >= (uint32_t)FAN_MODE_COUNT)
     {
         return;
     }
@@ -327,27 +309,6 @@ static void FanApp_UpdateSensorSnapshot(void)
     s_state.current_hum_percent = (uint8_t)(hum + 0.5f);
 }
 
-static uint8_t FanApp_RandomTarget(TickType_t now)
-{
-    uint8_t base = s_state.base_speed_percent;
-    uint8_t amplitude = s_state.random_amplitude_percent;
-
-    if ((s_last_random_tick == 0U) ||
-        ((TickType_t)(now - s_last_random_tick) >= pdMS_TO_TICKS(FAN_APP_RANDOM_UPDATE_MS)))
-    {
-        uint32_t span = ((uint32_t)amplitude * 2UL) + 1UL;
-        s_last_random_tick = now;
-        s_random_offset = (int16_t)(FanApp_NextRandom() % span) - (int16_t)amplitude;
-    }
-
-    if ((int16_t)base + s_random_offset < 0)
-    {
-        return 0U;
-    }
-
-    return FanApp_ClampPercent((uint16_t)((int16_t)base + s_random_offset));
-}
-
 static uint8_t FanApp_ModeTarget(TickType_t now)
 {
     switch (s_state.mode)
@@ -358,14 +319,6 @@ static uint8_t FanApp_ModeTarget(TickType_t now)
     case FAN_MODE_NATURAL:
     case FAN_MODE_SMART:
         return FanApp_PwmAlgorithmTarget(now);
-    case FAN_MODE_RANDOM:
-        return FanApp_RandomTarget(now);
-    case FAN_MODE_SLEEP:
-        return FanApp_ClampPercent((uint16_t)(15U + (s_state.base_speed_percent / 5U)));
-    case FAN_MODE_TURBO:
-        return 100U;
-    case FAN_MODE_ECO:
-        return FanApp_ClampPercent((uint16_t)((uint16_t)s_state.base_speed_percent * 65U / 100U));
     default:
         return 0U;
     }
@@ -395,7 +348,6 @@ static void FanApp_UpdateAutoOff(TickType_t now)
 void FanApp_Init(void)
 {
     FanApp_SetDefaults();
-    s_rng_state ^= (uint32_t)HAL_GetTick();
 
     (void)HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);
     FanApp_ApplyHardware(0U);
@@ -458,12 +410,6 @@ bool FanApp_SetNaturalAmplitude(uint8_t percent, TickType_t timeout)
     return FanApp_SendCommand(&cmd, timeout);
 }
 
-bool FanApp_SetRandomAmplitude(uint8_t percent, TickType_t timeout)
-{
-    fan_cmd_t cmd = { FAN_CMD_SET_RANDOM_AMPLITUDE, FanApp_ClampPercent(percent) };
-    return FanApp_SendCommand(&cmd, timeout);
-}
-
 bool FanApp_SetAutoOffMinutes(uint16_t minutes, TickType_t timeout)
 {
     fan_cmd_t cmd = { FAN_CMD_SET_AUTO_OFF_MIN, minutes };
@@ -489,7 +435,7 @@ uint8_t FanApp_GetModeCount(void)
 
 const char *FanApp_GetModeName(fan_mode_t mode)
 {
-    if (mode >= FAN_MODE_COUNT)
+    if ((uint32_t)mode >= (uint32_t)FAN_MODE_COUNT)
     {
         return "Unknown";
     }
@@ -509,7 +455,7 @@ fan_mode_t FanApp_ModeFromIndex(uint8_t index)
 
 uint8_t FanApp_ModeToIndex(fan_mode_t mode)
 {
-    if (mode >= FAN_MODE_COUNT)
+    if ((uint32_t)mode >= (uint32_t)FAN_MODE_COUNT)
     {
         return (uint8_t)FAN_MODE_MANUAL;
     }
@@ -560,10 +506,6 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
     case FAN_CMD_SET_NATURAL_AMPLITUDE:
         s_state.natural_amplitude_percent = FanApp_ClampRangeU16(cmd->value, 0U, 60U);
         s_pwm_last_tick = 0U;
-        break;
-
-    case FAN_CMD_SET_RANDOM_AMPLITUDE:
-        s_state.random_amplitude_percent = FanApp_ClampRangeU16(cmd->value, 0U, 60U);
         break;
 
     case FAN_CMD_SET_AUTO_OFF_MIN:

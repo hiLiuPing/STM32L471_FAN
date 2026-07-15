@@ -17,10 +17,6 @@ typedef enum {
     FAN_MODE_MANUAL,
     FAN_MODE_NATURAL,
     FAN_MODE_SMART,
-    FAN_MODE_RANDOM,
-    FAN_MODE_SLEEP,
-    FAN_MODE_TURBO,
-    FAN_MODE_ECO,
     FAN_MODE_COUNT
 } fan_mode_t;
 
@@ -32,7 +28,6 @@ typedef enum {
     FAN_CMD_SET_SMART_TEMP,
     FAN_CMD_SET_SMART_HUM,
     FAN_CMD_SET_NATURAL_AMPLITUDE,
-    FAN_CMD_SET_RANDOM_AMPLITUDE,
     FAN_CMD_SET_AUTO_OFF_MIN,
     FAN_CMD_RESET_DEFAULTS,
 } fan_cmd_type_t;
@@ -53,7 +48,6 @@ typedef struct {
     uint16_t smart_temp_threshold_x10;
     uint8_t smart_hum_threshold_percent;
     uint8_t natural_amplitude_percent;
-    uint8_t random_amplitude_percent;
     uint16_t auto_off_min;
     uint16_t auto_off_remaining_min;
     int16_t current_temp_x10;
@@ -72,7 +66,6 @@ bool FanApp_SetIntensity(uint8_t percent, TickType_t timeout);
 bool FanApp_SetSmartTempThreshold(uint16_t temp_x10, TickType_t timeout);
 bool FanApp_SetSmartHumidityThreshold(uint8_t percent, TickType_t timeout);
 bool FanApp_SetNaturalAmplitude(uint8_t percent, TickType_t timeout);
-bool FanApp_SetRandomAmplitude(uint8_t percent, TickType_t timeout);
 bool FanApp_SetAutoOffMinutes(uint16_t minutes, TickType_t timeout);
 
 void FanApp_GetState(fan_state_t *out_state);

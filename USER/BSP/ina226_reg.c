@@ -53,10 +53,8 @@ int32_t ina226_init(ina226_ctx_t *ctx)
     /* 自动计算 calibration + LSB */
     ina226_calc_calibration(ctx);
 
-    /* config:
-     * VBUS + Shunt continuous
-     */
-    if (ina226_write16(ctx, INA226_REG_CONFIG, 0x4127) != 0)
+    /* Average across multiple PWM periods before publishing a measurement. */
+    if (ina226_write16(ctx, INA226_REG_CONFIG, INA226_CONFIG_STABLE_POWER) != 0)
         return -1;
 
     /* 写校准值 */
