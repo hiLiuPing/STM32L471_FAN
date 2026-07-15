@@ -16,5 +16,9 @@
 version: "2.1"
 options:
     STM32L471_FAN:
-        files: {}
+        files:
+            'USER/GUI/screens/ui_HomePage.c': -O2
+            'USER/Middle/EmbeddedGUI/src/core/**/*.c': -O2
+            'USER/Middle/EmbeddedGUI/src/canvas/**/*.c': -O2
+            'USER/Middle/EmbeddedGUI/src/image/**/*.c': -O2
         virtualPathFiles: {}

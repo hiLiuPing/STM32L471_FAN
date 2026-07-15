@@ -7,6 +7,9 @@
 #include "sensors_app.h"
 #include "task.h"
 #include "user_TasksInit.h"
+#include "weather_app.h"
+
+#define APP_DATA_WEATHER_DEMO_INTERVAL_MS 15000U
 
 static const char *TiltName(TiltKey_t evt)
 {
@@ -27,7 +30,7 @@ void AppDataTask(void *argument)
 {
     TickType_t last_wake_time;
     TickType_t last_1s_tick;
-    TickType_t last_log_tick;
+    TickType_t last_weather_demo_tick;
     TiltKey_t last_tilt = MSG_TILT_NONE;
 
     (void)argument;
@@ -35,7 +38,7 @@ void AppDataTask(void *argument)
     User_Tasks_WaitForHardwareReady();
     last_wake_time = xTaskGetTickCount();
     last_1s_tick = last_wake_time;
-    last_log_tick = last_wake_time;
+    last_weather_demo_tick = last_wake_time;
 
     for (;;)
     {
@@ -68,6 +71,12 @@ void AppDataTask(void *argument)
 
         DataApp_QuoteServiceUpdate(now);
 
+        if ((TickType_t)(now - last_weather_demo_tick) >= pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS))
+        {
+            last_weather_demo_tick += pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS);
+            Weather_FillDemoData();
+        }
+
         if ((TickType_t)(now - last_1s_tick) >= pdMS_TO_TICKS(100U))
         {
             last_1s_tick += pdMS_TO_TICKS(100U);
@@ -81,8 +90,6 @@ void AppDataTask(void *argument)
             FanApp_UpdateRpm(xTaskGetTickCount());
             DataApp_HomeStatus_Update();
         }
-
-
 
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(30U));
     }

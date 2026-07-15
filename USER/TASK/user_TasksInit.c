@@ -127,7 +127,7 @@ void User_Tasks_Init(void)
                                          "EGUIHandler",
                                          128U * 12U,
                                          NULL,
-                                         tskIDLE_PRIORITY + 1U,
+                                         tskIDLE_PRIORITY + 2U,
                                          &EGUIHandlerTaskHandle));
 
     User_Tasks_RequireStatus(xTaskCreate(TransmitTask,

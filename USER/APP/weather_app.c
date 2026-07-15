@@ -21,6 +21,34 @@ volatile uint8_t g_weather_persist_dirty = 0U;
 static uint8_t s_weather_cycle_has_now = 0U;
 static uint8_t s_weather_cycle_has_air = 0U;
 static uint8_t s_weather_cycle_has_future = 0U;
+static uint8_t s_weather_demo_index = 0U;
+
+typedef struct
+{
+    const char *text;
+    const char *forecast_text;
+    int icon;
+    int temp;
+    int temp_high;
+    int temp_low;
+    int pm25;
+    uint8_t hour;
+} WeatherDemoData_t;
+
+static const WeatherDemoData_t s_weather_demo_data[] = {
+    {"Clear",     "Clear",     100, 30, 34, 25, 12, 10U},
+    {"Clear",     "Clear",     150, 24, 29, 21, 10, 22U},
+    {"Cloudy",    "Cloudy",    101, 27, 31, 23, 18, 10U},
+    {"Cloudy",    "Cloudy",    151, 22, 27, 19, 20, 22U},
+    {"LightRain", "LightRain", 305, 25, 28, 22, 24, 10U},
+    {"LightRain", "LightRain", 309, 21, 25, 18, 26, 22U},
+    {"MidRain",   "MidRain",   306, 24, 27, 20, 30, 10U},
+    {"MidRain",   "MidRain",   314, 20, 24, 17, 32, 22U},
+    {"HeavyRain", "HeavyRain", 307, 22, 25, 19, 38, 10U},
+    {"HeavyRain", "HeavyRain", 310, 19, 23, 16, 42, 22U},
+    {"Snow",      "Snow",      400, -2,  1, -6, 15, 10U},
+    {"Snow",      "Snow",      401, -5, -1, -9, 16, 22U},
+};
 
 static WeatherScene_t Weather_ClassifyIcon(int icon)
 {
@@ -134,71 +162,100 @@ WeatherScene_t Weather_GetScene(void)
 
 void Weather_FillDemoData(void)
 {
-    strcpy(g_now_weather.text, "Rain");
-    g_now_weather.icon = 307;
-    g_now_weather.temp = 22;
-    g_now_weather.feelsLike = 24;
-    strcpy(g_now_weather.windDir, "East");
-    g_now_weather.windScale = 0;
-    g_now_weather.vis = 2;
-    g_now_weather.humidity = 15;
-    g_now_weather.aqi = 95;
-    g_now_weather.pm10 = 22;
-    g_now_weather.pm25 = 13;
+    const WeatherDemoData_t *demo = &s_weather_demo_data[s_weather_demo_index];
+    RTC_TimeTypeDef time = {0};
+    RTC_DateTypeDef date = {0};
+
+    copy_token(g_now_weather.text, sizeof(g_now_weather.text), demo->text);
+    g_now_weather.icon = demo->icon;
+    g_now_weather.temp = demo->temp;
+    g_now_weather.feelsLike = demo->temp;
+    copy_token(g_now_weather.windDir, sizeof(g_now_weather.windDir), "East");
+    g_now_weather.windScale = 2;
+    g_now_weather.vis = 10;
+    g_now_weather.humidity = 65;
+    g_now_weather.aqi = demo->pm25 + 20;
+    g_now_weather.pm10 = demo->pm25 + 8;
+    g_now_weather.pm25 = demo->pm25;
     g_now_weather.no2 = 10;
     g_now_weather.so2 = 6;
-    g_now_weather.co = 5.00f;
-    g_now_weather.o3 = 0;
+    g_now_weather.co = 0.50f;
+    g_now_weather.o3 = 70;
 
-    g_air_detail.aqi = 22;
-    g_air_detail.pm10 = 13;
-    g_air_detail.pm25 = 10;
-    g_air_detail.no2 = 6;
-    g_air_detail.so2 = 5;
-    g_air_detail.co = 0.00f;
-    g_air_detail.o3 = 70;
+    g_air_detail.aqi = g_now_weather.aqi;
+    g_air_detail.pm10 = g_now_weather.pm10;
+    g_air_detail.pm25 = demo->pm25;
+    g_air_detail.no2 = g_now_weather.no2;
+    g_air_detail.so2 = g_now_weather.so2;
+    g_air_detail.co = g_now_weather.co;
+    g_air_detail.o3 = g_now_weather.o3;
 
-    strcpy(g_future_weather[0].date, "2026-06-13");
-    strcpy(g_future_weather[0].weather, "HeavyRain");
-    g_future_weather[0].temp_high = 23;
-    g_future_weather[0].temp_low = 20;
-    g_future_weather[0].icon_id = 307;
+    copy_token(g_future_weather[0].date, sizeof(g_future_weather[0].date), "2026-07-15");
+    copy_token(g_future_weather[0].weather, sizeof(g_future_weather[0].weather), demo->forecast_text);
+    g_future_weather[0].temp_high = demo->temp_high;
+    g_future_weather[0].temp_low = demo->temp_low;
+    g_future_weather[0].icon_id = demo->icon;
 
-    strcpy(g_future_weather[1].date, "2026-06-14");
+    strcpy(g_future_weather[1].date, "2026-07-16");
     strcpy(g_future_weather[1].weather, "Cloudy");
     g_future_weather[1].temp_high = 32;
     g_future_weather[1].temp_low = 21;
     g_future_weather[1].icon_id = 101;
 
-    strcpy(g_future_weather[2].date, "2026-06-15");
+    strcpy(g_future_weather[2].date, "2026-07-17");
     strcpy(g_future_weather[2].weather, "Cloudy");
     g_future_weather[2].temp_high = 33;
     g_future_weather[2].temp_low = 23;
     g_future_weather[2].icon_id = 101;
 
-    strcpy(g_future_weather[3].date, "2026-06-16");
+    strcpy(g_future_weather[3].date, "2026-07-18");
     strcpy(g_future_weather[3].weather, "Rain");
     g_future_weather[3].temp_high = 34;
     g_future_weather[3].temp_low = 24;
     g_future_weather[3].icon_id = 305;
 
-    strcpy(g_future_weather[4].date, "2026-06-17");
+    strcpy(g_future_weather[4].date, "2026-07-19");
     strcpy(g_future_weather[4].weather, "Rain");
     g_future_weather[4].temp_high = 34;
     g_future_weather[4].temp_low = 25;
     g_future_weather[4].icon_id = 305;
 
-    strcpy(g_future_weather[5].date, "2026-06-18");
+    strcpy(g_future_weather[5].date, "2026-07-20");
     strcpy(g_future_weather[5].weather, "MidRain");
     g_future_weather[5].temp_high = 30;
     g_future_weather[5].temp_low = 25;
     g_future_weather[5].icon_id = 306;
 
-    strcpy(g_future_weather[6].date, "2026-06-19");
-    strcpy(g_future_weather[6].weather, "MidRain");
-    g_future_weather[6].temp_high = 29;
-    g_future_weather[6].temp_low = 25;
-    g_future_weather[6].icon_id = 306;
+    strcpy(g_future_weather[6].date, "2026-07-21");
+    strcpy(g_future_weather[6].weather, "Snow");
+    g_future_weather[6].temp_high = 1;
+    g_future_weather[6].temp_low = -6;
+    g_future_weather[6].icon_id = 400;
+
+    date.Year = 26U;
+    date.Month = RTC_MONTH_JULY;
+    date.Date = 15U;
+    date.WeekDay = RTC_WEEKDAY_WEDNESDAY;
+    time.Hours = demo->hour;
+    time.Minutes = 0U;
+    time.Seconds = 0U;
+    time.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    time.StoreOperation = RTC_STOREOPERATION_RESET;
+    (void)HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN);
+    (void)HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN);
+
+    log_printf("[WeatherDemo] %u/%u %s icon=%d %02u:00",
+               (unsigned int)(s_weather_demo_index + 1U),
+               (unsigned int)(sizeof(s_weather_demo_data) / sizeof(s_weather_demo_data[0])),
+               demo->text,
+               demo->icon,
+               (unsigned int)demo->hour);
+
+    s_weather_demo_index++;
+    if (s_weather_demo_index >= (sizeof(s_weather_demo_data) / sizeof(s_weather_demo_data[0])))
+    {
+        s_weather_demo_index = 0U;
+    }
 }
 
 uint8_t stm32_calc_crc8(uint8_t *ptr, uint16_t len)

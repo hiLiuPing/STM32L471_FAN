@@ -9,13 +9,13 @@
 /* Existing LVGL port used LV_COLOR_16_SWAP=1 for SPI RGB565 byte order. */
 #define EGUI_CONFIG_COLOR_16_SWAP 1
 
-/* Two 10-line PFB buffers let SPI DMA flush one tile while the next tile renders. */
+/* Two PFB buffers let SPI DMA flush one tile while the next tile renders. */
 #define EGUI_CONFIG_PFB_WIDTH        EGUI_CONFIG_SCREEN_WIDTH
-#define EGUI_CONFIG_PFB_HEIGHT       10
+#define EGUI_CONFIG_PFB_HEIGHT       14
 #define EGUI_CONFIG_PFB_BUFFER_COUNT 2
 
 #define EGUI_CONFIG_MAX_FPS          30
-#define EGUI_CONFIG_DIRTY_AREA_COUNT 8
+#define EGUI_CONFIG_DIRTY_AREA_COUNT 12
 
 /* Enable 8-bit alpha channel pixel accessor for egui_image_std */
 #define EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565_8 1
@@ -51,6 +51,6 @@
 
 /* Debug monitors: FPS/render time (bottom-right) and memory (bottom-left) */
 #define EGUI_CONFIG_DEBUG_PERF_MONITOR_SHOW 1
-#define EGUI_CONFIG_DEBUG_MEM_MONITOR_SHOW  1
+#define EGUI_CONFIG_DEBUG_MEM_MONITOR_SHOW  0
 
 #endif /* __APP_EGUI_CONFIG_H__ */
