@@ -29,12 +29,12 @@ void HardwareInitTask(void *argument)
     log_printf("start app");
     log_printf("step1: init leds...");
     LED_App_Init();
-    log_printf("step1.5: init fan...");
-    FanApp_Init();
     log_printf("step2: key init...");
     Key_Init();
     log_printf("step3: app init...");
     (void)APP_Sensors_Init();
+    log_printf("step3.1: init fan...");
+    FanApp_Init();
     DataApp_Init();
     SettingsApp_Init();
     UserMonitor_Init();

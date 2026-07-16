@@ -285,7 +285,7 @@ int32_t APP_Sensors_Init(void)
     I2C_Bus_Init(&i2c_bus_1);
     I2C_Bus_Init(&i2c_bus_2);
 
-    (void)AppConfig_Init(&g_ee_ctx, &hi2c1, EE24_ADDRESS_DEFAULT);
+    (void)AppConfig_Init(&g_ee_ctx, &i2c_bus_1, EE24_ADDRESS_DEFAULT);
     Init_Motion(&g_sensors_motion);
     Init_Env(&g_sensors_environment);
     Init_Battery(&g_sensors_battery);

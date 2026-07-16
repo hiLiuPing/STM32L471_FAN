@@ -16,10 +16,12 @@ extern "C" {
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN     5U
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX     360U
 
-#define SETTINGS_APP_BRIGHTNESS_DAY_DEFAULT            80U
-#define SETTINGS_APP_BRIGHTNESS_NIGHT_DEFAULT          20U
+#define SETTINGS_APP_BRIGHTNESS_DAY_PERCENT            95U
+#define SETTINGS_APP_BRIGHTNESS_NIGHT_PERCENT          35U
 #define SETTINGS_APP_BRIGHTNESS_MIN                    1U
 #define SETTINGS_APP_BRIGHTNESS_MAX                    100U
+
+#define SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT           1U
 
 #define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DEFAULT   5U
 #define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN       1U
@@ -30,8 +32,7 @@ typedef struct
     uint8_t poetry_popup_enabled;
     uint16_t poetry_popup_interval_min;
     uint16_t weather_time_sync_interval_min;
-    uint8_t brightness_day_percent;
-    uint8_t brightness_night_percent;
+    uint8_t rgb_pwr_enabled;
     uint16_t screen_idle_timeout_min;
 } AppSettings_t;
 
@@ -42,7 +43,6 @@ void SettingsApp_Apply(void);
 uint16_t SettingsApp_GetWeatherTimeSyncIntervalMin(void);
 uint16_t SettingsApp_GetScreenIdleTimeoutMin(void);
 uint8_t SettingsApp_GetActiveBrightnessPercent(void);
-void SettingsApp_PreviewBrightnessPercent(uint8_t percent);
 void SettingsApp_ApplyActiveBrightness(void);
 
 #ifdef __cplusplus

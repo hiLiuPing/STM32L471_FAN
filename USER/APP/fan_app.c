@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "eeprom_app.h"
+#include "log.h"
 #include "main.h"
 #include "pwm_fan_control.h"
 #include "sensors_app.h"
@@ -23,6 +25,39 @@
 #define FAN_APP_TACH_TIMER_HZ               1000000UL
 #define FAN_APP_TACH_PULSES_PER_REV         2UL
 #define FAN_APP_TACH_TIMEOUT_MS              1000U
+#define FAN_APP_SAVE_DELAY_MS                1000U
+#define FAN_APP_STORAGE_VERSION              1U
+
+#pragma pack(push, 1)
+typedef struct
+{
+    uint32_t magic;
+    uint8_t version;
+    uint8_t mode;
+    uint8_t base_speed_percent;
+    uint8_t intensity_percent;
+    uint16_t smart_temp_threshold_x10;
+    uint8_t smart_hum_threshold_percent;
+    uint8_t natural_amplitude_percent;
+    uint16_t auto_off_min;
+    uint8_t reserved[240];
+    uint16_t crc;
+} FanApp_Storage_t;
+#pragma pack(pop)
+
+typedef struct
+{
+    fan_mode_t mode;
+    uint8_t base_speed_percent;
+    uint8_t intensity_percent;
+    uint16_t smart_temp_threshold_x10;
+    uint8_t smart_hum_threshold_percent;
+    uint8_t natural_amplitude_percent;
+    uint16_t auto_off_min;
+} FanApp_PersistedSettings_t;
+
+_Static_assert(sizeof(FanApp_Storage_t) == EE_BLOCK_SIZE,
+               "FanApp storage must occupy one EEPROM block");
 
 
 static const char *const s_mode_names[FAN_MODE_COUNT] = {
@@ -47,6 +82,11 @@ static volatile uint32_t s_tach_sequence = 0U;
 static volatile uint8_t s_tach_capture_seen = 0U;
 static uint32_t s_tach_processed_sequence = 0U;
 static uint32_t s_tach_filtered_period_ticks = 0U;
+static TickType_t s_save_deadline_tick = 0U;
+static uint8_t s_save_dirty = 0U;
+static uint8_t s_pwm_running = 0U;
+
+static void FanApp_MarkSettingsDirty(TickType_t now);
 
 static uint8_t FanApp_ClampPercent(uint16_t value)
 {
@@ -81,6 +121,103 @@ static uint16_t FanApp_ClampRangeU16(uint16_t value, uint16_t min, uint16_t max)
     }
 
     return value;
+}
+
+static fan_mode_t FanApp_NormalizePersistedMode(uint8_t mode)
+{
+    if ((mode <= (uint8_t)FAN_MODE_OFF) || (mode >= (uint8_t)FAN_MODE_COUNT))
+    {
+        return FAN_MODE_MANUAL;
+    }
+
+    return (fan_mode_t)mode;
+}
+
+static void FanApp_GetPersistedSettings(FanApp_PersistedSettings_t *settings)
+{
+    memset(settings, 0, sizeof(*settings));
+    settings->mode = FanApp_NormalizePersistedMode((uint8_t)s_state.last_mode);
+    settings->base_speed_percent = s_state.base_speed_percent;
+    settings->intensity_percent = s_state.intensity_percent;
+    settings->smart_temp_threshold_x10 = s_state.smart_temp_threshold_x10;
+    settings->smart_hum_threshold_percent = s_state.smart_hum_threshold_percent;
+    settings->natural_amplitude_percent = s_state.natural_amplitude_percent;
+    settings->auto_off_min = s_state.auto_off_min;
+}
+
+static void FanApp_ToStorage(const FanApp_PersistedSettings_t *settings,
+                             FanApp_Storage_t *storage)
+{
+    memset(storage, 0, sizeof(*storage));
+    storage->version = FAN_APP_STORAGE_VERSION;
+    storage->mode = (uint8_t)settings->mode;
+    storage->base_speed_percent = settings->base_speed_percent;
+    storage->intensity_percent = settings->intensity_percent;
+    storage->smart_temp_threshold_x10 = settings->smart_temp_threshold_x10;
+    storage->smart_hum_threshold_percent = settings->smart_hum_threshold_percent;
+    storage->natural_amplitude_percent = settings->natural_amplitude_percent;
+    storage->auto_off_min = settings->auto_off_min;
+}
+
+static void FanApp_FromStorage(const FanApp_Storage_t *storage)
+{
+    s_state.power_on = 0U;
+    s_state.mode = FAN_MODE_OFF;
+    s_state.last_mode = FanApp_NormalizePersistedMode(storage->mode);
+    s_state.base_speed_percent = FanApp_ClampPercent(storage->base_speed_percent);
+    s_state.intensity_percent = FanApp_ClampPercent(storage->intensity_percent);
+    s_state.smart_temp_threshold_x10 =
+        FanApp_ClampRangeU16(storage->smart_temp_threshold_x10, 180U, 360U);
+    s_state.smart_hum_threshold_percent =
+        FanApp_ClampPercent(storage->smart_hum_threshold_percent);
+    s_state.natural_amplitude_percent =
+        (uint8_t)FanApp_ClampRangeU16(storage->natural_amplitude_percent, 0U, 60U);
+    s_state.auto_off_min =
+        FanApp_ClampRangeU16(storage->auto_off_min, 0U, FAN_APP_AUTO_OFF_MAX_MIN);
+}
+
+static bool FanApp_SaveSettings(const FanApp_PersistedSettings_t *settings)
+{
+    FanApp_Storage_t storage;
+
+    FanApp_ToStorage(settings, &storage);
+    return AppConfig_Save(OFF_FAN_SETTINGS, &storage, (uint16_t)sizeof(storage));
+}
+
+static bool FanApp_LoadSettings(void)
+{
+    FanApp_Storage_t storage;
+    FanApp_PersistedSettings_t loaded;
+    FanApp_PersistedSettings_t normalized;
+
+    if (!AppConfig_Load(OFF_FAN_SETTINGS, &storage, (uint16_t)sizeof(storage)) ||
+        (storage.version != FAN_APP_STORAGE_VERSION))
+    {
+        return false;
+    }
+
+    memset(&loaded, 0, sizeof(loaded));
+    loaded.mode = (fan_mode_t)storage.mode;
+    loaded.base_speed_percent = storage.base_speed_percent;
+    loaded.intensity_percent = storage.intensity_percent;
+    loaded.smart_temp_threshold_x10 = storage.smart_temp_threshold_x10;
+    loaded.smart_hum_threshold_percent = storage.smart_hum_threshold_percent;
+    loaded.natural_amplitude_percent = storage.natural_amplitude_percent;
+    loaded.auto_off_min = storage.auto_off_min;
+
+    FanApp_FromStorage(&storage);
+    FanApp_GetPersistedSettings(&normalized);
+    if (memcmp(&loaded, &normalized, sizeof(loaded)) != 0)
+    {
+        FanApp_MarkSettingsDirty(xTaskGetTickCount());
+    }
+    return true;
+}
+
+static void FanApp_MarkSettingsDirty(TickType_t now)
+{
+    s_save_dirty = 1U;
+    s_save_deadline_tick = now + pdMS_TO_TICKS(FAN_APP_SAVE_DELAY_MS);
 }
 
 static void FanApp_ResetPwmAlgorithm(void)
@@ -145,17 +282,36 @@ static void FanApp_ApplyHardware(uint8_t output_percent)
 {
     uint16_t compare = FanApp_PercentToCompare(output_percent);
 
-    __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, compare);
-    s_state.pwm_compare = compare;
-
     if (output_percent == 0U)
     {
         HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_RESET);
+        if (s_pwm_running != 0U)
+        {
+            if (HAL_TIM_PWM_Stop(&htim17, TIM_CHANNEL_1) == HAL_OK)
+            {
+                s_pwm_running = 0U;
+            }
+        }
+
+        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, compare);
+        s_state.pwm_compare = compare;
+        return;
     }
-    else
+
+    __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, compare);
+    s_state.pwm_compare = compare;
+
+    if (s_pwm_running == 0U)
     {
-        HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_SET);
+        if (HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1) != HAL_OK)
+        {
+            HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_RESET);
+            return;
+        }
+        s_pwm_running = 1U;
     }
+
+    HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_SET);
 }
 
 static void FanApp_UpdatePwmAlgorithmConfig(uint8_t scaled_base_percent)
@@ -379,10 +535,32 @@ static void FanApp_UpdateAutoOff(TickType_t now)
 
 void FanApp_Init(void)
 {
+    FanApp_PersistedSettings_t settings;
+
     FanApp_SetDefaults();
     FanApp_ResetTachState();
+    s_pwm_running = 0U;
+    s_save_dirty = 0U;
+    s_save_deadline_tick = 0U;
 
-    (void)HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);
+    if (FanApp_LoadSettings())
+    {
+        log_printf("[Fan] settings load ok");
+    }
+    else
+    {
+        FanApp_GetPersistedSettings(&settings);
+        if (FanApp_SaveSettings(&settings))
+        {
+            log_printf("[Fan] settings defaults saved");
+        }
+        else
+        {
+            FanApp_MarkSettingsDirty(xTaskGetTickCount());
+            log_printf("[Fan] settings use defaults");
+        }
+    }
+
     __HAL_TIM_SET_COUNTER(&htim2, 0U);
     (void)HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
     FanApp_ApplyHardware(0U);
@@ -606,6 +784,9 @@ uint8_t FanApp_ModeToIndex(fan_mode_t mode)
 void FanApp_HandleCommand(const fan_cmd_t *cmd)
 {
     TickType_t now = xTaskGetTickCount();
+    FanApp_PersistedSettings_t before;
+    FanApp_PersistedSettings_t after;
+    uint8_t force_save = 0U;
 
     if (cmd == NULL)
     {
@@ -613,6 +794,7 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
     }
 
     taskENTER_CRITICAL();
+    FanApp_GetPersistedSettings(&before);
 
     switch (cmd->type)
     {
@@ -625,18 +807,36 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
         break;
 
     case FAN_CMD_SET_SPEED:
-        s_state.base_speed_percent = FanApp_ClampPercent(cmd->value);
-        s_pwm_last_tick = 0U;
+        {
+            uint8_t value = FanApp_ClampPercent(cmd->value);
+            if (s_state.base_speed_percent != value)
+            {
+                s_state.base_speed_percent = value;
+                s_pwm_last_tick = 0U;
+            }
+        }
         break;
 
     case FAN_CMD_SET_INTENSITY:
-        s_state.intensity_percent = FanApp_ClampPercent(cmd->value);
-        s_pwm_last_tick = 0U;
+        {
+            uint8_t value = FanApp_ClampPercent(cmd->value);
+            if (s_state.intensity_percent != value)
+            {
+                s_state.intensity_percent = value;
+                s_pwm_last_tick = 0U;
+            }
+        }
         break;
 
     case FAN_CMD_SET_SMART_TEMP:
-        s_state.smart_temp_threshold_x10 = FanApp_ClampRangeU16(cmd->value, 180U, 360U);
-        s_pwm_last_tick = 0U;
+        {
+            uint16_t value = FanApp_ClampRangeU16(cmd->value, 180U, 360U);
+            if (s_state.smart_temp_threshold_x10 != value)
+            {
+                s_state.smart_temp_threshold_x10 = value;
+                s_pwm_last_tick = 0U;
+            }
+        }
         break;
 
     case FAN_CMD_SET_SMART_HUM:
@@ -644,26 +844,84 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
         break;
 
     case FAN_CMD_SET_NATURAL_AMPLITUDE:
-        s_state.natural_amplitude_percent = FanApp_ClampRangeU16(cmd->value, 0U, 60U);
-        s_pwm_last_tick = 0U;
+        {
+            uint8_t value = (uint8_t)FanApp_ClampRangeU16(cmd->value, 0U, 60U);
+            if (s_state.natural_amplitude_percent != value)
+            {
+                s_state.natural_amplitude_percent = value;
+                s_pwm_last_tick = 0U;
+            }
+        }
         break;
 
     case FAN_CMD_SET_AUTO_OFF_MIN:
-        s_state.auto_off_min = FanApp_ClampRangeU16(cmd->value, 0U, FAN_APP_AUTO_OFF_MAX_MIN);
-        FanApp_ResetAutoOffTimer(now);
+        {
+            uint16_t value = FanApp_ClampRangeU16(cmd->value, 0U, FAN_APP_AUTO_OFF_MAX_MIN);
+            if (s_state.auto_off_min != value)
+            {
+                s_state.auto_off_min = value;
+                FanApp_ResetAutoOffTimer(now);
+            }
+        }
         break;
 
     case FAN_CMD_RESET_DEFAULTS:
         FanApp_SetDefaults();
         FanApp_ResetTachCapture();
         FanApp_ApplyHardware(0U);
+        force_save = 1U;
         break;
 
     default:
         break;
     }
 
+    FanApp_GetPersistedSettings(&after);
+    if ((force_save != 0U) || (memcmp(&before, &after, sizeof(before)) != 0))
+    {
+        FanApp_MarkSettingsDirty(now);
+    }
+
     taskEXIT_CRITICAL();
+}
+
+void FanApp_PersistPending(TickType_t now)
+{
+    FanApp_PersistedSettings_t settings;
+    TickType_t save_deadline = 0U;
+    uint8_t save_due = 0U;
+
+    taskENTER_CRITICAL();
+    if ((s_save_dirty != 0U) &&
+        ((int32_t)(now - s_save_deadline_tick) >= 0))
+    {
+        FanApp_GetPersistedSettings(&settings);
+        save_deadline = s_save_deadline_tick;
+        save_due = 1U;
+    }
+    taskEXIT_CRITICAL();
+
+    if (save_due == 0U)
+    {
+        return;
+    }
+
+    if (FanApp_SaveSettings(&settings))
+    {
+        taskENTER_CRITICAL();
+        if (s_save_deadline_tick == save_deadline)
+        {
+            s_save_dirty = 0U;
+        }
+        taskEXIT_CRITICAL();
+        log_printf("[Fan] settings saved");
+    }
+    else
+    {
+        taskENTER_CRITICAL();
+        s_save_deadline_tick = now + pdMS_TO_TICKS(FAN_APP_SAVE_DELAY_MS);
+        taskEXIT_CRITICAL();
+    }
 }
 
 void FanApp_Service(TickType_t now)

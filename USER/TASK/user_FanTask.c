@@ -29,6 +29,11 @@ void FanTask(void *argument)
             }
         }
 
-        FanApp_Service(xTaskGetTickCount());
+        {
+            TickType_t now = xTaskGetTickCount();
+
+            FanApp_Service(now);
+            FanApp_PersistPending(now);
+        }
     }
 }

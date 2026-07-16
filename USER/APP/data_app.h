@@ -43,6 +43,9 @@ typedef struct
     uint16_t weather_icon_id;
     uint8_t weather_scene;
     uint8_t is_day;
+    uint8_t battery_percent;
+    uint8_t charging;
+    uint8_t charge_full;
     uint32_t version;
 } DataApp_HomeStatus_t;
 

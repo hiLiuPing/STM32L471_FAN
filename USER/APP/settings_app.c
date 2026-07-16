@@ -5,12 +5,14 @@
 #include "data_app.h"
 #include "eeprom_app.h"
 #include "lcd_init.h"
+#include "led_app.h"
 #include "log.h"
 #include "ui_poetry_popup.h"
 #include "weather_app.h"
 
-#define SETTINGS_APP_STORAGE_VERSION     2U
-#define SETTINGS_APP_STORAGE_VERSION_OLD 1U
+#define SETTINGS_APP_STORAGE_VERSION     3U
+#define SETTINGS_APP_STORAGE_VERSION_V2  2U
+#define SETTINGS_APP_STORAGE_VERSION_V1  1U
 
 #pragma pack(push, 1)
 typedef struct
@@ -20,31 +22,21 @@ typedef struct
     uint8_t poetry_popup_enabled;
     uint16_t poetry_popup_interval_min;
     uint16_t weather_time_sync_interval_min;
-    uint8_t brightness_day_percent;
-    uint8_t brightness_night_percent;
+    uint8_t rgb_pwr_enabled;
+    uint8_t legacy_brightness_night_percent;
     uint16_t screen_idle_timeout_min;
     uint8_t reserved[240];
     uint16_t crc;
 } SettingsApp_Storage_t;
 #pragma pack(pop)
 
+_Static_assert(sizeof(SettingsApp_Storage_t) == EE_BLOCK_SIZE,
+               "Settings storage must remain one EEPROM block");
+
 static AppSettings_t s_settings;
 static uint8_t s_settings_initialized = 0U;
 
 static uint16_t SettingsApp_ClampU16(uint16_t value, uint16_t min_value, uint16_t max_value)
-{
-    if (value < min_value)
-    {
-        return min_value;
-    }
-    if (value > max_value)
-    {
-        return max_value;
-    }
-    return value;
-}
-
-static uint8_t SettingsApp_ClampU8(uint8_t value, uint8_t min_value, uint8_t max_value)
 {
     if (value < min_value)
     {
@@ -67,8 +59,7 @@ static void SettingsApp_LoadDefaults(AppSettings_t *settings)
     settings->poetry_popup_enabled = 1U;
     settings->poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT;
     settings->weather_time_sync_interval_min = SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DEFAULT;
-    settings->brightness_day_percent = SETTINGS_APP_BRIGHTNESS_DAY_DEFAULT;
-    settings->brightness_night_percent = SETTINGS_APP_BRIGHTNESS_NIGHT_DEFAULT;
+    settings->rgb_pwr_enabled = SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
     settings->screen_idle_timeout_min = SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DEFAULT;
 }
 
@@ -86,12 +77,7 @@ static void SettingsApp_Normalize(AppSettings_t *settings)
     settings->weather_time_sync_interval_min = SettingsApp_ClampU16(settings->weather_time_sync_interval_min,
                                                                      SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN,
                                                                      SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX);
-    settings->brightness_day_percent = SettingsApp_ClampU8(settings->brightness_day_percent,
-                                                           SETTINGS_APP_BRIGHTNESS_MIN,
-                                                           SETTINGS_APP_BRIGHTNESS_MAX);
-    settings->brightness_night_percent = SettingsApp_ClampU8(settings->brightness_night_percent,
-                                                             SETTINGS_APP_BRIGHTNESS_MIN,
-                                                             SETTINGS_APP_BRIGHTNESS_MAX);
+    settings->rgb_pwr_enabled = (settings->rgb_pwr_enabled != 0U) ? 1U : 0U;
     settings->screen_idle_timeout_min = SettingsApp_ClampU16(settings->screen_idle_timeout_min,
                                                              SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN,
                                                              SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX);
@@ -107,8 +93,9 @@ static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSet
     settings->poetry_popup_enabled = storage->poetry_popup_enabled;
     settings->poetry_popup_interval_min = storage->poetry_popup_interval_min;
     settings->weather_time_sync_interval_min = storage->weather_time_sync_interval_min;
-    settings->brightness_day_percent = storage->brightness_day_percent;
-    settings->brightness_night_percent = storage->brightness_night_percent;
+    settings->rgb_pwr_enabled = (storage->version == SETTINGS_APP_STORAGE_VERSION) ?
+                                    storage->rgb_pwr_enabled :
+                                    SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
     settings->screen_idle_timeout_min = storage->screen_idle_timeout_min;
     SettingsApp_Normalize(settings);
 }
@@ -125,8 +112,7 @@ static void SettingsApp_ToStorage(const AppSettings_t *settings, SettingsApp_Sto
     storage->poetry_popup_enabled = settings->poetry_popup_enabled;
     storage->poetry_popup_interval_min = settings->poetry_popup_interval_min;
     storage->weather_time_sync_interval_min = settings->weather_time_sync_interval_min;
-    storage->brightness_day_percent = settings->brightness_day_percent;
-    storage->brightness_night_percent = settings->brightness_night_percent;
+    storage->rgb_pwr_enabled = settings->rgb_pwr_enabled;
     storage->screen_idle_timeout_min = settings->screen_idle_timeout_min;
 }
 
@@ -147,12 +133,17 @@ void SettingsApp_Init(void)
 
     if (AppConfig_Load(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage)) &&
         ((storage.version == SETTINGS_APP_STORAGE_VERSION) ||
-         (storage.version == SETTINGS_APP_STORAGE_VERSION_OLD)))
+         (storage.version == SETTINGS_APP_STORAGE_VERSION_V2) ||
+         (storage.version == SETTINGS_APP_STORAGE_VERSION_V1)))
     {
         SettingsApp_FromStorage(&storage, &s_settings);
-        if (storage.version == SETTINGS_APP_STORAGE_VERSION_OLD)
+        if (storage.version == SETTINGS_APP_STORAGE_VERSION_V1)
         {
             s_settings.poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT;
+        }
+        if (storage.version != SETTINGS_APP_STORAGE_VERSION)
+        {
+            s_settings.rgb_pwr_enabled = SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
             SettingsApp_Normalize(&s_settings);
             need_save = true;
         }
@@ -218,8 +209,8 @@ uint8_t SettingsApp_GetActiveBrightnessPercent(void)
     }
 
     base_percent = (Time_IsDaytime() != 0U) ?
-                       s_settings.brightness_day_percent :
-                       s_settings.brightness_night_percent;
+                       SETTINGS_APP_BRIGHTNESS_DAY_PERCENT :
+                       SETTINGS_APP_BRIGHTNESS_NIGHT_PERCENT;
 
     switch (Weather_GetScene())
     {
@@ -252,13 +243,6 @@ uint8_t SettingsApp_GetActiveBrightnessPercent(void)
     return (uint8_t)adjusted_percent;
 }
 
-void SettingsApp_PreviewBrightnessPercent(uint8_t percent)
-{
-    LCD_SetBacklightPercent(SettingsApp_ClampU8(percent,
-                                                SETTINGS_APP_BRIGHTNESS_MIN,
-                                                SETTINGS_APP_BRIGHTNESS_MAX));
-}
-
 void SettingsApp_ApplyActiveBrightness(void)
 {
     LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
@@ -282,6 +266,8 @@ void SettingsApp_Apply(void)
 
     ui_poetry_popup_set_timing((uint16_t)interval_s, UI_POETRY_POPUP_DEFAULT_DURATION_S);
     ui_poetry_popup_set_enabled(s_settings.poetry_popup_enabled != 0U);
+    LED_CMD_OnEvent(LED_TARGET_PWR,
+                    (s_settings.rgb_pwr_enabled != 0U) ? LED_EVT_RAINBOW : LED_EVT_STOP);
     SettingsApp_ApplyActiveBrightness();
 }
 

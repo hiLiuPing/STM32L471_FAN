@@ -79,6 +79,7 @@ uint8_t FanApp_ModeToIndex(fan_mode_t mode);
 /* FanTask-only executors. Other tasks should use FanApp_Set... or FanApp_SendCommand. */
 void FanApp_HandleCommand(const fan_cmd_t *cmd);
 void FanApp_Service(TickType_t now);
+void FanApp_PersistPending(TickType_t now);
 
 #ifdef __cplusplus
 }

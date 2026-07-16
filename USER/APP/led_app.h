@@ -26,18 +26,15 @@ typedef enum {
     LED_EVT_STOP,
 } LED_EVT_t;
 
- 
-extern LED_Object_t led_blue;  // PE3 -> TIM3_CH1
-extern LED_Object_t led_green; // PE4 -> TIM3_CH2
-extern LED_Object_t led_red;   // PE5 -> TIM3_CH3
-extern LED_Object_t led2_blue;
-extern LED_Object_t led2_green;
-extern LED_Object_t led2_red;
-
-extern RGB_Object_t rgb;
+typedef enum {
+    LED_TARGET_PWR = 0,
+    LED_TARGET_SW,
+    LED_TARGET_COUNT
+} LED_Target_t;
 
 void LED_App_Init(void);
-void LED_CMD_OnEvent(LED_EVT_t event);
+void LED_App_Update(uint32_t dt);
+void LED_CMD_OnEvent(LED_Target_t target, LED_EVT_t event);
 
 #ifdef __cplusplus
 }

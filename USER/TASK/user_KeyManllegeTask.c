@@ -5,6 +5,7 @@
 #include "task.h"
 
 #include "key.h"
+#include "led_app.h"
 #include "log.h"
 
 #include "user_TasksInit.h"
@@ -18,6 +19,11 @@ static void KeyManager_Dispatch(const key_event_t *key_event)
     if (key_event == NULL)
     {
         return;
+    }
+
+    if (key_event->type == KEY_EVT_CLICK)
+    {
+        LED_CMD_OnEvent(LED_TARGET_SW, LED_EVT_HEARTBEAT_BLUE);
     }
 
     switch (key_event->type)

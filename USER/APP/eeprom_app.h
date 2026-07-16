@@ -9,11 +9,12 @@ extern "C" {
 #include <stdint.h>
 
 #include "ee24.h"
-#include "main.h"
+#include "i2c_bus.h"
 
 typedef struct
 {
     EE24_HandleTypeDef handle;
+    I2C_Bus_t *bus;
     uint8_t initialized;
 } eeprom_ctx_t;
 
@@ -24,6 +25,7 @@ extern eeprom_ctx_t g_ee_ctx;
 #define OFF_CALIB_DATA      (EE_BLOCK_SIZE * 1U)
 #define OFF_WEATHER_CONFIG  (EE_BLOCK_SIZE * 2U)
 #define OFF_APP_SETTINGS    (EE_BLOCK_SIZE * 3U)
+#define OFF_FAN_SETTINGS    (EE_BLOCK_SIZE * 4U)
 
 #pragma pack(push, 1)
 typedef struct
@@ -44,7 +46,7 @@ typedef struct
 } CalibData_t;
 #pragma pack(pop)
 
-bool AppConfig_Init(eeprom_ctx_t *ctx, I2C_HandleTypeDef *hi2c, uint8_t dev_addr);
+bool AppConfig_Init(eeprom_ctx_t *ctx, I2C_Bus_t *bus, uint8_t dev_addr);
 bool AppConfig_Load(uint32_t offset, void *data, uint16_t size);
 bool AppConfig_Save(uint32_t offset, void *data, uint16_t size);
 uint16_t AppConfig_CRC16(uint8_t *ptr, uint16_t len);

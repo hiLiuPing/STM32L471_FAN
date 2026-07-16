@@ -9,37 +9,58 @@
 #include "page_manager.h"
 #include "settings_app.h"
 #include "ui_common.h"
-#include "widget/egui_view_group.h"
-#include "widget/egui_view_list.h"
+#include "widget/egui_view.h"
 
-#define UI_SETTING_ITEM_COUNT 6U
-#define UI_SETTING_ROW_H      24
-#define UI_SETTING_LIST_Y     0
-#define UI_SETTING_VALUE_STEP  1U
-#define UI_SETTING_FAST_STEP   5U
+#define UI_SETTING_ITEM_COUNT       5U
+#define UI_SETTING_FRAME_MS         50U
+#define UI_SETTING_ROW_X            132
+#define UI_SETTING_ROW_W            288
+#define UI_SETTING_ROW_Y            10
+#define UI_SETTING_ROW_H            23
+#define UI_SETTING_ROW_GAP          3
+#define UI_SETTING_VALUE_STEP       1U
+#define UI_SETTING_FAST_STEP        5U
+#define UI_SETTING_ENTER_STEP_MS    65U
+#define UI_SETTING_ENTER_LENGTH_MS  260U
+#define UI_SETTING_CONFIRM_MS       360U
+#define UI_SETTING_PARTICLE_COUNT   8U
 
 typedef enum
 {
     UI_SETTING_ITEM_POETRY_ENABLE = 0,
     UI_SETTING_ITEM_POETRY_INTERVAL,
     UI_SETTING_ITEM_WEATHER_INTERVAL,
-    UI_SETTING_ITEM_BRIGHTNESS_DAY,
-    UI_SETTING_ITEM_BRIGHTNESS_NIGHT,
+    UI_SETTING_ITEM_RGB_PWR_ENABLE,
     UI_SETTING_ITEM_IDLE_TIMEOUT
 } ui_setting_item_t;
 
 typedef struct
 {
-    egui_view_group_t base;
-    egui_view_list_t list;
+    egui_view_t base;
     egui_timer_t timer;
     AppSettings_t settings;
     AppSettings_t edit_backup;
+    uint32_t enter_tick;
+    uint32_t frame_tick;
+    uint32_t confirm_until;
+    uint16_t hue;
     uint8_t selected_index;
     uint8_t editing;
     uint8_t setting_active;
-    char item_text[UI_SETTING_ITEM_COUNT][56];
+    uint8_t animation_active;
 } ui_setting_page_t;
+
+static const char *const s_setting_labels[UI_SETTING_ITEM_COUNT] = {
+    "Poetry popup",
+    "Poetry gap",
+    "Weather sync",
+    "RGB rainbow",
+    "Screen sleep",
+};
+
+static const int16_t s_particle_base_x[UI_SETTING_PARTICLE_COUNT] = {12, 31, 55, 79, 102, 19, 66, 111};
+static const int16_t s_particle_base_y[UI_SETTING_PARTICLE_COUNT] = {18, 37, 24, 49, 31, 72, 84, 66};
+static const uint8_t s_particle_size[UI_SETTING_PARTICLE_COUNT] = {1, 2, 1, 2, 1, 1, 2, 1};
 
 static ui_setting_page_t s_setting_page;
 static egui_view_api_t s_setting_api;
@@ -48,21 +69,73 @@ egui_view_t *ui_SettingPage = NULL;
 
 static void ui_SettingPage_on_draw(egui_view_t *self);
 static void ui_SettingPage_timer_cb(egui_timer_t *timer);
-static void ui_SettingPage_rebuild_items(void);
-static void ui_SettingPage_format_item(uint8_t index, char *buf, uint16_t size);
 static void ui_SettingPage_move_selection(int8_t delta);
 static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast);
 static bool ui_SettingPage_commit_edit(void);
 
+static uint32_t ui_setting_hsv_to_rgb(uint16_t hue, uint8_t saturation, uint8_t value)
+{
+    uint16_t remainder;
+    uint8_t region;
+    uint8_t p;
+    uint8_t q;
+    uint8_t t;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+
+    hue %= 360U;
+    region = (uint8_t)(hue / 60U);
+    remainder = (uint16_t)(((hue % 60U) * 255U) / 60U);
+    p = (uint8_t)(((uint16_t)value * (255U - saturation)) >> 8);
+    q = (uint8_t)(((uint16_t)value * (255U - (((uint16_t)saturation * remainder) >> 8))) >> 8);
+    t = (uint8_t)(((uint16_t)value * (255U - (((uint16_t)saturation * (255U - remainder)) >> 8))) >> 8);
+
+    switch (region)
+    {
+    case 0U: r = value; g = t; b = p; break;
+    case 1U: r = q; g = value; b = p; break;
+    case 2U: r = p; g = value; b = t; break;
+    case 3U: r = p; g = q; b = value; break;
+    case 4U: r = t; g = p; b = value; break;
+    default: r = value; g = p; b = q; break;
+    }
+
+    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+}
+
+static uint16_t ui_setting_adjust_u16(uint16_t value, int8_t delta, uint16_t step, uint16_t min_value, uint16_t max_value)
+{
+    int32_t next = (int32_t)value + ((int32_t)delta * (int32_t)step);
+
+    if (next < (int32_t)min_value)
+    {
+        next = min_value;
+    }
+    if (next > (int32_t)max_value)
+    {
+        next = max_value;
+    }
+    return (uint16_t)next;
+}
+
+static void ui_SettingPage_activate_animation(void)
+{
+    uint32_t now = egui_timer_get_current_time();
+
+    s_setting_page.enter_tick = now;
+    s_setting_page.frame_tick = now;
+    s_setting_page.animation_active = 1U;
+}
+
 void ui_SettingPage_screen_init(void)
 {
-    egui_view_t *view = EGUI_VIEW_OF(&s_setting_page.base);
-    egui_view_t *list_view = EGUI_VIEW_OF(&s_setting_page.list);
+    egui_view_t *view = &s_setting_page.base;
 
     memset(&s_setting_page, 0, sizeof(s_setting_page));
     ui_SettingPage = view;
 
-    egui_view_group_init(view, egui_port_get_core());
+    egui_view_init(view, egui_port_get_core());
     egui_view_copy_api(view, &s_setting_api);
     s_setting_api.on_draw = ui_SettingPage_on_draw;
     view->api = &s_setting_api;
@@ -70,34 +143,17 @@ void ui_SettingPage_screen_init(void)
     egui_view_set_size(view, UI_SCREEN_W, UI_SCREEN_H);
     egui_view_set_visible(view, 1);
 
-    egui_view_list_init(list_view, egui_port_get_core());
-    egui_view_set_position(list_view, 0, UI_SETTING_LIST_Y);
-    egui_view_list_set_item_height(list_view, UI_SETTING_ROW_H);
-    egui_view_scroll_set_size(list_view, UI_SCREEN_W, UI_SCREEN_H);
-    egui_view_group_add_child(view, list_view);
-
     SettingsApp_Get(&s_setting_page.settings);
-    s_setting_page.selected_index = 0U;
-    s_setting_page.editing = 0U;
-    s_setting_page.setting_active = 0U;
-    ui_SettingPage_rebuild_items();
-
-    egui_view_start_periodic(view, &s_setting_page.timer, view, ui_SettingPage_timer_cb, 1000U);
+    ui_SettingPage_activate_animation();
+    egui_view_start_periodic(view, &s_setting_page.timer, view, ui_SettingPage_timer_cb, UI_SETTING_FRAME_MS);
 }
 
 void ui_SettingPage_screen_destroy(void)
 {
-    if ((s_setting_page.editing != 0U) &&
-        ((s_setting_page.selected_index == UI_SETTING_ITEM_BRIGHTNESS_DAY) ||
-         (s_setting_page.selected_index == UI_SETTING_ITEM_BRIGHTNESS_NIGHT)))
-    {
-        SettingsApp_ApplyActiveBrightness();
-    }
-
     s_setting_page.setting_active = 0U;
     s_setting_page.editing = 0U;
     s_setting_page.selected_index = 0U;
-    ui_SettingPage_rebuild_items();
+    s_setting_page.animation_active = 0U;
 }
 
 bool ui_SettingPage_key_handler(void *key_event)
@@ -108,10 +164,15 @@ bool ui_SettingPage_key_handler(void *key_event)
     {
         return false;
     }
-
     if ((event->type != KEY_EVT_CLICK) && (event->type != KEY_EVT_REPEAT) && (event->type != KEY_EVT_LONG))
     {
         return false;
+    }
+
+    if (s_setting_page.animation_active == 0U)
+    {
+        SettingsApp_Get(&s_setting_page.settings);
+        ui_SettingPage_activate_animation();
     }
 
     if (s_setting_page.setting_active == 0U)
@@ -122,11 +183,9 @@ bool ui_SettingPage_key_handler(void *key_event)
             s_setting_page.setting_active = 1U;
             s_setting_page.editing = 0U;
             s_setting_page.selected_index = 0U;
-            ui_SettingPage_rebuild_items();
             egui_view_invalidate_full(ui_SettingPage);
             return true;
         }
-
         return ui_page_consume_nav_key_event(key_event);
     }
 
@@ -149,13 +208,7 @@ bool ui_SettingPage_key_handler(void *key_event)
         if ((event->id == KEY_ID_PWR) && (event->type == KEY_EVT_CLICK))
         {
             s_setting_page.settings = s_setting_page.edit_backup;
-            if ((s_setting_page.selected_index == UI_SETTING_ITEM_BRIGHTNESS_DAY) ||
-                (s_setting_page.selected_index == UI_SETTING_ITEM_BRIGHTNESS_NIGHT))
-            {
-                SettingsApp_ApplyActiveBrightness();
-            }
             s_setting_page.editing = 0U;
-            ui_SettingPage_rebuild_items();
             egui_view_invalidate_full(ui_SettingPage);
             return true;
         }
@@ -176,7 +229,6 @@ bool ui_SettingPage_key_handler(void *key_event)
     {
         s_setting_page.edit_backup = s_setting_page.settings;
         s_setting_page.editing = 1U;
-        ui_SettingPage_rebuild_items();
         egui_view_invalidate_full(ui_SettingPage);
         return true;
     }
@@ -185,21 +237,177 @@ bool ui_SettingPage_key_handler(void *key_event)
         s_setting_page.setting_active = 0U;
         s_setting_page.editing = 0U;
         s_setting_page.selected_index = 0U;
-        ui_SettingPage_rebuild_items();
         egui_view_invalidate_full(ui_SettingPage);
         return true;
     }
 
-    return ui_page_consume_nav_key_event(key_event);
+    return true;
 }
 
 static void ui_SettingPage_timer_cb(egui_timer_t *timer)
 {
     egui_view_t *view = (egui_view_t *)timer->user_data;
+    uint32_t now;
 
-    if ((view != NULL) && egui_view_get_visible(view))
+    if ((view == NULL) || !egui_view_get_visible(view))
     {
-        egui_view_invalidate_full(view);
+        return;
+    }
+
+    if (s_setting_page.animation_active == 0U)
+    {
+        SettingsApp_Get(&s_setting_page.settings);
+        ui_SettingPage_activate_animation();
+    }
+
+    now = egui_timer_get_current_time();
+    s_setting_page.frame_tick = now;
+    s_setting_page.hue = (uint16_t)((s_setting_page.hue + 4U) % 360U);
+    egui_view_invalidate_full(view);
+}
+
+static void ui_setting_draw_switch(egui_canvas_t *canvas, int16_t x, int16_t y, uint8_t enabled, uint32_t accent)
+{
+    uint32_t track = (enabled != 0U) ? accent : 0x334155;
+    int16_t knob_x = (enabled != 0U) ? (x + 25) : (x + 7);
+
+    egui_canvas_draw_round_rectangle_fill(canvas, x, y, 38, 16, 8, ui_color(track), EGUI_ALPHA_100);
+    egui_canvas_draw_circle_fill_basic(canvas, knob_x, y + 8, 5, ui_color(0xF8FAFC), EGUI_ALPHA_100);
+}
+
+static void ui_setting_draw_background(egui_canvas_t *canvas)
+{
+    uint32_t accent = ui_setting_hsv_to_rgb(s_setting_page.hue, 210U, 255U);
+    uint16_t phase = (uint16_t)((s_setting_page.frame_tick / 20U) % UI_SCREEN_W);
+
+    ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, 0x07111F);
+    ui_draw_rect(canvas, 0, 0, 128, UI_SCREEN_H, 0x0B1F33);
+
+    for (uint8_t i = 0U; i < 6U; i++)
+    {
+        int16_t x = (int16_t)(((phase + (uint16_t)i * 86U) % (UI_SCREEN_W + 70U)) - 35);
+        uint32_t color = ui_setting_hsv_to_rgb((uint16_t)(s_setting_page.hue + (uint16_t)i * 54U), 220U, 230U);
+        egui_canvas_draw_line(canvas, x, 0, x + 36, UI_SCREEN_H, 2, ui_color(color), EGUI_ALPHA_20);
+    }
+
+    for (uint8_t i = 0U; i < UI_SETTING_PARTICLE_COUNT; i++)
+    {
+        int16_t drift = (int16_t)(((s_setting_page.frame_tick / (35U + (uint32_t)i * 3U)) + (uint32_t)i * 9U) % 28U);
+        int16_t y = (int16_t)((s_particle_base_y[i] + drift) % 104);
+        uint32_t color = ui_setting_hsv_to_rgb((uint16_t)(s_setting_page.hue + (uint16_t)i * 38U), 190U, 255U);
+        egui_canvas_draw_circle_fill_basic(canvas, s_particle_base_x[i], y + 7, s_particle_size[i], ui_color(color), EGUI_ALPHA_80);
+    }
+
+    egui_canvas_draw_circle_basic(canvas, 64, 52, 31, 2, ui_color(accent), EGUI_ALPHA_80);
+    egui_canvas_draw_circle_basic(canvas, 64, 52, 23, 1, ui_color(0xE2E8F0), EGUI_ALPHA_40);
+    for (uint8_t i = 0U; i < 3U; i++)
+    {
+        uint16_t hue = (uint16_t)(s_setting_page.hue + (uint16_t)i * 120U);
+        int16_t offset = (int16_t)(((s_setting_page.frame_tick / 50U) + (uint32_t)i * 10U) % 30U);
+        egui_canvas_draw_circle_fill_basic(canvas, 48 + offset, 47 + (int16_t)i * 6, 5, ui_color(ui_setting_hsv_to_rgb(hue, 255U, 255U)), EGUI_ALPHA_90);
+    }
+
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_18_4), "RGB", 38, 88, 52, 22,
+                 EGUI_ALIGN_CENTER, 0xF8FAFC);
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4),
+                 (s_setting_page.settings.rgb_pwr_enabled != 0U) ? "RAINBOW ON" : "RAINBOW OFF",
+                 18, 111, 92, 15, EGUI_ALIGN_CENTER, accent);
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4),
+                 (s_setting_page.setting_active != 0U) ? "PWR BACK  OK EDIT" : "OK SETTINGS",
+                 7, 128, 114, 12, EGUI_ALIGN_CENTER, 0x94A3B8);
+}
+
+static void ui_setting_format_value(uint8_t index, char *buf, uint16_t size)
+{
+    switch ((ui_setting_item_t)index)
+    {
+    case UI_SETTING_ITEM_POETRY_INTERVAL:
+        (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.poetry_popup_interval_min);
+        break;
+    case UI_SETTING_ITEM_WEATHER_INTERVAL:
+        (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.weather_time_sync_interval_min);
+        break;
+    case UI_SETTING_ITEM_IDLE_TIMEOUT:
+        (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.screen_idle_timeout_min);
+        break;
+    default:
+        buf[0] = '\0';
+        break;
+    }
+}
+
+static void ui_setting_draw_rows(egui_canvas_t *canvas)
+{
+    const egui_font_t *font = EGUI_FONT_OF(&egui_res_font_montserrat_12_4);
+    uint32_t elapsed = s_setting_page.frame_tick - s_setting_page.enter_tick;
+    uint32_t accent = ui_setting_hsv_to_rgb(s_setting_page.hue, 225U, 255U);
+    uint8_t pulse = (uint8_t)((s_setting_page.frame_tick / 80U) % 20U);
+
+    if (pulse > 10U)
+    {
+        pulse = (uint8_t)(20U - pulse);
+    }
+
+    for (uint8_t i = 0U; i < UI_SETTING_ITEM_COUNT; i++)
+    {
+        uint32_t delay = (uint32_t)i * UI_SETTING_ENTER_STEP_MS;
+        uint32_t progress = (elapsed > delay) ? (elapsed - delay) : 0U;
+        int16_t slide = 0;
+        int16_t x;
+        int16_t y = (int16_t)(UI_SETTING_ROW_Y + (int16_t)i * (UI_SETTING_ROW_H + UI_SETTING_ROW_GAP));
+        uint8_t selected = (uint8_t)((s_setting_page.setting_active != 0U) && (s_setting_page.selected_index == i));
+        uint32_t fill = selected ? 0x123451 : 0x0D2134;
+        uint32_t border = selected ? accent : 0x1E3A50;
+        char value[20];
+
+        if (progress < UI_SETTING_ENTER_LENGTH_MS)
+        {
+            slide = (int16_t)(46U - ((progress * 46U) / UI_SETTING_ENTER_LENGTH_MS));
+        }
+        x = UI_SETTING_ROW_X + slide;
+
+        egui_canvas_draw_round_rectangle_fill(canvas, x, y, UI_SETTING_ROW_W, UI_SETTING_ROW_H, 5, ui_color(fill), EGUI_ALPHA_90);
+        egui_canvas_draw_round_rectangle(canvas, x, y, UI_SETTING_ROW_W, UI_SETTING_ROW_H, 5,
+                                         selected ? 2 : 1, ui_color(border), EGUI_ALPHA_100);
+
+        if (selected != 0U)
+        {
+            int16_t beam_x = x + 8 + (int16_t)((s_setting_page.frame_tick / 12U) % (UI_SETTING_ROW_W - 40));
+            egui_canvas_draw_line(canvas, beam_x, y + 2, beam_x + 28, y + 2, 2,
+                                  ui_color(ui_setting_hsv_to_rgb((uint16_t)(s_setting_page.hue + 90U), 210U, 255U)), EGUI_ALPHA_80);
+            if (s_setting_page.editing != 0U)
+            {
+                egui_canvas_draw_round_rectangle(canvas, x + 3, y + 3, UI_SETTING_ROW_W - 6, UI_SETTING_ROW_H - 6, 3,
+                                                 (pulse > 5U) ? 2 : 1, ui_color(0xF8FAFC), EGUI_ALPHA_40);
+            }
+        }
+
+        ui_draw_text(canvas, font, s_setting_labels[i], x + 12, y + 2, 135, UI_SETTING_ROW_H - 4,
+                     EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, selected ? 0xFFFFFF : 0xC8D8E8);
+
+        if (i == UI_SETTING_ITEM_POETRY_ENABLE)
+        {
+            ui_setting_draw_switch(canvas, x + UI_SETTING_ROW_W - 50, y + 3,
+                                   s_setting_page.settings.poetry_popup_enabled, accent);
+        }
+        else if (i == UI_SETTING_ITEM_RGB_PWR_ENABLE)
+        {
+            ui_setting_draw_switch(canvas, x + UI_SETTING_ROW_W - 50, y + 3,
+                                   s_setting_page.settings.rgb_pwr_enabled, accent);
+        }
+        else
+        {
+            ui_setting_format_value(i, value, sizeof(value));
+            ui_draw_text(canvas, font, value, x + 168, y + 2, 105, UI_SETTING_ROW_H - 4,
+                         EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER, selected ? accent : 0x7DD3FC);
+        }
+    }
+
+    if (s_setting_page.confirm_until > s_setting_page.frame_tick)
+    {
+        egui_alpha_t alpha = (egui_alpha_t)(((s_setting_page.confirm_until - s_setting_page.frame_tick) * 178U) / UI_SETTING_CONFIRM_MS);
+        egui_canvas_draw_rectangle_fill(canvas, UI_SETTING_ROW_X, 0, UI_SETTING_ROW_W + 8, UI_SCREEN_H,
+                                        ui_color(accent), alpha);
     }
 }
 
@@ -208,73 +416,8 @@ static void ui_SettingPage_on_draw(egui_view_t *self)
     egui_canvas_t *canvas = egui_view_get_canvas(self);
 
     (void)self;
-    ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, 0x87CEEB);
-}
-
-static void ui_SettingPage_rebuild_items(void)
-{
-    egui_view_t *list_view = EGUI_VIEW_OF(&s_setting_page.list);
-
-    egui_view_list_clear(list_view);
-    for (uint8_t i = 0U; i < UI_SETTING_ITEM_COUNT; i++)
-    {
-        ui_SettingPage_format_item(i, s_setting_page.item_text[i], sizeof(s_setting_page.item_text[i]));
-        (void)egui_view_list_add_item(list_view, s_setting_page.item_text[i]);
-    }
-
-    if (s_setting_page.setting_active != 0U)
-    {
-        egui_view_list_set_selected_index(list_view, s_setting_page.selected_index);
-    }
-    else
-    {
-        egui_view_list_set_selected_index(list_view, EGUI_VIEW_LIST_SELECTED_NONE);
-    }
-}
-
-static void ui_SettingPage_format_item(uint8_t index, char *buf, uint16_t size)
-{
-    const char *prefix;
-    const AppSettings_t *settings = &s_setting_page.settings;
-
-    if ((buf == NULL) || (size == 0U))
-    {
-        return;
-    }
-
-    if (s_setting_page.setting_active == 0U)
-    {
-        prefix = "  ";
-    }
-    else
-    {
-        prefix = (index == s_setting_page.selected_index) ? ((s_setting_page.editing != 0U) ? "* " : "> ") : "  ";
-    }
-
-    switch ((ui_setting_item_t)index)
-    {
-    case UI_SETTING_ITEM_POETRY_ENABLE:
-        (void)snprintf(buf, size, "%sPoetry popup  %s", prefix, (settings->poetry_popup_enabled != 0U) ? "On" : "Off");
-        break;
-    case UI_SETTING_ITEM_POETRY_INTERVAL:
-        (void)snprintf(buf, size, "%sPoetry gap    %u min", prefix, (unsigned)settings->poetry_popup_interval_min);
-        break;
-    case UI_SETTING_ITEM_WEATHER_INTERVAL:
-        (void)snprintf(buf, size, "%sWeather sync  %u min", prefix, (unsigned)settings->weather_time_sync_interval_min);
-        break;
-    case UI_SETTING_ITEM_BRIGHTNESS_DAY:
-        (void)snprintf(buf, size, "%sDay bright    %u%%", prefix, (unsigned)settings->brightness_day_percent);
-        break;
-    case UI_SETTING_ITEM_BRIGHTNESS_NIGHT:
-        (void)snprintf(buf, size, "%sNight bright  %u%%", prefix, (unsigned)settings->brightness_night_percent);
-        break;
-    case UI_SETTING_ITEM_IDLE_TIMEOUT:
-        (void)snprintf(buf, size, "%sScreen sleep  %u min", prefix, (unsigned)settings->screen_idle_timeout_min);
-        break;
-    default:
-        buf[0] = '\0';
-        break;
-    }
+    ui_setting_draw_background(canvas);
+    ui_setting_draw_rows(canvas);
 }
 
 static void ui_SettingPage_move_selection(int8_t delta)
@@ -289,99 +432,46 @@ static void ui_SettingPage_move_selection(int8_t delta)
     {
         next = 0;
     }
-
     s_setting_page.selected_index = (uint8_t)next;
-    ui_SettingPage_rebuild_items();
     egui_view_invalidate_full(ui_SettingPage);
-}
-
-static uint16_t ui_setting_adjust_u16(uint16_t value, int8_t delta, uint16_t step, uint16_t min_value, uint16_t max_value)
-{
-    int32_t next = (int32_t)value + ((int32_t)delta * (int32_t)step);
-
-    if (next < (int32_t)min_value)
-    {
-        next = min_value;
-    }
-    if (next > (int32_t)max_value)
-    {
-        next = max_value;
-    }
-
-    return (uint16_t)next;
-}
-
-static uint8_t ui_setting_adjust_u8(uint8_t value, int8_t delta, uint8_t step, uint8_t min_value, uint8_t max_value)
-{
-    int16_t next = (int16_t)value + ((int16_t)delta * (int16_t)step);
-
-    if (next < (int16_t)min_value)
-    {
-        next = min_value;
-    }
-    if (next > (int16_t)max_value)
-    {
-        next = max_value;
-    }
-
-    return (uint8_t)next;
 }
 
 static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
 {
     uint16_t step = (fast != 0U) ? UI_SETTING_FAST_STEP : UI_SETTING_VALUE_STEP;
-    AppSettings_t *settings = &s_setting_page.settings;
 
     switch ((ui_setting_item_t)s_setting_page.selected_index)
     {
     case UI_SETTING_ITEM_POETRY_ENABLE:
         if (delta != 0)
         {
-            settings->poetry_popup_enabled = (uint8_t)!settings->poetry_popup_enabled;
+            s_setting_page.settings.poetry_popup_enabled = (uint8_t)!s_setting_page.settings.poetry_popup_enabled;
         }
         break;
     case UI_SETTING_ITEM_POETRY_INTERVAL:
-        settings->poetry_popup_interval_min = ui_setting_adjust_u16(settings->poetry_popup_interval_min,
-                                                                    delta,
-                                                                    step,
-                                                                    SETTINGS_APP_POETRY_INTERVAL_MIN_MIN,
-                                                                    SETTINGS_APP_POETRY_INTERVAL_MIN_MAX);
+        s_setting_page.settings.poetry_popup_interval_min =
+            ui_setting_adjust_u16(s_setting_page.settings.poetry_popup_interval_min, delta, step,
+                                  SETTINGS_APP_POETRY_INTERVAL_MIN_MIN, SETTINGS_APP_POETRY_INTERVAL_MIN_MAX);
         break;
     case UI_SETTING_ITEM_WEATHER_INTERVAL:
-        settings->weather_time_sync_interval_min = ui_setting_adjust_u16(settings->weather_time_sync_interval_min,
-                                                                         delta,
-                                                                         step,
-                                                                         SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN,
-                                                                         SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX);
+        s_setting_page.settings.weather_time_sync_interval_min =
+            ui_setting_adjust_u16(s_setting_page.settings.weather_time_sync_interval_min, delta, step,
+                                  SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN, SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX);
         break;
-    case UI_SETTING_ITEM_BRIGHTNESS_DAY:
-        settings->brightness_day_percent = ui_setting_adjust_u8(settings->brightness_day_percent,
-                                                                delta,
-                                                                UI_SETTING_VALUE_STEP,
-                                                                SETTINGS_APP_BRIGHTNESS_MIN,
-                                                                SETTINGS_APP_BRIGHTNESS_MAX);
-        SettingsApp_PreviewBrightnessPercent(settings->brightness_day_percent);
-        break;
-    case UI_SETTING_ITEM_BRIGHTNESS_NIGHT:
-        settings->brightness_night_percent = ui_setting_adjust_u8(settings->brightness_night_percent,
-                                                                  delta,
-                                                                  UI_SETTING_VALUE_STEP,
-                                                                  SETTINGS_APP_BRIGHTNESS_MIN,
-                                                                  SETTINGS_APP_BRIGHTNESS_MAX);
-        SettingsApp_PreviewBrightnessPercent(settings->brightness_night_percent);
+    case UI_SETTING_ITEM_RGB_PWR_ENABLE:
+        if (delta != 0)
+        {
+            s_setting_page.settings.rgb_pwr_enabled = (uint8_t)!s_setting_page.settings.rgb_pwr_enabled;
+        }
         break;
     case UI_SETTING_ITEM_IDLE_TIMEOUT:
-        settings->screen_idle_timeout_min = ui_setting_adjust_u16(settings->screen_idle_timeout_min,
-                                                                  delta,
-                                                                  step,
-                                                                  SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN,
-                                                                  SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX);
+        s_setting_page.settings.screen_idle_timeout_min =
+            ui_setting_adjust_u16(s_setting_page.settings.screen_idle_timeout_min, delta, step,
+                                  SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN, SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX);
         break;
     default:
         break;
     }
-
-    ui_SettingPage_rebuild_items();
     egui_view_invalidate_full(ui_SettingPage);
 }
 
@@ -390,8 +480,7 @@ static bool ui_SettingPage_commit_edit(void)
     (void)SettingsApp_Update(&s_setting_page.settings);
     SettingsApp_Apply();
     s_setting_page.editing = 0U;
-    ui_SettingPage_rebuild_items();
+    s_setting_page.confirm_until = egui_timer_get_current_time() + UI_SETTING_CONFIRM_MS;
     egui_view_invalidate_full(ui_SettingPage);
-
     return true;
 }

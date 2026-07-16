@@ -1,5 +1,6 @@
 #include "ui_HomePage.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "core/egui_timer.h"
@@ -72,6 +73,29 @@ typedef struct
     uint8_t tint_alpha;
 } ui_home_style_t;
 
+typedef enum
+{
+    HOME_BATTERY_STATIC = 0,
+    HOME_BATTERY_CHARGING_FILL,
+    HOME_BATTERY_CHARGING_HOLD,
+    HOME_BATTERY_FULL_FILL,
+    HOME_BATTERY_FULL_FLASH,
+    HOME_BATTERY_FULL_STABLE
+} ui_home_battery_phase_t;
+
+typedef struct
+{
+    ui_home_battery_phase_t phase;
+    uint32_t phase_tick;
+    uint8_t display_percent;
+    uint8_t full_start_percent;
+    uint8_t visible;
+    uint8_t full_animation_played;
+    uint8_t prev_charging;
+    uint8_t prev_full;
+    uint8_t resume_pending;
+} ui_home_battery_state_t;
+
 static ui_home_page_t s_home_page;
 static egui_view_api_t s_home_api;
 
@@ -82,6 +106,7 @@ static uint32_t s_home_status_tick = 0U;
 static uint32_t s_home_status_version = 0xFFFFFFFFU;
 static ui_home_scene_state_t s_home_scene_state;
 static ui_home_weather_state_t s_home_weather_state;
+static ui_home_battery_state_t s_home_battery_state;
 static ui_home_particle_t s_home_particles[30];
 static DataApp_HomeStatus_t s_home_render_status;
 static ui_home_style_t s_home_render_style;
@@ -97,6 +122,8 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer);
 static void ui_HomePage_weather_reset(WeatherScene_t scene, uint8_t is_day, uint32_t now);
 static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_day);
 static void ui_HomePage_update_render_snapshot(const DataApp_HomeStatus_t *status);
+static uint8_t ui_HomePage_battery_update(const DataApp_HomeStatus_t *status, uint32_t now, uint8_t restart);
+static void ui_HomePage_draw_battery(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status, uint32_t text_rgb);
 static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
                                               egui_dim_t x,
                                               egui_dim_t y,
@@ -112,14 +139,44 @@ static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
 #define HOME_STATUS_TOP_H WEATHER_ICON_SIZE
 #define HOME_STATUS_WEATHER_ICON_X (UI_SCREEN_W - WEATHER_ICON_SIZE + 5)
 #define HOME_STATUS_WEATHER_ICON_Y -10
-#define HOME_STATUS_ENV_X 288
+#define HOME_BOTTOM_STATUS_Y 112
+#define HOME_BOTTOM_STATUS_H 24
+#define HOME_BOTTOM_STATUS_CENTER_Y (HOME_BOTTOM_STATUS_Y + (HOME_BOTTOM_STATUS_H / 2))
+#define HOME_STATUS_ENV_X 242
 #define HOME_STATUS_ENV_Y 110
-#define HOME_STATUS_ENV_W 136
+#define HOME_STATUS_ENV_W 186
 #define HOME_STATUS_ENV_H 32
+#define HOME_STATUS_ENV_TEXT_X 242
+#define HOME_STATUS_ENV_TEXT_Y HOME_BOTTOM_STATUS_Y
+#define HOME_STATUS_ENV_TEXT_W 108
+#define HOME_STATUS_ENV_TEXT_H HOME_BOTTOM_STATUS_H
 #define HOME_STATUS_PM25_X 8
-#define HOME_STATUS_PM25_Y 116
+#define HOME_STATUS_PM25_Y HOME_BOTTOM_STATUS_Y
 #define HOME_STATUS_PM25_W 130
-#define HOME_STATUS_PM25_H 24
+#define HOME_STATUS_PM25_H HOME_BOTTOM_STATUS_H
+
+#define HOME_BATTERY_REGION_X 352
+#define HOME_BATTERY_REGION_Y 110
+#define HOME_BATTERY_REGION_W 74
+#define HOME_BATTERY_REGION_H 28
+#define HOME_BATTERY_BODY_X 354
+#define HOME_BATTERY_BODY_Y (HOME_BOTTOM_STATUS_CENTER_Y - (HOME_BATTERY_BODY_H / 2))
+#define HOME_BATTERY_BODY_W 26
+#define HOME_BATTERY_BODY_H 14
+#define HOME_BATTERY_TERMINAL_X 380
+#define HOME_BATTERY_TERMINAL_Y (HOME_BOTTOM_STATUS_CENTER_Y - (HOME_BATTERY_TERMINAL_H / 2))
+#define HOME_BATTERY_TERMINAL_W 3
+#define HOME_BATTERY_TERMINAL_H 6
+#define HOME_BATTERY_TEXT_X 387
+#define HOME_BATTERY_TEXT_Y HOME_BOTTOM_STATUS_Y
+#define HOME_BATTERY_TEXT_W 39
+#define HOME_BATTERY_TEXT_H HOME_BOTTOM_STATUS_H
+#define HOME_BATTERY_CHARGE_FILL_MS 1200U
+#define HOME_BATTERY_CHARGE_HOLD_MS 300U
+#define HOME_BATTERY_FULL_FILL_MS 350U
+#define HOME_BATTERY_FULL_FLASH_STEP_MS 150U
+#define HOME_BATTERY_FULL_FLASH_STEPS 4U
+#define HOME_BATTERY_ACTIVE_RGB 0x22C55E
 
 #define HOME_SCENE_WRAP_W 428
 #define HOME_SCENE_CLOUD_STEP_MS 100U
@@ -786,6 +843,136 @@ static void ui_HomePage_invalidate_status_regions(egui_view_t *view)
     ui_HomePage_invalidate_rect(view, HOME_STATUS_ENV_X, HOME_STATUS_ENV_Y, HOME_STATUS_ENV_W, HOME_STATUS_ENV_H);
 }
 
+static void ui_HomePage_invalidate_battery(egui_view_t *view)
+{
+    ui_HomePage_invalidate_rect(view,
+                                HOME_BATTERY_REGION_X,
+                                HOME_BATTERY_REGION_Y,
+                                HOME_BATTERY_REGION_W,
+                                HOME_BATTERY_REGION_H);
+}
+
+static uint8_t ui_HomePage_battery_update(const DataApp_HomeStatus_t *status,
+                                          uint32_t now,
+                                          uint8_t restart)
+{
+    ui_home_battery_state_t *state = &s_home_battery_state;
+    uint8_t old_percent;
+    uint8_t old_visible;
+    uint8_t old_active;
+    uint8_t active;
+    uint32_t elapsed;
+
+    if (status == NULL)
+    {
+        return 0U;
+    }
+
+    old_percent = state->display_percent;
+    old_visible = state->visible;
+    old_active = (uint8_t)(state->prev_charging || state->prev_full);
+    active = (uint8_t)(status->charging || status->charge_full);
+
+    if (status->charge_full != 0U)
+    {
+        if ((state->prev_full == 0U) && (state->full_animation_played == 0U))
+        {
+            state->phase = HOME_BATTERY_FULL_FILL;
+            state->phase_tick = now;
+            state->full_start_percent = state->display_percent;
+            state->visible = 1U;
+        }
+
+        if (state->phase == HOME_BATTERY_FULL_FILL)
+        {
+            elapsed = now - state->phase_tick;
+            if (elapsed >= HOME_BATTERY_FULL_FILL_MS)
+            {
+                state->display_percent = 100U;
+                state->phase = HOME_BATTERY_FULL_FLASH;
+                state->phase_tick = now;
+            }
+            else
+            {
+                state->display_percent = (uint8_t)(state->full_start_percent +
+                    (((uint32_t)(100U - state->full_start_percent) * elapsed) / HOME_BATTERY_FULL_FILL_MS));
+            }
+        }
+        else if (state->phase == HOME_BATTERY_FULL_FLASH)
+        {
+            uint32_t flash_step = (now - state->phase_tick) / HOME_BATTERY_FULL_FLASH_STEP_MS;
+
+            if (flash_step >= HOME_BATTERY_FULL_FLASH_STEPS)
+            {
+                state->phase = HOME_BATTERY_FULL_STABLE;
+                state->display_percent = 100U;
+                state->visible = 1U;
+                state->full_animation_played = 1U;
+            }
+            else
+            {
+                state->visible = (uint8_t)((flash_step & 1U) != 0U);
+            }
+        }
+        else if (state->phase == HOME_BATTERY_FULL_STABLE)
+        {
+            state->display_percent = 100U;
+            state->visible = 1U;
+        }
+    }
+    else if (status->charging != 0U)
+    {
+        if ((state->prev_charging == 0U) || (restart != 0U) ||
+            ((state->phase != HOME_BATTERY_CHARGING_FILL) &&
+             (state->phase != HOME_BATTERY_CHARGING_HOLD)))
+        {
+            state->phase = HOME_BATTERY_CHARGING_FILL;
+            state->phase_tick = now;
+            state->display_percent = 0U;
+            state->visible = 1U;
+            state->full_animation_played = 0U;
+        }
+
+        if (state->phase == HOME_BATTERY_CHARGING_FILL)
+        {
+            elapsed = now - state->phase_tick;
+            if (elapsed >= HOME_BATTERY_CHARGE_FILL_MS)
+            {
+                state->display_percent = status->battery_percent;
+                state->phase = HOME_BATTERY_CHARGING_HOLD;
+                state->phase_tick = now;
+            }
+            else
+            {
+                state->display_percent = (uint8_t)(((uint32_t)status->battery_percent * elapsed) /
+                                                   HOME_BATTERY_CHARGE_FILL_MS);
+            }
+        }
+        else if ((now - state->phase_tick) >= HOME_BATTERY_CHARGE_HOLD_MS)
+        {
+            state->phase = HOME_BATTERY_CHARGING_FILL;
+            state->phase_tick = now;
+            state->display_percent = 0U;
+        }
+    }
+    else
+    {
+        state->phase = HOME_BATTERY_STATIC;
+        state->phase_tick = now;
+        state->display_percent = status->battery_percent;
+        state->visible = 1U;
+        state->full_animation_played = 0U;
+    }
+
+    state->prev_charging = status->charging;
+    state->prev_full = status->charge_full;
+    state->resume_pending = 0U;
+
+    return (uint8_t)((old_percent != state->display_percent) ||
+                     (old_visible != state->visible) ||
+                     (old_active != active));
+}
+
 void ui_HomePage_screen_init(void)
 {
     egui_view_t *view = EGUI_VIEW_OF(&s_home_page.base);
@@ -805,9 +992,12 @@ void ui_HomePage_screen_init(void)
     s_home_status_version = 0xFFFFFFFFU;
     s_home_scene_state.is_valid = 0U;
     s_home_weather_state.is_valid = 0U;
+    memset(&s_home_battery_state, 0, sizeof(s_home_battery_state));
+    s_home_battery_state.visible = 1U;
     s_home_heiti_16 = NULL;
     DataApp_HomeStatus_Get(&status);
     ui_HomePage_update_render_snapshot(&status);
+    (void)ui_HomePage_battery_update(&status, s_home_scene_tick, 1U);
     ui_HomePage_weather_reset(s_home_render_scene, status.is_day, s_home_scene_tick);
     egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 50U);
 }
@@ -831,6 +1021,15 @@ void ui_HomePage_set_animation_enabled(bool enable)
     }
 
     s_home_animation_enabled = next;
+    if (!s_home_animation_enabled)
+    {
+        if (s_home_battery_state.prev_charging != 0U)
+        {
+            s_home_battery_state.resume_pending = 1U;
+        }
+        return;
+    }
+
     if (s_home_animation_enabled)
     {
         DataApp_HomeStatus_t status;
@@ -839,6 +1038,7 @@ void ui_HomePage_set_animation_enabled(bool enable)
         s_home_scene_state.is_valid = 0U;
         DataApp_HomeStatus_Get(&status);
         ui_HomePage_update_render_snapshot(&status);
+        (void)ui_HomePage_battery_update(&status, s_home_scene_tick, 1U);
         ui_HomePage_weather_reset(s_home_render_scene, status.is_day, s_home_scene_tick);
         if ((ui_HomePage != NULL) && egui_view_get_visible(ui_HomePage))
         {
@@ -863,14 +1063,37 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer)
 
     if ((view == NULL) || !egui_view_get_visible(view))
     {
+        now = egui_timer_get_current_time();
         s_home_scene_state.is_valid = 0U;
         s_home_weather_state.is_valid = 0U;
+        if ((s_home_battery_state.phase == HOME_BATTERY_CHARGING_FILL) ||
+            (s_home_battery_state.phase == HOME_BATTERY_CHARGING_HOLD) ||
+            (s_home_battery_state.phase == HOME_BATTERY_FULL_FILL) ||
+            (s_home_battery_state.phase == HOME_BATTERY_FULL_FLASH))
+        {
+            s_home_battery_state.phase_tick = now;
+        }
+        if (s_home_battery_state.prev_charging != 0U)
+        {
+            s_home_battery_state.resume_pending = 1U;
+        }
         return;
     }
 
     now = egui_timer_get_current_time();
     DataApp_HomeStatus_Get(&status);
     ui_HomePage_update_render_snapshot(&status);
+    if (s_home_animation_enabled || (!status.charging && !status.charge_full))
+    {
+        if (ui_HomePage_battery_update(&status, now, s_home_battery_state.resume_pending) != 0U)
+        {
+            ui_HomePage_invalidate_battery(view);
+        }
+    }
+    else
+    {
+        s_home_battery_state.phase_tick = now;
+    }
     scene = s_home_render_scene;
     if ((s_home_weather_state.is_valid == 0U) ||
         (s_home_weather_state.scene != scene) ||
@@ -1383,6 +1606,87 @@ static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
     return (uint8_t)((clipped.size.width > 0) && (clipped.size.height > 0));
 }
 
+static void ui_HomePage_draw_battery(egui_canvas_t *canvas,
+                                     const DataApp_HomeStatus_t *status,
+                                     uint32_t text_rgb)
+{
+    const egui_font_t *font = EGUI_FONT_OF(&egui_res_font_montserrat_12_4);
+    uint32_t color_rgb;
+    uint8_t display_percent;
+    egui_dim_t inner_width;
+    egui_dim_t fill_width;
+    char percent_text[5];
+
+    if ((status == NULL) ||
+        !ui_HomePage_canvas_intersects(canvas,
+                                       HOME_BATTERY_REGION_X,
+                                       HOME_BATTERY_REGION_Y,
+                                       HOME_BATTERY_REGION_W,
+                                       HOME_BATTERY_REGION_H))
+    {
+        return;
+    }
+
+    if (s_home_battery_state.visible == 0U)
+    {
+        return;
+    }
+
+    color_rgb = (status->charging || status->charge_full) ? HOME_BATTERY_ACTIVE_RGB : text_rgb;
+    display_percent = s_home_battery_state.display_percent;
+    if (display_percent > 100U)
+    {
+        display_percent = 100U;
+    }
+
+    egui_canvas_draw_round_rectangle(canvas,
+                                     HOME_BATTERY_BODY_X,
+                                     HOME_BATTERY_BODY_Y,
+                                     HOME_BATTERY_BODY_W,
+                                     HOME_BATTERY_BODY_H,
+                                     2,
+                                     1,
+                                     ui_color(color_rgb),
+                                     EGUI_ALPHA_100);
+    egui_canvas_draw_round_rectangle_fill(canvas,
+                                          HOME_BATTERY_TERMINAL_X,
+                                          HOME_BATTERY_TERMINAL_Y,
+                                          HOME_BATTERY_TERMINAL_W,
+                                          HOME_BATTERY_TERMINAL_H,
+                                          1,
+                                          ui_color(color_rgb),
+                                          EGUI_ALPHA_100);
+
+    inner_width = HOME_BATTERY_BODY_W - 4;
+    fill_width = (egui_dim_t)(((uint32_t)inner_width * display_percent) / 100U);
+    if ((display_percent != 0U) && (fill_width == 0))
+    {
+        fill_width = 1;
+    }
+    if (fill_width > 0)
+    {
+        egui_canvas_draw_round_rectangle_fill(canvas,
+                                              HOME_BATTERY_BODY_X + 2,
+                                              HOME_BATTERY_BODY_Y + 2,
+                                              fill_width,
+                                              HOME_BATTERY_BODY_H - 4,
+                                              1,
+                                              ui_color(color_rgb),
+                                              EGUI_ALPHA_100);
+    }
+
+    (void)snprintf(percent_text, sizeof(percent_text), "%u%%", (unsigned int)status->battery_percent);
+    ui_draw_text(canvas,
+                 font,
+                 percent_text,
+                 HOME_BATTERY_TEXT_X,
+                 HOME_BATTERY_TEXT_Y,
+                 HOME_BATTERY_TEXT_W,
+                 HOME_BATTERY_TEXT_H,
+                 EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER,
+                 color_rgb);
+}
+
 static void ui_HomePage_draw_top_status(egui_canvas_t *canvas,
                                         const DataApp_HomeStatus_t *status,
                                         uint32_t text_rgb)
@@ -1444,7 +1748,15 @@ static void ui_HomePage_draw_pm25_status(egui_canvas_t *canvas,
     }
     heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->pm25_text, HOME_STATUS_PM25_X, HOME_STATUS_PM25_Y, text_rgb);
+    ui_draw_text(canvas,
+                 heiti_font,
+                 status->pm25_text,
+                 HOME_STATUS_PM25_X,
+                 HOME_STATUS_PM25_Y,
+                 HOME_STATUS_PM25_W,
+                 HOME_STATUS_PM25_H,
+                 EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER,
+                 text_rgb);
 }
 
 static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
@@ -1466,7 +1778,16 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
     }
     heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->env_text, 306, 116, text_rgb);
+    ui_draw_text(canvas,
+                 heiti_font,
+                 status->env_text,
+                 HOME_STATUS_ENV_TEXT_X,
+                 HOME_STATUS_ENV_TEXT_Y,
+                 HOME_STATUS_ENV_TEXT_W,
+                 HOME_STATUS_ENV_TEXT_H,
+                 EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER,
+                 text_rgb);
+    ui_HomePage_draw_battery(canvas, status, text_rgb);
 }
 
 static void ui_HomePage_draw_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status, uint32_t text_rgb)

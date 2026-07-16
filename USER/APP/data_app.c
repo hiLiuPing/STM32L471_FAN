@@ -62,6 +62,20 @@ static int DataApp_HumidityToInt(float humidity)
     return (int)(humidity + 0.5f);
 }
 
+static uint8_t DataApp_BatteryPercent(float soc)
+{
+    if (!(soc >= 0.0f))
+    {
+        return 0U;
+    }
+    if (soc >= 100.0f)
+    {
+        return 100U;
+    }
+
+    return (uint8_t)(soc + 0.5f);
+}
+
 static void DataApp_FormatEnv(char *buf, uint32_t buf_size)
 {
     int temp_x10;
@@ -76,11 +90,11 @@ static void DataApp_FormatEnv(char *buf, uint32_t buf_size)
     temp_abs = (temp_x10 < 0) ? -temp_x10 : temp_x10;
     (void)snprintf(buf,
                    buf_size,
-                   "%s%d.%dC %d%%",
+                   "%d%% %s%d.%dC",
+                   DataApp_HumidityToInt(g_sensors_environment.hum),
                    (temp_x10 < 0) ? "-" : "",
                    temp_abs / 10,
-                   temp_abs % 10,
-                   DataApp_HumidityToInt(g_sensors_environment.hum));
+                   temp_abs % 10);
 }
 
 static uint8_t DataApp_HomeStatusEquals(const DataApp_HomeStatus_t *a, const DataApp_HomeStatus_t *b)
@@ -93,6 +107,9 @@ static uint8_t DataApp_HomeStatusEquals(const DataApp_HomeStatus_t *a, const Dat
     return (uint8_t)((a->weather_icon_id == b->weather_icon_id) &&
                      (a->weather_scene == b->weather_scene) &&
                      (a->is_day == b->is_day) &&
+                     (a->battery_percent == b->battery_percent) &&
+                     (a->charging == b->charging) &&
+                     (a->charge_full == b->charge_full) &&
                      (strcmp(a->time_text, b->time_text) == 0) &&
                      (strcmp(a->date_text, b->date_text) == 0) &&
                      (strcmp(a->week_text, b->week_text) == 0) &&
@@ -216,6 +233,17 @@ void DataApp_HomeStatus_Update(void)
     next.weather_icon_id = Weather_GetDisplayIcon();
     next.weather_scene = (uint8_t)Weather_GetScene();
     next.is_day = Time_IsDaytime();
+    next.battery_percent = DataApp_BatteryPercent(g_sensors_battery.soc);
+    next.charge_full = (uint8_t)((g_sensors_charger.state == BQ_CHG_DONE) ||
+                                 (g_sensors_charger.power_good && (next.battery_percent >= 99U)));
+    next.charging = (uint8_t)(!next.charge_full &&
+                              (next.battery_percent < 99U) &&
+                              ((g_sensors_charger.state == BQ_CHG_PRECHARGE) ||
+                               (g_sensors_charger.state == BQ_CHG_FAST_CHARGE)));
+    if (next.charge_full != 0U)
+    {
+        next.battery_percent = 100U;
+    }
 
     if (!DataApp_HomeStatusEquals(&next, current))
     {
