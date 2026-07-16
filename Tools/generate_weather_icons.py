@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate 32x32 RGB565 + Alpha8 weather icon resources."""
+"""Generate 64x64 RGB565 + Alpha8 weather icon resources."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image
 
 
-ICON_SIZE = 32
+ICON_SIZE = 64
 RGB565_COUNT = ICON_SIZE * ICON_SIZE
 WHITE_THRESHOLD = 245
 ALPHA_THRESHOLD = 128
@@ -129,9 +129,9 @@ def generate_header(icons: list[WeatherIcon]) -> str:
         "",
         '#include "image/egui_image_std.h"',
         "",
-        "#define WEATHER_ICON_SIZE        32U",
-        "#define WEATHER_ICON_RGB565_LEN 1024U",
-        "#define WEATHER_ICON_ALPHA8_LEN 1024U",
+        f"#define WEATHER_ICON_SIZE        {ICON_SIZE}U",
+        f"#define WEATHER_ICON_RGB565_LEN {RGB565_COUNT}U",
+        f"#define WEATHER_ICON_ALPHA8_LEN {RGB565_COUNT}U",
         "",
         "#if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565",
         "",
@@ -214,6 +214,7 @@ def generate_source(icons: list[WeatherIcon]) -> str:
             "",
             "const egui_image_std_t *ui_weather_icon_get(uint16_t icon_id)",
             "{",
+            "    /* Prefer a dedicated resource before applying shared-icon ranges. */",
             "    for (uint32_t i = 0U; i < (sizeof(s_weather_icons) / sizeof(s_weather_icons[0])); i++)",
             "    {",
             "        if (s_weather_icons[i].icon_id == icon_id)",
@@ -222,15 +223,32 @@ def generate_source(icons: list[WeatherIcon]) -> str:
             "        }",
             "    }",
             "",
-            "    for (uint32_t i = 0U; i < (sizeof(s_weather_icons) / sizeof(s_weather_icons[0])); i++)",
+            "    if ((icon_id >= 101U) && (icon_id <= 102U))",
             "    {",
-            "        if (s_weather_icons[i].icon_id == 100U)",
-            "        {",
-            "            return s_weather_icons[i].image;",
-            "        }",
+            "        return &weather_icon_102;",
+            "    }",
+            "    if ((icon_id >= 103U) && (icon_id <= 104U))",
+            "    {",
+            "        return &weather_icon_104;",
+            "    }",
+            "    if ((icon_id >= 302U) && (icon_id <= 304U))",
+            "    {",
+            "        return &weather_icon_302;",
+            "    }",
+            "    if ((icon_id >= 307U) && (icon_id <= 399U))",
+            "    {",
+            "        return &weather_icon_307;",
+            "    }",
+            "    if ((icon_id >= 400U) && (icon_id <= 499U))",
+            "    {",
+            "        return &weather_icon_499;",
+            "    }",
+            "    if ((icon_id >= 500U) && (icon_id <= 515U))",
+            "    {",
+            "        return &weather_icon_509;",
             "    }",
             "",
-            "    return NULL;",
+            "    return &weather_icon_100;",
             "}",
             "",
             "// clang-format on",

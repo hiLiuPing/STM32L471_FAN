@@ -1,5 +1,7 @@
 #include "ui_HomePage.h"
 
+#include <string.h>
+
 #include "core/egui_timer.h"
 #include "data_app.h"
 #include "egui_port_stm32l471_fan.h"
@@ -107,7 +109,9 @@ static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
 #define HOME_STATUS_TOP_X 0
 #define HOME_STATUS_TOP_Y 0
 #define HOME_STATUS_TOP_W UI_SCREEN_W
-#define HOME_STATUS_TOP_H 34
+#define HOME_STATUS_TOP_H WEATHER_ICON_SIZE
+#define HOME_STATUS_WEATHER_ICON_X (UI_SCREEN_W - WEATHER_ICON_SIZE + 5)
+#define HOME_STATUS_WEATHER_ICON_Y -10
 #define HOME_STATUS_ENV_X 288
 #define HOME_STATUS_ENV_Y 110
 #define HOME_STATUS_ENV_W 136
@@ -1270,6 +1274,90 @@ static void ui_HomePage_draw_raw_text(egui_canvas_t *canvas,
     }
 }
 
+static egui_dim_t ui_HomePage_draw_text_advance(egui_canvas_t *canvas,
+                                                const egui_font_t *font,
+                                                const char *text,
+                                                egui_dim_t x,
+                                                egui_dim_t y,
+                                                uint32_t rgb)
+{
+    egui_dim_t width = 0;
+    egui_dim_t height = 0;
+
+    ui_HomePage_draw_raw_text(canvas, font, text, x, y, rgb);
+    (void)egui_font_get_str_size_with_canvas(font, canvas, text, 0U, 0, &width, &height);
+    return width;
+}
+
+static void ui_HomePage_draw_date_text(egui_canvas_t *canvas,
+                                       const egui_font_t *number_font,
+                                       const egui_font_t *heiti_font,
+                                       const char *text,
+                                       egui_dim_t x,
+                                       egui_dim_t y,
+                                       uint32_t rgb)
+{
+    static const char month_marker[] = "\346\234\210";
+    static const char day_marker[] = "\346\227\245";
+    const char *month_pos;
+    const char *day_pos;
+    size_t month_len;
+    size_t day_len;
+    char month_text[3];
+    char day_text[3];
+    egui_dim_t pen_x = x;
+
+    if ((number_font == NULL) || (heiti_font == NULL) || (text == NULL))
+    {
+        ui_HomePage_draw_raw_text(canvas, heiti_font, text, x, y, rgb);
+        return;
+    }
+
+    month_pos = strstr(text, month_marker);
+    day_pos = (month_pos != NULL) ? strstr(month_pos + sizeof(month_marker) - 1U, day_marker) : NULL;
+    month_len = (month_pos != NULL) ? (size_t)(month_pos - text) : 0U;
+    day_len = ((month_pos != NULL) && (day_pos != NULL)) ?
+                  (size_t)(day_pos - (month_pos + sizeof(month_marker) - 1U)) :
+                  0U;
+
+    if ((month_len == 0U) || (month_len >= sizeof(month_text)) ||
+        (day_len == 0U) || (day_len >= sizeof(day_text)) ||
+        (day_pos == NULL) || (day_pos[sizeof(day_marker) - 1U] != '\0'))
+    {
+        ui_HomePage_draw_raw_text(canvas, heiti_font, text, x, y, rgb);
+        return;
+    }
+
+    for (size_t i = 0U; i < month_len; i++)
+    {
+        if ((text[i] < '0') || (text[i] > '9'))
+        {
+            ui_HomePage_draw_raw_text(canvas, heiti_font, text, x, y, rgb);
+            return;
+        }
+    }
+    for (size_t i = 0U; i < day_len; i++)
+    {
+        const char ch = month_pos[sizeof(month_marker) - 1U + i];
+
+        if ((ch < '0') || (ch > '9'))
+        {
+            ui_HomePage_draw_raw_text(canvas, heiti_font, text, x, y, rgb);
+            return;
+        }
+    }
+
+    memcpy(month_text, text, month_len);
+    month_text[month_len] = '\0';
+    memcpy(day_text, month_pos + sizeof(month_marker) - 1U, day_len);
+    day_text[day_len] = '\0';
+
+    pen_x += ui_HomePage_draw_text_advance(canvas, number_font, month_text, pen_x, y - 4, rgb);
+    pen_x += ui_HomePage_draw_text_advance(canvas, heiti_font, month_marker, pen_x, y, rgb);
+    pen_x += ui_HomePage_draw_text_advance(canvas, number_font, day_text, pen_x, y - 4, rgb);
+    (void)ui_HomePage_draw_text_advance(canvas, heiti_font, day_marker, pen_x, y, rgb);
+}
+
 static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
                                              egui_dim_t x,
                                              egui_dim_t y,
@@ -1324,15 +1412,15 @@ static void ui_HomePage_draw_top_status(egui_canvas_t *canvas,
     heiti_font_18 = (s_home_heiti_18 != NULL) ? s_home_heiti_18 : EGUI_FONT_OF(&egui_res_font_montserrat_18_4);
 
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_30_4), status->time_text, 10, 1, 86, 32, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, text_rgb);
-    ui_HomePage_draw_raw_text(canvas, heiti_font_18, status->date_text, 104, 8, text_rgb);
-    ui_HomePage_draw_raw_text(canvas, heiti_font_16, status->week_text, 194, 9, text_rgb);
-    ui_HomePage_draw_raw_text(canvas, heiti_font_16, status->temp_range_text, 270, 9, text_rgb);
+    ui_HomePage_draw_date_text(canvas, small_font, heiti_font_18, status->date_text, 104, 10, text_rgb);
+    ui_HomePage_draw_raw_text(canvas, heiti_font_18, status->week_text, 180, 10, text_rgb);
+    ui_HomePage_draw_raw_text(canvas, heiti_font_18, status->temp_range_text, 300, 10, text_rgb);
 
 #if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565
     weather_icon = ui_weather_icon_get(status->weather_icon_id);
     if (weather_icon != NULL)
     {
-        egui_image_draw_image(&weather_icon->base, canvas, 390, 2);
+        egui_image_draw_image(&weather_icon->base, canvas, HOME_STATUS_WEATHER_ICON_X, HOME_STATUS_WEATHER_ICON_Y);
     }
 #endif
 }
@@ -1363,7 +1451,7 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
                                         const DataApp_HomeStatus_t *status,
                                         uint32_t text_rgb)
 {
-    const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_18_4);
+    const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
 
     if ((status == NULL) ||
@@ -1372,13 +1460,13 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
         return;
     }
 
-    if (s_home_heiti_18 == NULL)
+    if (s_home_heiti_16 == NULL)
     {
-        s_home_heiti_18 = ui_heiti_font_get_18();
+        s_home_heiti_16 = ui_heiti_font_get_16();
     }
-    heiti_font = (s_home_heiti_18 != NULL) ? s_home_heiti_18 : small_font;
+    heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
-    ui_HomePage_draw_raw_text(canvas, heiti_font, status->env_text, 306, 114, text_rgb);
+    ui_HomePage_draw_raw_text(canvas, heiti_font, status->env_text, 306, 116, text_rgb);
 }
 
 static void ui_HomePage_draw_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status, uint32_t text_rgb)
