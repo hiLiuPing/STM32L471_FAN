@@ -99,6 +99,7 @@ virtualFolder:
             - path: USER/APP/weather_app.c
             - path: USER/APP/icons.c
             - path: USER/APP/home_scene_res.c
+            - path: USER/APP/home_camp_res.c
             - path: USER/APP/psram_app.c
             - path: USER/APP/systemMonitor_app.c
             - path: USER/APP/led_app.c

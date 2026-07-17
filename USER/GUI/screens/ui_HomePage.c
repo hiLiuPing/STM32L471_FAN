@@ -7,6 +7,7 @@
 #include "data_app.h"
 #include "egui_port_stm32l471_fan.h"
 #include "fan_app.h"
+#include "home_camp_res.h"
 #include "home_scene_res.h"
 #include "icons.h"
 #include "key.h"
@@ -41,6 +42,7 @@ typedef struct
     int grass_base;
     int bike_x;
     uint8_t bike_index;
+    uint8_t fire_index;
     uint8_t is_valid;
 } ui_home_scene_state_t;
 
@@ -204,6 +206,7 @@ static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value);
 #define HOME_SCENE_CLOUD_STEP_MS 100U
 #define HOME_SCENE_GRASS_STEP_MS 50U
 #define HOME_SCENE_BIKE_STEP_MS 100U
+#define HOME_SCENE_FIRE_STEP_MS 100U
 #define HOME_BIKE_CYCLE_MS 3600000U
 #define HOME_SCENE_RESUME_GAP_MS 250U
 #define HOME_WEATHER_STEP_MS 100U
@@ -255,6 +258,14 @@ static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value);
 #define HOME_BIKE_Y 55
 #define HOME_BIKE_W 62
 #define HOME_BIKE_H 64
+#define HOME_HOUSE_W 111
+#define HOME_HOUSE_H 72
+#define HOME_HOUSE_X (((int)UI_SCREEN_W - HOME_HOUSE_W) / 2)
+#define HOME_HOUSE_Y 55
+#define HOME_FIRE_W 22
+#define HOME_FIRE_H 22
+#define HOME_FIRE_X (HOME_HOUSE_X + HOME_HOUSE_W + 4)
+#define HOME_FIRE_Y 100
 #define HOME_GROUND_TILE_Y 110
 #define HOME_GROUND_TILE_W 42
 #define HOME_GROUND_TILE_H 24
@@ -731,6 +742,11 @@ static int ui_HomePage_scene_bike_x(uint32_t tick)
     return HOME_BIKE_START_X + (int)(((cycle_tick * (uint32_t)range) + (HOME_BIKE_CYCLE_MS / 2U)) / HOME_BIKE_CYCLE_MS);
 }
 
+static uint8_t ui_HomePage_scene_fire_index(uint32_t tick)
+{
+    return (uint8_t)((tick / HOME_SCENE_FIRE_STEP_MS) % 4U);
+}
+
 static void ui_HomePage_get_scene_state(uint32_t tick, ui_home_scene_state_t *state)
 {
     if (state == NULL)
@@ -742,6 +758,7 @@ static void ui_HomePage_get_scene_state(uint32_t tick, ui_home_scene_state_t *st
     state->grass_base = ui_HomePage_scene_grass_base(tick);
     state->bike_x = ui_HomePage_scene_bike_x(tick);
     state->bike_index = ui_HomePage_scene_bike_index(tick);
+    state->fire_index = ui_HomePage_scene_fire_index(tick);
     state->is_valid = 1U;
 }
 
@@ -843,18 +860,26 @@ static void ui_HomePage_invalidate_precise_scene(egui_view_t *view, const ui_hom
         ui_HomePage_invalidate_cloud_base(view, next->cloud_base + HOME_SCENE_WRAP_W);
     }
 
-    if (prev->grass_base != next->grass_base)
+    if (s_home_render_status.is_day != 0U)
     {
-        ui_HomePage_invalidate_grass_front_base(view, prev->grass_base);
-        ui_HomePage_invalidate_grass_front_base(view, prev->grass_base + HOME_SCENE_WRAP_W);
-        ui_HomePage_invalidate_grass_front_base(view, next->grass_base);
-        ui_HomePage_invalidate_grass_front_base(view, next->grass_base + HOME_SCENE_WRAP_W);
-    }
+        if (prev->grass_base != next->grass_base)
+        {
+            ui_HomePage_invalidate_grass_front_base(view, prev->grass_base);
+            ui_HomePage_invalidate_grass_front_base(view, prev->grass_base + HOME_SCENE_WRAP_W);
+            ui_HomePage_invalidate_grass_front_base(view, next->grass_base);
+            ui_HomePage_invalidate_grass_front_base(view, next->grass_base + HOME_SCENE_WRAP_W);
+        }
 
-    if ((prev->bike_index != next->bike_index) || (prev->bike_x != next->bike_x))
+        if ((prev->bike_index != next->bike_index) || (prev->bike_x != next->bike_x))
+        {
+            ui_HomePage_invalidate_clipped_rect(view, prev->bike_x, HOME_BIKE_Y, HOME_BIKE_W, HOME_BIKE_H);
+            ui_HomePage_invalidate_clipped_rect(view, next->bike_x, HOME_BIKE_Y, HOME_BIKE_W, HOME_BIKE_H);
+        }
+    }
+    else if ((prev->fire_index != next->fire_index) &&
+             (ui_HomePage_is_rain_scene(s_home_render_scene) == 0U))
     {
-        ui_HomePage_invalidate_clipped_rect(view, prev->bike_x, HOME_BIKE_Y, HOME_BIKE_W, HOME_BIKE_H);
-        ui_HomePage_invalidate_clipped_rect(view, next->bike_x, HOME_BIKE_Y, HOME_BIKE_W, HOME_BIKE_H);
+        ui_HomePage_invalidate_clipped_rect(view, HOME_FIRE_X, HOME_FIRE_Y, HOME_FIRE_W, HOME_FIRE_H);
     }
 }
 
@@ -1336,16 +1361,22 @@ static void ui_HomePage_draw_scene(egui_canvas_t *canvas)
         &qoi_scene_bike3,
         &qoi_scene_bike4,
     };
+    static const egui_image_std_t *const fires[] =
+    {
+        &home_camp_fire1,
+        &home_camp_fire2,
+        &home_camp_fire3,
+        &home_camp_fire4,
+    };
 
     uint32_t tick = s_home_scene_tick;
-
     uint8_t bike_index = ui_HomePage_scene_bike_index(tick);
+    uint8_t fire_index = ui_HomePage_scene_fire_index(tick);
     int bike_x = ui_HomePage_scene_bike_x(tick);
 
     /* 云：慢速滚动，裁掉屏幕外的副本 */
-    int cloud_offset = (tick / 100) % 428;
-    int cloud_base1 = -cloud_offset;
-    int cloud_base2 = cloud_base1 + 428;
+    int cloud_base1 = ui_HomePage_scene_cloud_base(tick);
+    int cloud_base2 = cloud_base1 + HOME_SCENE_WRAP_W;
 
     draw_cloud_group(canvas, cloud_base1);
     if (cloud_base2 < SCREEN_W)
@@ -1362,19 +1393,28 @@ static void ui_HomePage_draw_scene(egui_canvas_t *canvas)
     draw_if_visible(&qoi_scene_grass0, canvas, 0, HOME_GROUND_BASE_Y, HOME_GROUND_BASE_W, HOME_GROUND_BASE_H);
     draw_if_visible(&qoi_scene_grass0, canvas, 195, HOME_GROUND_BASE_Y, HOME_GROUND_BASE_W, HOME_GROUND_BASE_H);
 
-    /* 前景草：比云快，裁掉屏幕外的副本 */
-    int grass_offset = (tick / 50) % 428;
-    int grass_base1 = -grass_offset;
-    int grass_base2 = grass_base1 + 428;
-
-    draw_grass_front_group(canvas, grass_base1);
-    if (grass_base2 < SCREEN_W)
+    if (s_home_render_status.is_day != 0U)
     {
-        draw_grass_front_group(canvas, grass_base2);
-    }
+        int grass_base1 = ui_HomePage_scene_grass_base(tick);
+        int grass_base2 = grass_base1 + HOME_SCENE_WRAP_W;
 
-    /* 自行车 */
-    draw_if_visible(bikes[bike_index], canvas, bike_x, HOME_BIKE_Y, HOME_BIKE_W, HOME_BIKE_H);
+        draw_grass_front_group(canvas, grass_base1);
+        if (grass_base2 < SCREEN_W)
+        {
+            draw_grass_front_group(canvas, grass_base2);
+        }
+
+        draw_if_visible(bikes[bike_index], canvas, bike_x, HOME_BIKE_Y, HOME_BIKE_W, HOME_BIKE_H);
+    }
+    else
+    {
+        draw_grass_front_group(canvas, 0);
+        draw_if_visible(&home_camp_house, canvas, HOME_HOUSE_X, HOME_HOUSE_Y, HOME_HOUSE_W, HOME_HOUSE_H);
+        if (ui_HomePage_is_rain_scene(s_home_render_scene) == 0U)
+        {
+            draw_if_visible(fires[fire_index], canvas, HOME_FIRE_X, HOME_FIRE_Y, HOME_FIRE_W, HOME_FIRE_H);
+        }
+    }
 
 #else
     EGUI_UNUSED(canvas);

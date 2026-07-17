@@ -25,7 +25,7 @@ void HardwareInitTask(void *argument)
     (void)argument;
 
     log_init(&huart1);
-
+    Weather_PowerOn();
     log_printf("start app");
     log_printf("step1: init leds...");
     LED_App_Init();
@@ -85,7 +85,8 @@ void HardwareInitTask(void *argument)
     log_printf("step5: hw ready");
     User_Tasks_SetHardwareReady();
     log_printf("step6: delete self");
-    Weather_FillDemoData();
+    // Weather_FillDemoData();
+    
     SettingsApp_ApplyActiveBrightness();
     log_printf("fill demo weather data");
     vTaskDelete(NULL);

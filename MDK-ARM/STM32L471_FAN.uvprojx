@@ -1531,6 +1531,11 @@
               <FilePath>../USER/APP/home_scene_res.c</FilePath>
             </File>
             <File>
+              <FileName>home_camp_res.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/home_camp_res.c</FilePath>
+            </File>
+            <File>
               <FileName>psram_app.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/psram_app.c</FilePath>

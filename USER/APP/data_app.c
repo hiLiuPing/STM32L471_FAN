@@ -10,6 +10,8 @@
 
 #define DATA_APP_TIME_BUF_NUM 2U
 #define DATA_APP_HOME_STATUS_BUF_NUM 2U
+#define DATA_APP_DAY_START_HOUR 7U
+#define DATA_APP_NIGHT_START_HOUR 19U
 
 TiltKey_t current_raw_direction = MSG_TILT_NONE;
 
@@ -179,7 +181,8 @@ uint8_t Time_IsDaytime(void)
         return 1U;
     }
 
-    return (uint8_t)((now.hour >= 7U) && (now.hour < 19U));
+    return (uint8_t)((now.hour >= DATA_APP_DAY_START_HOUR) &&
+                     (now.hour < DATA_APP_NIGHT_START_HOUR));
 }
 
 void Time_Format(char *out)

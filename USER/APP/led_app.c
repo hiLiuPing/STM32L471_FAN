@@ -57,6 +57,7 @@ void LED_App_Init(void)
     {
         Error_Handler();
     }
+    
 }
 
 void LED_App_Update(uint32_t dt)
