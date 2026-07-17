@@ -12,6 +12,7 @@ from PIL import Image
 
 HOUSE_NAME = "house"
 FIRE_NAMES = ("fire1", "fire2", "fire3", "fire4")
+HOUSE_TARGET_SIZE = (74, 48)
 FIRE_CANVAS_SIZE = (22, 22)
 
 
@@ -31,7 +32,7 @@ def rgb888_to_rgb565(r: int, g: int, b: int) -> int:
 def load_rgba(path: Path, normalize_fire: bool) -> Image.Image:
     image = Image.open(path).convert("RGBA")
     if not normalize_fire:
-        return image
+        return image.resize(HOUSE_TARGET_SIZE, Image.Resampling.LANCZOS)
 
     if image.width > FIRE_CANVAS_SIZE[0] or image.height > FIRE_CANVAS_SIZE[1]:
         raise ValueError(f"fire frame exceeds {FIRE_CANVAS_SIZE[0]}x{FIRE_CANVAS_SIZE[1]}: {path}")

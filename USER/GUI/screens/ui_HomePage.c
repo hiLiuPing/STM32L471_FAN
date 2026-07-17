@@ -258,10 +258,10 @@ static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value);
 #define HOME_BIKE_Y 55
 #define HOME_BIKE_W 62
 #define HOME_BIKE_H 64
-#define HOME_HOUSE_W 111
-#define HOME_HOUSE_H 72
+#define HOME_HOUSE_W 74
+#define HOME_HOUSE_H 48
 #define HOME_HOUSE_X (((int)UI_SCREEN_W - HOME_HOUSE_W) / 2)
-#define HOME_HOUSE_Y 55
+#define HOME_HOUSE_Y 75
 #define HOME_FIRE_W 22
 #define HOME_FIRE_H 22
 #define HOME_FIRE_X (HOME_HOUSE_X + HOME_HOUSE_W + 4)

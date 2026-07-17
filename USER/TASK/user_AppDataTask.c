@@ -298,11 +298,11 @@ void AppDataTask(void *argument)
 
         DataApp_QuoteServiceUpdate(now);
 
-        // if ((TickType_t)(now - last_weather_demo_tick) >= pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS))
-        // {
-        //     last_weather_demo_tick += pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS);
-        //     Weather_FillDemoData();
-        // }
+        if ((TickType_t)(now - last_weather_demo_tick) >= pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS))
+        {
+            last_weather_demo_tick += pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS);
+            Weather_FillDemoData();
+        }
 
         if ((TickType_t)(now - last_1s_tick) >= pdMS_TO_TICKS(100U))
         {
