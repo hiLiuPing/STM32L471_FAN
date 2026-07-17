@@ -32,6 +32,7 @@ void ui_page_manager_next(void);
 void ui_page_manager_prev(void);
 void ui_page_manager_goto(const char *page_name, uint8_t index);
 ui_page_t *ui_page_manager_get_current(void);
+bool ui_page_manager_is_startup_active(void);
 void ui_page_manager_handle_key_event(void *key_event);
 void ui_page_manager_service(void);
 bool ui_page_consume_nav_key_event(void *key_event);

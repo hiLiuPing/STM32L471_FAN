@@ -6,6 +6,10 @@
 
 #include "egui_port_stm32l471_fan.h"
 #include "key.h"
+#include "page_manager.h"
+#include "system_notify.h"
+#include "ui_shutdown_popup.h"
+#include "ui_system_popup.h"
 #include "user_TasksInit.h"
 
 static void EGUIHandlerTask_DispatchQueuedKeys(void)
@@ -23,6 +27,23 @@ static void EGUIHandlerTask_DispatchQueuedKeys(void)
     }
 }
 
+static void EGUIHandlerTask_DispatchSystemNotification(void)
+{
+    SystemNotifyMessage_t message;
+
+    if (ui_page_manager_is_startup_active() ||
+        ui_shutdown_popup_is_active() ||
+        ui_system_popup_is_visible())
+    {
+        return;
+    }
+
+    if (SystemNotify_TryReceive(&message))
+    {
+        ui_system_popup_show(&message);
+    }
+}
+
 void EGUIHandlerTask(void *argument)
 {
     (void)argument;
@@ -32,6 +53,7 @@ void EGUIHandlerTask(void *argument)
     for (;;)
     {
         EGUIHandlerTask_DispatchQueuedKeys();
+        EGUIHandlerTask_DispatchSystemNotification();
         egui_port_poll();
         vTaskDelay(pdMS_TO_TICKS(5U));
     }

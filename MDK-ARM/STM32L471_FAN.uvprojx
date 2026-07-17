@@ -1521,6 +1521,11 @@
               <FilePath>../USER/APP/weather_app.c</FilePath>
             </File>
             <File>
+              <FileName>icons.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/icons.c</FilePath>
+            </File>
+            <File>
               <FileName>home_scene_res.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/home_scene_res.c</FilePath>
@@ -1549,6 +1554,11 @@
               <FileName>system_power.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/system_power.c</FilePath>
+            </File>
+            <File>
+              <FileName>system_notify.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/system_notify.c</FilePath>
             </File>
             <File>
               <FileName>pwm_fan_control.c</FileName>
@@ -1754,6 +1764,11 @@
               <FileName>ui_shutdown_popup.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/GUI/ui_shutdown_popup.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_system_popup.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/ui_system_popup.c</FilePath>
             </File>
             <File>
               <FileName>ui_heiti_font.c</FileName>

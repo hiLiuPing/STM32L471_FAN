@@ -97,12 +97,14 @@ virtualFolder:
             - path: USER/APP/settings_app.c
             - path: USER/APP/data_app.c
             - path: USER/APP/weather_app.c
+            - path: USER/APP/icons.c
             - path: USER/APP/home_scene_res.c
             - path: USER/APP/psram_app.c
             - path: USER/APP/systemMonitor_app.c
             - path: USER/APP/led_app.c
             - path: USER/APP/fan_app.c
             - path: USER/APP/system_power.c
+            - path: USER/APP/system_notify.c
             - path: USER/APP/pwm_fan_control.c
             - path: USER/APP/fan_anim_res.c
             - path: USER/APP/poetry_app.c
@@ -295,6 +297,10 @@ virtualFolder:
           files:
             - path: USER/GUI/ui.c
             - path: USER/GUI/page_manager.c
+            - path: USER/GUI/ui_poetry_popup.c
+            - path: USER/GUI/ui_shutdown_popup.c
+            - path: USER/GUI/ui_system_popup.c
+            - path: USER/GUI/ui_heiti_font.c
             - path: USER/GUI/screens/ui_StartPage.c
             - path: USER/GUI/screens/ui_HomePage.c
             - path: USER/GUI/screens/ui_FanPage.c

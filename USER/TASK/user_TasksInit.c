@@ -13,6 +13,7 @@
 
 #include "fan_app.h"
 #include "key.h"
+#include "system_notify.h"
 
 TaskHandle_t HardwareInitTaskHandle = NULL;
 TaskHandle_t KeyTaskHandle = NULL;
@@ -67,6 +68,8 @@ void User_Tasks_WaitForHardwareReady(void)
 
 void User_Tasks_Init(void)
 {
+    QueueHandle_t system_notify_queue;
+
     g_system_hw_ready = 0U;
 
     xKeyScanTaskWakeSemaphore = xSemaphoreCreateBinary();
@@ -87,6 +90,9 @@ void User_Tasks_Init(void)
     Fan_Command_queue = xQueueCreate(8U, sizeof(fan_cmd_t));
     User_Tasks_RequireHandle(Fan_Command_queue);
     FanApp_AttachCommandQueue(Fan_Command_queue);
+    system_notify_queue = xQueueCreate(16U, sizeof(SystemNotifyMessage_t));
+    User_Tasks_RequireHandle(system_notify_queue);
+    SystemNotify_AttachQueue(system_notify_queue);
 
     User_Tasks_RequireStatus(xTaskCreate(HardwareInitTask,
                                          "HwInitTask",

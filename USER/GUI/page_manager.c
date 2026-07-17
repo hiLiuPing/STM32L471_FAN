@@ -6,6 +6,7 @@
 #include "key.h"
 #include "ui_poetry_popup.h"
 #include "ui_shutdown_popup.h"
+#include "ui_system_popup.h"
 #include "widget/egui_view.h"
 
 typedef struct
@@ -222,6 +223,15 @@ ui_page_t *ui_page_manager_get_current(void)
     return s_page_manager.pages[s_page_manager.current_index];
 }
 
+bool ui_page_manager_is_startup_active(void)
+{
+    ui_page_t *current = ui_page_manager_get_current();
+
+    return (current != NULL) &&
+           (current->name != NULL) &&
+           (strcmp(current->name, "START") == 0);
+}
+
 static bool ui_page_manager_consume_global_key_event(void *key_event)
 {
     const key_event_t *event = (const key_event_t *)key_event;
@@ -246,6 +256,11 @@ void ui_page_manager_handle_key_event(void *key_event)
     ui_page_t *current_page = ui_page_manager_get_current();
     bool consumed = false;
 
+    if (ui_page_manager_is_startup_active())
+    {
+        return;
+    }
+
     if ((event != NULL) &&
         (event->id == KEY_ID_PWR) &&
         (event->type == KEY_EVT_LONG))
@@ -256,6 +271,42 @@ void ui_page_manager_handle_key_event(void *key_event)
 
     if (ui_shutdown_popup_is_active())
     {
+        return;
+    }
+
+    if ((event != NULL) && ui_system_popup_is_visible())
+    {
+        bool allow_home_fan_key = false;
+
+        if ((current_page != NULL) &&
+            (current_page->name != NULL) &&
+            (strcmp(current_page->name, "HOME") == 0) &&
+            ui_system_popup_is_fan_control())
+        {
+            allow_home_fan_key = ((event->id == KEY_ID_OK) &&
+                                  (event->type == KEY_EVT_CLICK)) ||
+                                 (((event->id == KEY_ID_UP) ||
+                                   (event->id == KEY_ID_DOWN)) &&
+                                  ((event->type == KEY_EVT_CLICK) ||
+                                   (event->type == KEY_EVT_LONG) ||
+                                   (event->type == KEY_EVT_REPEAT)));
+        }
+
+        if (!allow_home_fan_key)
+        {
+            if (event->type == KEY_EVT_CLICK)
+            {
+                ui_system_popup_dismiss();
+            }
+            return;
+        }
+    }
+
+    if ((event != NULL) &&
+        (event->type == KEY_EVT_CLICK) &&
+        ui_poetry_popup_is_visible())
+    {
+        ui_poetry_popup_dismiss();
         return;
     }
 

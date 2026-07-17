@@ -6,18 +6,34 @@
 #include "core/egui_timer.h"
 #include "data_app.h"
 #include "egui_port_stm32l471_fan.h"
+#include "fan_app.h"
 #include "home_scene_res.h"
 #include "icons.h"
+#include "key.h"
 #include "page_manager.h"
+#include "system_notify.h"
 #include "ui_common.h"
 #include "ui_heiti_font.h"
+#include "ui_system_popup.h"
 #include "weather_app.h"
+
+#define HOME_FAN_QUICK_WINDOW_MS 3000U
+#define HOME_FAN_SPEED_STEP      5U
+#define HOME_FAN_SPEED_FAST_STEP 10U
 
 typedef struct
 {
     egui_view_t base;
     egui_timer_t timer;
 } ui_home_page_t;
+
+typedef struct
+{
+    uint32_t expires_at_ms;
+    uint8_t target_speed_percent;
+    uint8_t target_power_on;
+    uint8_t active;
+} ui_home_fan_quick_state_t;
 
 typedef struct
 {
@@ -107,6 +123,7 @@ static uint32_t s_home_status_version = 0xFFFFFFFFU;
 static ui_home_scene_state_t s_home_scene_state;
 static ui_home_weather_state_t s_home_weather_state;
 static ui_home_battery_state_t s_home_battery_state;
+static ui_home_fan_quick_state_t s_home_fan_quick_state;
 static ui_home_particle_t s_home_particles[30];
 static DataApp_HomeStatus_t s_home_render_status;
 static ui_home_style_t s_home_render_style;
@@ -129,6 +146,11 @@ static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
                                               egui_dim_t y,
                                               egui_dim_t w,
                                               egui_dim_t h);
+static void ui_HomePage_fan_quick_reset(void);
+static bool ui_HomePage_fan_quick_is_active(uint32_t now);
+static bool ui_HomePage_fan_toggle(void);
+static bool ui_HomePage_fan_adjust(const key_event_t *event);
+static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value);
 
 /* Screen bounds for culling */
 #define SCREEN_W (int)UI_SCREEN_W
@@ -993,6 +1015,7 @@ void ui_HomePage_screen_init(void)
     s_home_scene_state.is_valid = 0U;
     s_home_weather_state.is_valid = 0U;
     memset(&s_home_battery_state, 0, sizeof(s_home_battery_state));
+    ui_HomePage_fan_quick_reset();
     s_home_battery_state.visible = 1U;
     s_home_heiti_16 = NULL;
     DataApp_HomeStatus_Get(&status);
@@ -1004,11 +1027,140 @@ void ui_HomePage_screen_init(void)
 
 void ui_HomePage_screen_destroy(void)
 {
+    ui_HomePage_fan_quick_reset();
 }
 
 bool ui_HomePage_key_handler(void *key_event)
 {
+    const key_event_t *event = (const key_event_t *)key_event;
+    uint32_t now;
+
+    if (event == NULL)
+    {
+        return false;
+    }
+
+    if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
+    {
+        return ui_HomePage_fan_toggle();
+    }
+
+    if ((event->id != KEY_ID_UP) && (event->id != KEY_ID_DOWN))
+    {
+        return false;
+    }
+
+    now = egui_timer_get_current_time();
+    if (ui_HomePage_fan_quick_is_active(now))
+    {
+        return ui_HomePage_fan_adjust(event);
+    }
+
     return ui_page_consume_nav_key_event(key_event);
+}
+
+static void ui_HomePage_fan_quick_reset(void)
+{
+    memset(&s_home_fan_quick_state, 0, sizeof(s_home_fan_quick_state));
+}
+
+static bool ui_HomePage_fan_quick_is_active(uint32_t now)
+{
+    if ((s_home_fan_quick_state.active == 0U) ||
+        (s_home_fan_quick_state.target_power_on == 0U))
+    {
+        return false;
+    }
+
+    if ((int32_t)(now - s_home_fan_quick_state.expires_at_ms) >= 0)
+    {
+        ui_HomePage_fan_quick_reset();
+        return false;
+    }
+
+    return true;
+}
+
+static bool ui_HomePage_fan_toggle(void)
+{
+    fan_state_t state;
+    uint32_t now = egui_timer_get_current_time();
+    uint8_t enable;
+
+    FanApp_GetState(&state);
+    enable = ui_HomePage_fan_quick_is_active(now) ? 0U : (uint8_t)(state.power_on == 0U);
+
+    if (!FanApp_SetPowerWithFlags(enable != 0U,
+                                  FAN_CMD_FLAG_SUPPRESS_POWER_NOTIFY,
+                                  0U))
+    {
+        return true;
+    }
+
+    if (enable != 0U)
+    {
+        s_home_fan_quick_state.active = 1U;
+        s_home_fan_quick_state.target_power_on = 1U;
+        s_home_fan_quick_state.target_speed_percent = state.base_speed_percent;
+        s_home_fan_quick_state.expires_at_ms = now + HOME_FAN_QUICK_WINDOW_MS;
+        ui_HomePage_show_fan_popup(SYSTEM_NOTIFY_FAN_ON, 0);
+    }
+    else
+    {
+        ui_HomePage_fan_quick_reset();
+        ui_HomePage_show_fan_popup(SYSTEM_NOTIFY_FAN_OFF, 0);
+    }
+
+    return true;
+}
+
+static bool ui_HomePage_fan_adjust(const key_event_t *event)
+{
+    uint8_t step;
+    uint8_t next;
+    uint32_t now;
+
+    if ((event == NULL) ||
+        ((event->type != KEY_EVT_CLICK) &&
+         (event->type != KEY_EVT_LONG) &&
+         (event->type != KEY_EVT_REPEAT)))
+    {
+        return false;
+    }
+
+    step = (event->type == KEY_EVT_CLICK) ?
+               HOME_FAN_SPEED_STEP :
+               HOME_FAN_SPEED_FAST_STEP;
+    next = s_home_fan_quick_state.target_speed_percent;
+    if (event->id == KEY_ID_DOWN)
+    {
+        next = ((uint16_t)next + step > 100U) ? 100U : (uint8_t)(next + step);
+    }
+    else
+    {
+        next = (next < step) ? 0U : (uint8_t)(next - step);
+    }
+
+    if (!FanApp_SetSpeed(next, 0U))
+    {
+        return true;
+    }
+
+    now = egui_timer_get_current_time();
+    s_home_fan_quick_state.target_speed_percent = next;
+    s_home_fan_quick_state.expires_at_ms = now + HOME_FAN_QUICK_WINDOW_MS;
+    ui_HomePage_show_fan_popup(SYSTEM_NOTIFY_FAN_SPEED, (int16_t)next);
+    return true;
+}
+
+static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value)
+{
+    SystemNotifyMessage_t message;
+
+    message.type = type;
+    message.value0 = value;
+    message.value1 = 0;
+    (void)ui_system_popup_show_or_update(&message);
 }
 
 void ui_HomePage_set_animation_enabled(bool enable)
@@ -1081,6 +1233,7 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer)
     }
 
     now = egui_timer_get_current_time();
+    (void)ui_HomePage_fan_quick_is_active(now);
     DataApp_HomeStatus_Get(&status);
     ui_HomePage_update_render_snapshot(&status);
     if (s_home_animation_enabled || (!status.charging && !status.charge_full))

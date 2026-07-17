@@ -37,9 +37,12 @@ typedef enum {
     FAN_CMD_RESET_DEFAULTS,
 } fan_cmd_type_t;
 
+#define FAN_CMD_FLAG_SUPPRESS_POWER_NOTIFY 0x01U
+
 typedef struct {
     fan_cmd_type_t type;
     uint16_t value;
+    uint8_t flags;
 } fan_cmd_t;
 
 typedef struct {
@@ -56,6 +59,7 @@ typedef struct {
     uint8_t natural_amplitude_percent;
     uint16_t auto_off_min;
     uint16_t auto_off_remaining_min;
+    uint32_t auto_off_remaining_s;
     int16_t current_temp_x10;
     uint8_t current_hum_percent;
     uint16_t pwm_compare;
@@ -66,6 +70,7 @@ void FanApp_AttachCommandQueue(QueueHandle_t queue);
 bool FanApp_SendCommand(const fan_cmd_t *cmd, TickType_t timeout);
 
 bool FanApp_SetPower(bool enable, TickType_t timeout);
+bool FanApp_SetPowerWithFlags(bool enable, uint8_t flags, TickType_t timeout);
 bool FanApp_SetMode(fan_mode_t mode, TickType_t timeout);
 bool FanApp_SetSpeed(uint8_t percent, TickType_t timeout);
 bool FanApp_SetIntensity(uint8_t percent, TickType_t timeout);

@@ -133,6 +133,11 @@ static uint16_t FanApp_NormalizeAutoOffMinutes(uint16_t minutes)
     return FanApp_ClampRangeU16(minutes, FAN_AUTO_OFF_MINUTES_MIN, FAN_AUTO_OFF_MINUTES_MAX);
 }
 
+static TickType_t FanApp_AutoOffMinutesToTicks(uint16_t minutes)
+{
+    return (TickType_t)minutes * pdMS_TO_TICKS(60000U);
+}
+
 static fan_mode_t FanApp_NormalizePersistedMode(uint8_t mode)
 {
     if ((mode <= (uint8_t)FAN_MODE_OFF) || (mode >= (uint8_t)FAN_MODE_COUNT))
@@ -416,15 +421,17 @@ static void FanApp_ResetAutoOffTimer(TickType_t now)
 {
     if ((s_state.power_on != 0U) && (s_state.auto_off_min > 0U))
     {
-        s_auto_off_deadline_tick = now + pdMS_TO_TICKS((uint32_t)s_state.auto_off_min * 60000UL);
+        s_auto_off_deadline_tick = now + FanApp_AutoOffMinutesToTicks(s_state.auto_off_min);
         s_auto_off_timer_active = 1U;
         s_state.auto_off_remaining_min = s_state.auto_off_min;
+        s_state.auto_off_remaining_s = (uint32_t)s_state.auto_off_min * 60U;
     }
     else
     {
         s_auto_off_deadline_tick = 0U;
         s_auto_off_timer_active = 0U;
         s_state.auto_off_remaining_min = 0U;
+        s_state.auto_off_remaining_s = 0U;
     }
 }
 
@@ -449,6 +456,7 @@ static void FanApp_SetPowerInternal(bool enable, TickType_t now)
         s_auto_off_deadline_tick = 0U;
         s_auto_off_timer_active = 0U;
         s_state.auto_off_remaining_min = 0U;
+        s_state.auto_off_remaining_s = 0U;
         FanApp_ApplyHardware(0U);
         FanApp_ResetPwmAlgorithm();
         return;
@@ -542,6 +550,7 @@ static void FanApp_UpdateAutoOff(TickType_t now)
     if ((s_state.power_on == 0U) || (s_auto_off_timer_active == 0U))
     {
         s_state.auto_off_remaining_min = 0U;
+        s_state.auto_off_remaining_s = 0U;
         return;
     }
 
@@ -553,8 +562,12 @@ static void FanApp_UpdateAutoOff(TickType_t now)
 
     {
         TickType_t ticks_left = s_auto_off_deadline_tick - now;
-        uint32_t remaining_ms = (uint32_t)ticks_left * (uint32_t)portTICK_PERIOD_MS;
-        s_state.auto_off_remaining_min = (uint16_t)((remaining_ms + 59999UL) / 60000UL);
+        TickType_t ticks_per_second = pdMS_TO_TICKS(1000U);
+        uint32_t remaining_s = ((uint32_t)ticks_left + (uint32_t)ticks_per_second - 1U) /
+                               (uint32_t)ticks_per_second;
+
+        s_state.auto_off_remaining_s = remaining_s;
+        s_state.auto_off_remaining_min = (uint16_t)((remaining_s + 59U) / 60U);
     }
 }
 
@@ -608,7 +621,12 @@ bool FanApp_SendCommand(const fan_cmd_t *cmd, TickType_t timeout)
 
 bool FanApp_SetPower(bool enable, TickType_t timeout)
 {
-    fan_cmd_t cmd = { FAN_CMD_SET_POWER, enable ? 1U : 0U };
+    return FanApp_SetPowerWithFlags(enable, 0U, timeout);
+}
+
+bool FanApp_SetPowerWithFlags(bool enable, uint8_t flags, TickType_t timeout)
+{
+    fan_cmd_t cmd = { FAN_CMD_SET_POWER, enable ? 1U : 0U, flags };
     return FanApp_SendCommand(&cmd, timeout);
 }
 
@@ -670,6 +688,7 @@ void FanApp_ForceStop(void)
     s_auto_off_deadline_tick = 0U;
     s_auto_off_timer_active = 0U;
     s_state.auto_off_remaining_min = 0U;
+    s_state.auto_off_remaining_s = 0U;
     FanApp_ResetTachCapture();
     FanApp_ApplyHardware(0U);
     FanApp_ResetPwmAlgorithm();

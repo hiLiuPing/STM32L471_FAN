@@ -1,5 +1,6 @@
 #include "settings_app.h"
 
+#include <stddef.h>
 #include <string.h>
 
 #include "data_app.h"
@@ -10,7 +11,8 @@
 #include "ui_poetry_popup.h"
 #include "weather_app.h"
 
-#define SETTINGS_APP_STORAGE_VERSION     3U
+#define SETTINGS_APP_STORAGE_VERSION     4U
+#define SETTINGS_APP_STORAGE_VERSION_V3  3U
 #define SETTINGS_APP_STORAGE_VERSION_V2  2U
 #define SETTINGS_APP_STORAGE_VERSION_V1  1U
 
@@ -25,13 +27,18 @@ typedef struct
     uint8_t rgb_pwr_enabled;
     uint8_t legacy_brightness_night_percent;
     uint16_t screen_idle_timeout_min;
-    uint8_t reserved[240];
+    uint16_t poetry_popup_duration_s;
+    uint8_t reserved[238];
     uint16_t crc;
 } SettingsApp_Storage_t;
 #pragma pack(pop)
 
 _Static_assert(sizeof(SettingsApp_Storage_t) == EE_BLOCK_SIZE,
                "Settings storage must remain one EEPROM block");
+_Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_duration_s) == 14U,
+               "New settings must not move legacy storage fields");
+_Static_assert(offsetof(SettingsApp_Storage_t, crc) == (EE_BLOCK_SIZE - sizeof(uint16_t)),
+               "Settings CRC must remain at the end of the EEPROM block");
 
 static AppSettings_t s_settings;
 static uint8_t s_settings_initialized = 0U;
@@ -58,6 +65,7 @@ static void SettingsApp_LoadDefaults(AppSettings_t *settings)
 
     settings->poetry_popup_enabled = 1U;
     settings->poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT;
+    settings->poetry_popup_duration_s = SETTINGS_APP_POETRY_DURATION_S_DEFAULT;
     settings->weather_time_sync_interval_min = SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DEFAULT;
     settings->rgb_pwr_enabled = SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
     settings->screen_idle_timeout_min = SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DEFAULT;
@@ -74,6 +82,9 @@ static void SettingsApp_Normalize(AppSettings_t *settings)
     settings->poetry_popup_interval_min = SettingsApp_ClampU16(settings->poetry_popup_interval_min,
                                                                SETTINGS_APP_POETRY_INTERVAL_MIN_MIN,
                                                                SETTINGS_APP_POETRY_INTERVAL_MIN_MAX);
+    settings->poetry_popup_duration_s = SettingsApp_ClampU16(settings->poetry_popup_duration_s,
+                                                              SETTINGS_APP_POETRY_DURATION_S_MIN,
+                                                              SETTINGS_APP_POETRY_DURATION_S_MAX);
     settings->weather_time_sync_interval_min = SettingsApp_ClampU16(settings->weather_time_sync_interval_min,
                                                                      SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN,
                                                                      SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX);
@@ -92,8 +103,11 @@ static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSet
 
     settings->poetry_popup_enabled = storage->poetry_popup_enabled;
     settings->poetry_popup_interval_min = storage->poetry_popup_interval_min;
+    settings->poetry_popup_duration_s = (storage->version == SETTINGS_APP_STORAGE_VERSION) ?
+                                            storage->poetry_popup_duration_s :
+                                            SETTINGS_APP_POETRY_DURATION_S_DEFAULT;
     settings->weather_time_sync_interval_min = storage->weather_time_sync_interval_min;
-    settings->rgb_pwr_enabled = (storage->version == SETTINGS_APP_STORAGE_VERSION) ?
+    settings->rgb_pwr_enabled = (storage->version >= SETTINGS_APP_STORAGE_VERSION_V3) ?
                                     storage->rgb_pwr_enabled :
                                     SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
     settings->screen_idle_timeout_min = storage->screen_idle_timeout_min;
@@ -111,6 +125,7 @@ static void SettingsApp_ToStorage(const AppSettings_t *settings, SettingsApp_Sto
     storage->version = SETTINGS_APP_STORAGE_VERSION;
     storage->poetry_popup_enabled = settings->poetry_popup_enabled;
     storage->poetry_popup_interval_min = settings->poetry_popup_interval_min;
+    storage->poetry_popup_duration_s = settings->poetry_popup_duration_s;
     storage->weather_time_sync_interval_min = settings->weather_time_sync_interval_min;
     storage->rgb_pwr_enabled = settings->rgb_pwr_enabled;
     storage->screen_idle_timeout_min = settings->screen_idle_timeout_min;
@@ -133,6 +148,7 @@ void SettingsApp_Init(void)
 
     if (AppConfig_Load(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage)) &&
         ((storage.version == SETTINGS_APP_STORAGE_VERSION) ||
+         (storage.version == SETTINGS_APP_STORAGE_VERSION_V3) ||
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V2) ||
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V1)))
     {
@@ -143,7 +159,6 @@ void SettingsApp_Init(void)
         }
         if (storage.version != SETTINGS_APP_STORAGE_VERSION)
         {
-            s_settings.rgb_pwr_enabled = SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
             SettingsApp_Normalize(&s_settings);
             need_save = true;
         }
@@ -264,7 +279,7 @@ void SettingsApp_Apply(void)
         interval_s = 0xFFFFU;
     }
 
-    ui_poetry_popup_set_timing((uint16_t)interval_s, UI_POETRY_POPUP_DEFAULT_DURATION_S);
+    ui_poetry_popup_set_timing((uint16_t)interval_s, s_settings.poetry_popup_duration_s);
     ui_poetry_popup_set_enabled(s_settings.poetry_popup_enabled != 0U);
     LED_CMD_OnEvent(LED_TARGET_PWR,
                     (s_settings.rgb_pwr_enabled != 0U) ? LED_EVT_RAINBOW : LED_EVT_STOP);

@@ -13,6 +13,7 @@
 #include "ui_common.h"
 #include "ui_heiti_font.h"
 #include "ui_shutdown_popup.h"
+#include "ui_system_popup.h"
 #include "widget/egui_view.h"
 
 #ifndef UI_POETRY_POPUP_PAUSE_HOME_ANIM
@@ -185,7 +186,7 @@ static void ui_poetry_popup_timer_cb(egui_timer_t *timer)
 
     (void)timer;
 
-    if (ui_shutdown_popup_is_active())
+    if (ui_shutdown_popup_is_active() || ui_system_popup_is_visible())
     {
         if (s_popup.phase == UI_POETRY_POPUP_PHASE_VISIBLE)
         {

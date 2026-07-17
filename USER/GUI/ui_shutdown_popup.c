@@ -10,6 +10,7 @@
 #include "system_power.h"
 #include "ui_common.h"
 #include "ui_poetry_popup.h"
+#include "ui_system_popup.h"
 #include "widget/egui_view.h"
 
 #define UI_SHUTDOWN_POPUP_TIMER_MS       50U
@@ -87,6 +88,7 @@ void ui_shutdown_popup_start(void)
     }
 
     ui_poetry_popup_dismiss();
+    ui_system_popup_dismiss_immediate();
     s_popup.phase = UI_SHUTDOWN_PHASE_HOLDING;
     s_popup.shown_at_ms = egui_timer_get_current_time();
     s_popup.cancel_at_ms = 0U;

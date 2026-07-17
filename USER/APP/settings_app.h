@@ -12,6 +12,10 @@ extern "C" {
 #define SETTINGS_APP_POETRY_INTERVAL_MIN_MIN           1U
 #define SETTINGS_APP_POETRY_INTERVAL_MIN_MAX           60U
 
+#define SETTINGS_APP_POETRY_DURATION_S_DEFAULT         30U
+#define SETTINGS_APP_POETRY_DURATION_S_MIN             30U
+#define SETTINGS_APP_POETRY_DURATION_S_MAX             300U
+
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DEFAULT 60U
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN     30U
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX     300U
@@ -31,6 +35,7 @@ typedef struct
 {
     uint8_t poetry_popup_enabled;
     uint16_t poetry_popup_interval_min;
+    uint16_t poetry_popup_duration_s;
     uint16_t weather_time_sync_interval_min;
     uint8_t rgb_pwr_enabled;
     uint16_t screen_idle_timeout_min;

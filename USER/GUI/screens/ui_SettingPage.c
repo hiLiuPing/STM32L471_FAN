@@ -11,15 +11,17 @@
 #include "ui_common.h"
 #include "widget/egui_view.h"
 
-#define UI_SETTING_ITEM_COUNT       5U
+#define UI_SETTING_ITEM_COUNT       6U
 #define UI_SETTING_FRAME_MS         50U
 #define UI_SETTING_ROW_X            132
 #define UI_SETTING_ROW_W            288
-#define UI_SETTING_ROW_Y            10
-#define UI_SETTING_ROW_H            23
-#define UI_SETTING_ROW_GAP          3
+#define UI_SETTING_ROW_Y            4
+#define UI_SETTING_ROW_H            20
+#define UI_SETTING_ROW_GAP          2
 #define UI_SETTING_VALUE_STEP       1U
 #define UI_SETTING_FAST_STEP        5U
+#define UI_SETTING_DURATION_STEP    10U
+#define UI_SETTING_DURATION_FAST_STEP 30U
 #define UI_SETTING_ENTER_STEP_MS    65U
 #define UI_SETTING_ENTER_LENGTH_MS  260U
 #define UI_SETTING_CONFIRM_MS       360U
@@ -29,6 +31,7 @@ typedef enum
 {
     UI_SETTING_ITEM_POETRY_ENABLE = 0,
     UI_SETTING_ITEM_POETRY_INTERVAL,
+    UI_SETTING_ITEM_POETRY_DURATION,
     UI_SETTING_ITEM_WEATHER_INTERVAL,
     UI_SETTING_ITEM_RGB_PWR_ENABLE,
     UI_SETTING_ITEM_IDLE_TIMEOUT
@@ -53,6 +56,7 @@ typedef struct
 static const char *const s_setting_labels[UI_SETTING_ITEM_COUNT] = {
     "Poetry popup",
     "Poetry gap",
+    "Poetry stay",
     "Weather sync",
     "RGB rainbow",
     "Screen sleep",
@@ -345,6 +349,9 @@ static void ui_setting_format_value(uint8_t index, char *buf, uint16_t size)
     case UI_SETTING_ITEM_POETRY_INTERVAL:
         (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.poetry_popup_interval_min);
         break;
+    case UI_SETTING_ITEM_POETRY_DURATION:
+        (void)snprintf(buf, size, "%u s", (unsigned)s_setting_page.settings.poetry_popup_duration_s);
+        break;
     case UI_SETTING_ITEM_WEATHER_INTERVAL:
         (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.weather_time_sync_interval_min);
         break;
@@ -473,6 +480,12 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
         s_setting_page.settings.poetry_popup_interval_min =
             ui_setting_adjust_u16(s_setting_page.settings.poetry_popup_interval_min, delta, step,
                                   SETTINGS_APP_POETRY_INTERVAL_MIN_MIN, SETTINGS_APP_POETRY_INTERVAL_MIN_MAX);
+        break;
+    case UI_SETTING_ITEM_POETRY_DURATION:
+        step = (fast != 0U) ? UI_SETTING_DURATION_FAST_STEP : UI_SETTING_DURATION_STEP;
+        s_setting_page.settings.poetry_popup_duration_s =
+            ui_setting_adjust_u16(s_setting_page.settings.poetry_popup_duration_s, delta, step,
+                                  SETTINGS_APP_POETRY_DURATION_S_MIN, SETTINGS_APP_POETRY_DURATION_S_MAX);
         break;
     case UI_SETTING_ITEM_WEATHER_INTERVAL:
         s_setting_page.settings.weather_time_sync_interval_min =

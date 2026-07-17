@@ -11,6 +11,7 @@
 #include "screens/ui_StartPage.h"
 #include "ui_poetry_popup.h"
 #include "ui_shutdown_popup.h"
+#include "ui_system_popup.h"
 
 static ui_page_t s_pages[] = {
     {
@@ -69,6 +70,7 @@ void ui_init(void)
 
     ui_page_manager_load_init();
     ui_poetry_popup_init();
+    ui_system_popup_init();
     ui_shutdown_popup_init();
     SettingsApp_Apply();
 }

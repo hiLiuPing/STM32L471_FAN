@@ -643,6 +643,16 @@ static void ui_FanPage_format_value(uint8_t index, const fan_state_t *state, cha
     }
 }
 
+static void ui_FanPage_format_countdown(uint32_t remaining_s, char *buf, uint16_t size)
+{
+    uint32_t hours = remaining_s / 3600U;
+    uint32_t minutes = (remaining_s % 3600U) / 60U;
+    uint32_t seconds = remaining_s % 60U;
+
+    (void)snprintf(buf, size, "%02u:%02u:%02u",
+                   (unsigned)hours, (unsigned)minutes, (unsigned)seconds);
+}
+
 static void ui_FanPage_draw_rows(egui_canvas_t *canvas)
 {
     const egui_font_t *font = EGUI_FONT_OF(&egui_res_font_montserrat_12_4);
@@ -708,10 +718,21 @@ static void ui_FanPage_draw_rows(egui_canvas_t *canvas)
 
     {
         const char *hint;
+        char countdown[12];
 
         if (s_fan_page.setting_active == 0U)
         {
-            hint = "OK SETTINGS";
+            if ((s_fan_page.state.power_on != 0U) &&
+                (s_fan_page.state.auto_off_remaining_s > 0U))
+            {
+                ui_FanPage_format_countdown(s_fan_page.state.auto_off_remaining_s,
+                                            countdown, sizeof(countdown));
+                hint = countdown;
+            }
+            else
+            {
+                hint = "OK SETTINGS";
+            }
         }
         else if (s_fan_page.editing != 0U)
         {
