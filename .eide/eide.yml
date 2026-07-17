@@ -102,6 +102,7 @@ virtualFolder:
             - path: USER/APP/systemMonitor_app.c
             - path: USER/APP/led_app.c
             - path: USER/APP/fan_app.c
+            - path: USER/APP/system_power.c
             - path: USER/APP/pwm_fan_control.c
             - path: USER/APP/fan_anim_res.c
             - path: USER/APP/poetry_app.c

@@ -264,5 +264,5 @@ void Key_Init(void)
     // Key_Port_Init();
     Key_RegisterDefaultKeys();
     Key_SetMode(KEY_MODE_CLICK_ON_RELEASE | KEY_MODE_LONG_ONCE | KEY_MODE_REPEAT);
-    Key_SetLongEnableMask(KEY_BIT(KEY_ID_DOWN) | KEY_BIT(KEY_ID_UP));
+    Key_SetLongEnableMask(KEY_BIT(KEY_ID_PWR) | KEY_BIT(KEY_ID_DOWN) | KEY_BIT(KEY_ID_UP));
 }

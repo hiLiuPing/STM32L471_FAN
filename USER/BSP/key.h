@@ -112,9 +112,15 @@ typedef struct {
 
 void Key_Init(void);
 bool Key_Scan(key_event_t* out_evt);
+void Key_SetMode(uint8_t mode_flags);
+uint8_t Key_GetMode(void);
+void Key_SetLongEnableMask(uint32_t mask);
+uint32_t Key_GetLongEnableMask(void);
+uint32_t Key_GetPressedMask(void);
+uint32_t Key_GetRawMask(void);
+void Key_SetTiming(const key_timing_t* timing);
 
 #ifdef __cplusplus
 }
 #endif
 #endif
-

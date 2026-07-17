@@ -71,6 +71,7 @@ static void ui_SettingPage_on_draw(egui_view_t *self);
 static void ui_SettingPage_timer_cb(egui_timer_t *timer);
 static void ui_SettingPage_move_selection(int8_t delta);
 static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast);
+static bool ui_SettingPage_is_toggle_item(uint8_t index);
 static bool ui_SettingPage_commit_edit(void);
 
 static uint32_t ui_setting_hsv_to_rgb(uint16_t hue, uint8_t saturation, uint8_t value)
@@ -227,6 +228,12 @@ bool ui_SettingPage_key_handler(void *key_event)
     }
     if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
     {
+        if (ui_SettingPage_is_toggle_item(s_setting_page.selected_index))
+        {
+            ui_SettingPage_adjust_selected(1, 0U);
+            return ui_SettingPage_commit_edit();
+        }
+
         s_setting_page.edit_backup = s_setting_page.settings;
         s_setting_page.editing = 1U;
         egui_view_invalidate_full(ui_SettingPage);
@@ -277,8 +284,22 @@ static void ui_setting_draw_switch(egui_canvas_t *canvas, int16_t x, int16_t y, 
 
 static void ui_setting_draw_background(egui_canvas_t *canvas)
 {
+    const char *key_hint;
     uint32_t accent = ui_setting_hsv_to_rgb(s_setting_page.hue, 210U, 255U);
     uint16_t phase = (uint16_t)((s_setting_page.frame_tick / 20U) % UI_SCREEN_W);
+
+    if (s_setting_page.setting_active == 0U)
+    {
+        key_hint = "OK SETTINGS";
+    }
+    else if (ui_SettingPage_is_toggle_item(s_setting_page.selected_index))
+    {
+        key_hint = "PWR BACK  OK TOGGLE";
+    }
+    else
+    {
+        key_hint = "PWR BACK  OK EDIT";
+    }
 
     ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, 0x07111F);
     ui_draw_rect(canvas, 0, 0, 128, UI_SCREEN_H, 0x0B1F33);
@@ -313,7 +334,7 @@ static void ui_setting_draw_background(egui_canvas_t *canvas)
                  (s_setting_page.settings.rgb_pwr_enabled != 0U) ? "RAINBOW ON" : "RAINBOW OFF",
                  18, 111, 92, 15, EGUI_ALIGN_CENTER, accent);
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4),
-                 (s_setting_page.setting_active != 0U) ? "PWR BACK  OK EDIT" : "OK SETTINGS",
+                 key_hint,
                  7, 128, 114, 12, EGUI_ALIGN_CENTER, 0x94A3B8);
 }
 
@@ -473,6 +494,12 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
         break;
     }
     egui_view_invalidate_full(ui_SettingPage);
+}
+
+static bool ui_SettingPage_is_toggle_item(uint8_t index)
+{
+    return ((index == (uint8_t)UI_SETTING_ITEM_POETRY_ENABLE) ||
+            (index == (uint8_t)UI_SETTING_ITEM_RGB_PWR_ENABLE));
 }
 
 static bool ui_SettingPage_commit_edit(void)

@@ -5,6 +5,7 @@
 #include "core/egui_timer.h"
 #include "key.h"
 #include "ui_poetry_popup.h"
+#include "ui_shutdown_popup.h"
 #include "widget/egui_view.h"
 
 typedef struct
@@ -241,8 +242,22 @@ static bool ui_page_manager_consume_global_key_event(void *key_event)
 
 void ui_page_manager_handle_key_event(void *key_event)
 {
+    const key_event_t *event = (const key_event_t *)key_event;
     ui_page_t *current_page = ui_page_manager_get_current();
     bool consumed = false;
+
+    if ((event != NULL) &&
+        (event->id == KEY_ID_PWR) &&
+        (event->type == KEY_EVT_LONG))
+    {
+        ui_shutdown_popup_start();
+        return;
+    }
+
+    if (ui_shutdown_popup_is_active())
+    {
+        return;
+    }
 
     if ((current_page != NULL) && (current_page->key_consume != NULL))
     {

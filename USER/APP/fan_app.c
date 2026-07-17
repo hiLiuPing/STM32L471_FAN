@@ -18,7 +18,6 @@
 #define FAN_APP_START_BOOST_PERCENT         35U
 #define FAN_APP_START_BOOST_MS              300U
 #define FAN_APP_PWM_ALGO_PERIOD_MS          100U
-#define FAN_APP_AUTO_OFF_MAX_MIN            120U
 #define FAN_APP_PWM_PERIOD                  3199U
 #define FAN_APP_SMART_TEMP_SPAN_X10         40
 #define FAN_APP_NATURAL_AMPLITUDE_DEFAULT   FAN_APP_DEFAULT_NATURAL_AMPLITUDE
@@ -72,6 +71,7 @@ static QueueHandle_t s_command_queue = NULL;
 static fan_state_t s_state;
 static TickType_t s_boost_until_tick = 0U;
 static TickType_t s_auto_off_deadline_tick = 0U;
+static uint8_t s_auto_off_timer_active = 0U;
 static PwmFanController_t s_pwm_fan;
 static TickType_t s_pwm_last_tick = 0U;
 static uint8_t s_pwm_cached_percent = 0U;
@@ -123,6 +123,16 @@ static uint16_t FanApp_ClampRangeU16(uint16_t value, uint16_t min, uint16_t max)
     return value;
 }
 
+static uint16_t FanApp_NormalizeAutoOffMinutes(uint16_t minutes)
+{
+    if (minutes == FAN_AUTO_OFF_MINUTES_DISABLED)
+    {
+        return FAN_AUTO_OFF_MINUTES_DISABLED;
+    }
+
+    return FanApp_ClampRangeU16(minutes, FAN_AUTO_OFF_MINUTES_MIN, FAN_AUTO_OFF_MINUTES_MAX);
+}
+
 static fan_mode_t FanApp_NormalizePersistedMode(uint8_t mode)
 {
     if ((mode <= (uint8_t)FAN_MODE_OFF) || (mode >= (uint8_t)FAN_MODE_COUNT))
@@ -172,8 +182,7 @@ static void FanApp_FromStorage(const FanApp_Storage_t *storage)
         FanApp_ClampPercent(storage->smart_hum_threshold_percent);
     s_state.natural_amplitude_percent =
         (uint8_t)FanApp_ClampRangeU16(storage->natural_amplitude_percent, 0U, 60U);
-    s_state.auto_off_min =
-        FanApp_ClampRangeU16(storage->auto_off_min, 0U, FAN_APP_AUTO_OFF_MAX_MIN);
+    s_state.auto_off_min = FanApp_NormalizeAutoOffMinutes(storage->auto_off_min);
 }
 
 static bool FanApp_SaveSettings(const FanApp_PersistedSettings_t *settings)
@@ -391,8 +400,10 @@ static void FanApp_SetDefaults(void)
     s_state.smart_temp_threshold_x10 = FAN_APP_DEFAULT_SMART_TEMP_X10;
     s_state.smart_hum_threshold_percent = FAN_APP_DEFAULT_SMART_HUM_PERCENT;
     s_state.natural_amplitude_percent = FAN_APP_DEFAULT_NATURAL_AMPLITUDE;
+    s_state.auto_off_min = FAN_AUTO_OFF_MINUTES_DEFAULT;
     s_boost_until_tick = 0U;
     s_auto_off_deadline_tick = 0U;
+    s_auto_off_timer_active = 0U;
     FanApp_ResetPwmAlgorithm();
 }
 
@@ -406,17 +417,21 @@ static void FanApp_ResetAutoOffTimer(TickType_t now)
     if ((s_state.power_on != 0U) && (s_state.auto_off_min > 0U))
     {
         s_auto_off_deadline_tick = now + pdMS_TO_TICKS((uint32_t)s_state.auto_off_min * 60000UL);
+        s_auto_off_timer_active = 1U;
         s_state.auto_off_remaining_min = s_state.auto_off_min;
     }
     else
     {
         s_auto_off_deadline_tick = 0U;
+        s_auto_off_timer_active = 0U;
         s_state.auto_off_remaining_min = 0U;
     }
 }
 
 static void FanApp_SetPowerInternal(bool enable, TickType_t now)
 {
+    uint8_t was_power_on = s_state.power_on;
+
     if (!enable)
     {
         if (s_state.mode != FAN_MODE_OFF)
@@ -432,6 +447,7 @@ static void FanApp_SetPowerInternal(bool enable, TickType_t now)
         FanApp_ResetTachCapture();
         s_boost_until_tick = 0U;
         s_auto_off_deadline_tick = 0U;
+        s_auto_off_timer_active = 0U;
         s_state.auto_off_remaining_min = 0U;
         FanApp_ApplyHardware(0U);
         FanApp_ResetPwmAlgorithm();
@@ -446,11 +462,16 @@ static void FanApp_SetPowerInternal(bool enable, TickType_t now)
     s_state.last_mode = s_state.mode;
     s_pwm_last_tick = 0U;
     FanApp_StartBoost(now);
-    FanApp_ResetAutoOffTimer(now);
+    if (was_power_on == 0U)
+    {
+        FanApp_ResetAutoOffTimer(now);
+    }
 }
 
 static void FanApp_SetModeInternal(fan_mode_t mode, TickType_t now)
 {
+    uint8_t was_power_on;
+
     if ((uint32_t)mode >= (uint32_t)FAN_MODE_COUNT)
     {
         return;
@@ -462,12 +483,16 @@ static void FanApp_SetModeInternal(fan_mode_t mode, TickType_t now)
         return;
     }
 
+    was_power_on = s_state.power_on;
     s_state.power_on = 1U;
     s_state.mode = mode;
     s_state.last_mode = mode;
     s_pwm_last_tick = 0U;
     FanApp_StartBoost(now);
-    FanApp_ResetAutoOffTimer(now);
+    if (was_power_on == 0U)
+    {
+        FanApp_ResetAutoOffTimer(now);
+    }
 }
 
 static void FanApp_UpdateSensorSnapshot(void)
@@ -514,13 +539,13 @@ static uint8_t FanApp_ModeTarget(TickType_t now)
 
 static void FanApp_UpdateAutoOff(TickType_t now)
 {
-    if ((s_state.power_on == 0U) || (s_auto_off_deadline_tick == 0U))
+    if ((s_state.power_on == 0U) || (s_auto_off_timer_active == 0U))
     {
         s_state.auto_off_remaining_min = 0U;
         return;
     }
 
-    if (now >= s_auto_off_deadline_tick)
+    if ((int32_t)(now - s_auto_off_deadline_tick) >= 0)
     {
         FanApp_SetPowerInternal(false, now);
         return;
@@ -627,6 +652,28 @@ bool FanApp_SetAutoOffMinutes(uint16_t minutes, TickType_t timeout)
 {
     fan_cmd_t cmd = { FAN_CMD_SET_AUTO_OFF_MIN, minutes };
     return FanApp_SendCommand(&cmd, timeout);
+}
+
+void FanApp_ForceStop(void)
+{
+    taskENTER_CRITICAL();
+    if (s_state.mode != FAN_MODE_OFF)
+    {
+        s_state.last_mode = s_state.mode;
+    }
+    s_state.power_on = 0U;
+    s_state.mode = FAN_MODE_OFF;
+    s_state.target_speed_percent = 0U;
+    s_state.current_speed_percent = 0U;
+    s_state.current_rpm = 0U;
+    s_boost_until_tick = 0U;
+    s_auto_off_deadline_tick = 0U;
+    s_auto_off_timer_active = 0U;
+    s_state.auto_off_remaining_min = 0U;
+    FanApp_ResetTachCapture();
+    FanApp_ApplyHardware(0U);
+    FanApp_ResetPwmAlgorithm();
+    taskEXIT_CRITICAL();
 }
 
 void FanApp_GetState(fan_state_t *out_state)
@@ -856,7 +903,7 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
 
     case FAN_CMD_SET_AUTO_OFF_MIN:
         {
-            uint16_t value = FanApp_ClampRangeU16(cmd->value, 0U, FAN_APP_AUTO_OFF_MAX_MIN);
+            uint16_t value = FanApp_NormalizeAutoOffMinutes(cmd->value);
             if (s_state.auto_off_min != value)
             {
                 s_state.auto_off_min = value;

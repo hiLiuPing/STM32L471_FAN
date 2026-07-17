@@ -12,6 +12,7 @@
 #include "screens/ui_HomePage.h"
 #include "ui_common.h"
 #include "ui_heiti_font.h"
+#include "ui_shutdown_popup.h"
 #include "widget/egui_view.h"
 
 #ifndef UI_POETRY_POPUP_PAUSE_HOME_ANIM
@@ -183,6 +184,19 @@ static void ui_poetry_popup_timer_cb(egui_timer_t *timer)
     uint32_t now = egui_timer_get_current_time();
 
     (void)timer;
+
+    if (ui_shutdown_popup_is_active())
+    {
+        if (s_popup.phase == UI_POETRY_POPUP_PHASE_VISIBLE)
+        {
+            ui_poetry_popup_hide();
+        }
+        else
+        {
+            s_popup.next_show_ms = now + (uint32_t)s_popup.interval_s * 1000U;
+        }
+        return;
+    }
 
     if (s_popup.enabled == 0U)
     {

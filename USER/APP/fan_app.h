@@ -12,6 +12,11 @@ extern "C" {
 #include "queue.h"
 #include "task.h"
 
+#define FAN_AUTO_OFF_MINUTES_DISABLED 0U
+#define FAN_AUTO_OFF_MINUTES_MIN      60U
+#define FAN_AUTO_OFF_MINUTES_MAX      480U
+#define FAN_AUTO_OFF_MINUTES_DEFAULT  240U
+
 typedef enum {
     FAN_MODE_OFF = 0,
     FAN_MODE_MANUAL,
@@ -68,6 +73,7 @@ bool FanApp_SetSmartTempThreshold(uint16_t temp_x10, TickType_t timeout);
 bool FanApp_SetSmartHumidityThreshold(uint8_t percent, TickType_t timeout);
 bool FanApp_SetNaturalAmplitude(uint8_t percent, TickType_t timeout);
 bool FanApp_SetAutoOffMinutes(uint16_t minutes, TickType_t timeout);
+void FanApp_ForceStop(void);
 
 void FanApp_GetState(fan_state_t *out_state);
 void FanApp_UpdateRpm(TickType_t now);
