@@ -145,7 +145,11 @@ void WeatherSyncTask(void *argument)
         {
             uint8_t sync_ok;
 
-            Weather_WaitForSyncWindow();
+            /*
+             * The first sync establishes the RTC, so it must not depend on
+             * the possibly stale RTC value used by the weather sync window.
+             * Keep the 06:00-21:00 restriction for later periodic syncs.
+             */
             Weather_PowerOn();
             (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
             Weather_DelayAbortable(6000U);

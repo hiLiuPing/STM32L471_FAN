@@ -88,6 +88,7 @@ static uint32_t s_tach_filtered_period_ticks = 0U;
 static TickType_t s_save_deadline_tick = 0U;
 static uint8_t s_save_dirty = 0U;
 static uint8_t s_pwm_running = 0U;
+static uint8_t s_pwm_pin_timer_mode = 1U;
 
 static void FanApp_MarkSettingsDirty(TickType_t now);
 
@@ -292,8 +293,44 @@ static uint16_t FanApp_PercentToCompare(uint8_t percent)
     return (uint16_t)(((uint32_t)(100U - percent) * period_counts) / 100U);
 }
 
+static void FanApp_ConfigurePwmPinForTimer(void)
+{
+    GPIO_InitTypeDef gpio_init = {0};
+
+    if (s_pwm_pin_timer_mode != 0U)
+    {
+        return;
+    }
+
+    gpio_init.Pin = FAN_PWM_Pin;
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_FREQ_MEDIUM;
+    gpio_init.Alternate = GPIO_AF14_TIM17;
+    HAL_GPIO_Init(FAN_PWM_GPIO_Port, &gpio_init);
+    s_pwm_pin_timer_mode = 1U;
+}
+
+static void FanApp_ConfigurePwmPinHighImpedance(void)
+{
+    GPIO_InitTypeDef gpio_init = {0};
+
+    if (s_pwm_pin_timer_mode == 0U)
+    {
+        return;
+    }
+
+    gpio_init.Pin = FAN_PWM_Pin;
+    gpio_init.Mode = GPIO_MODE_ANALOG;
+    gpio_init.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(FAN_PWM_GPIO_Port, &gpio_init);
+    s_pwm_pin_timer_mode = 0U;
+}
+
 static bool FanApp_EnsurePwmRunning(void)
 {
+    FanApp_ConfigurePwmPinForTimer();
+
     if (s_pwm_running != 0U)
     {
         return true;
@@ -301,6 +338,7 @@ static bool FanApp_EnsurePwmRunning(void)
 
     if (HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1) != HAL_OK)
     {
+        FanApp_ConfigurePwmPinHighImpedance();
         return false;
     }
 
@@ -328,6 +366,7 @@ static void FanApp_ApplyHardware(uint8_t output_percent)
         taskENTER_CRITICAL();
         s_state.pwm_compare = compare;
         taskEXIT_CRITICAL();
+        FanApp_ConfigurePwmPinHighImpedance();
         return;
     }
 
@@ -624,6 +663,7 @@ void FanApp_Init(void)
     FanApp_SetDefaults();
     FanApp_ResetTachState();
     s_pwm_running = 0U;
+    s_pwm_pin_timer_mode = 1U;
     s_save_dirty = 0U;
     s_save_deadline_tick = 0U;
 
