@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "core/egui_timer.h"
+#include "egui_port_stm32l471_fan.h"
 #include "key.h"
 #include "ui_poetry_popup.h"
 #include "ui_shutdown_popup.h"
@@ -54,7 +55,7 @@ static void ui_page_manager_ensure_page(ui_page_t *page)
     }
 }
 
-static void ui_page_manager_load_page(uint8_t index)
+static void ui_page_manager_load_page(uint8_t index, bool force)
 {
     ui_page_t *current_page;
     ui_page_t *target_page;
@@ -62,7 +63,7 @@ static void ui_page_manager_load_page(uint8_t index)
     if ((s_page_manager.core == NULL) ||
         (s_page_manager.count == 0U) ||
         (index >= s_page_manager.count) ||
-        !ui_page_manager_can_switch())
+        (!force && !ui_page_manager_can_switch()))
     {
         return;
     }
@@ -153,7 +154,7 @@ void ui_page_manager_register(ui_page_t *page)
 
 void ui_page_manager_load_init(void)
 {
-    ui_page_manager_load_page(0U);
+    ui_page_manager_load_page(0U, false);
 }
 
 void ui_page_manager_next(void)
@@ -167,7 +168,7 @@ void ui_page_manager_next(void)
 
     if (ui_page_manager_find_nav_page(s_page_manager.current_index, 1, &next_index))
     {
-        ui_page_manager_load_page(next_index);
+        ui_page_manager_load_page(next_index, false);
     }
 }
 
@@ -182,7 +183,7 @@ void ui_page_manager_prev(void)
 
     if (ui_page_manager_find_nav_page(s_page_manager.current_index, -1, &prev_index))
     {
-        ui_page_manager_load_page(prev_index);
+        ui_page_manager_load_page(prev_index, false);
     }
 }
 
@@ -210,7 +211,24 @@ void ui_page_manager_goto(const char *page_name, uint8_t index)
         }
     }
 
-    ui_page_manager_load_page(index);
+    ui_page_manager_load_page(index, false);
+}
+
+void ui_page_manager_wake_to_home(void)
+{
+    ui_poetry_popup_dismiss();
+    ui_system_popup_dismiss_immediate();
+
+    for (uint8_t i = 0U; i < s_page_manager.count; i++)
+    {
+        if ((s_page_manager.pages[i] != NULL) &&
+            (s_page_manager.pages[i]->name != NULL) &&
+            (strcmp(s_page_manager.pages[i]->name, "HOME") == 0))
+        {
+            ui_page_manager_load_page(i, true);
+            return;
+        }
+    }
 }
 
 ui_page_t *ui_page_manager_get_current(void)
@@ -258,6 +276,14 @@ void ui_page_manager_handle_key_event(void *key_event)
 
     if (ui_page_manager_is_startup_active())
     {
+        return;
+    }
+
+    if ((event != NULL) &&
+        (event->id == KEY_ID_PWR) &&
+        (event->type == KEY_EVT_DOUBLE_CLICK))
+    {
+        egui_port_set_display_power(false);
         return;
     }
 

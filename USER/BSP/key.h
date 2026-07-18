@@ -78,8 +78,9 @@ typedef enum {
     KEY_EVT_DOWN    = 1,   // 去抖后稳定按下
     KEY_EVT_UP      = 2,   // 去抖后稳定释放
     KEY_EVT_CLICK   = 3,   // 短按（一次按下->释放，且未触发长按）
-    KEY_EVT_LONG    = 4,   // 达到长按阈值触发一次
-    KEY_EVT_REPEAT  = 5    // 长按连发周期事件
+    KEY_EVT_LONG         = 4,   // 达到长按阈值触发一次
+    KEY_EVT_REPEAT       = 5,   // 长按连发周期事件
+    KEY_EVT_DOUBLE_CLICK = 6    // 上层按键管理任务识别的双击事件
 } key_evt_type_t;
 
 /**

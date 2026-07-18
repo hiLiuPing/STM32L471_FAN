@@ -3,7 +3,6 @@
 #include "FreeRTOS.h"
 #include "data_app.h"
 #include "fan_app.h"
-#include "log.h"
 #include "sensors_app.h"
 #include "system_notify.h"
 #include "task.h"
@@ -237,27 +236,11 @@ static void AppDataNotify_Update(AppDataNotifyState_t *state)
     AppDataNotify_UpdateEnvironment(state);
 }
 
-static const char *TiltName(TiltKey_t evt)
-{
-    switch (evt)
-    {
-    case MSG_TILT_UP: return "UP";
-    case MSG_TILT_DOWN: return "DOWN";
-    case MSG_TILT_LEFT: return "LEFT";
-    case MSG_TILT_RIGHT: return "RIGHT";
-    case MSG_FALL_DOWN: return "FALL";
-    case MSG_TILT_SHAKE_VERTICAL: return "SHAKE_V";
-    case MSG_TILT_SHAKE_HORIZONTAL: return "SHAKE_H";
-    default: return "NONE";
-    }
-}
-
 void AppDataTask(void *argument)
 {
     TickType_t last_wake_time;
     TickType_t last_1s_tick;
     TickType_t last_weather_demo_tick;
-    TiltKey_t last_tilt = MSG_TILT_NONE;
     AppDataNotifyState_t notify_state = {0};
 
     (void)argument;
@@ -270,32 +253,6 @@ void AppDataTask(void *argument)
     for (;;)
     {
         TickType_t now = xTaskGetTickCount();
-        TiltKey_t tilt_evt;
-        TiltKey_t fall_evt;
-
-        Update_Motion(&g_sensors_motion);
-        Motion_SwapBuffer(&g_sensors_motion);
-
-        tilt_evt = TiltKey_Update(&g_sensors_motion);
-        fall_evt = FallDetect_Check(&g_sensors_motion);
-
-        if ((tilt_evt != MSG_TILT_NONE) && (tilt_evt != last_tilt))
-        {
-            last_tilt = tilt_evt;
-            log_printf("[Motion] %s", TiltName(tilt_evt));
-            if (((tilt_evt == MSG_TILT_SHAKE_HORIZONTAL) ||
-                 (tilt_evt == MSG_TILT_SHAKE_VERTICAL)) &&
-                (xWeatherSyncTaskWakeSemaphore != NULL))
-            {
-                (void)xSemaphoreGive(xWeatherSyncTaskWakeSemaphore);
-            }
-        }
-
-        if (fall_evt == MSG_FALL_DOWN)
-        {
-            log_printf("[Motion] fall");
-        }
-
         DataApp_QuoteServiceUpdate(now);
 
         // if ((TickType_t)(now - last_weather_demo_tick) >= pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS))

@@ -103,7 +103,7 @@ void User_Tasks_Init(void)
 
     User_Tasks_RequireStatus(xTaskCreate(KeyTask,
                                          "KeyTask",
-                                         128U * 2U,
+                                         256U,
                                          NULL,
                                          tskIDLE_PRIORITY + 2U,
                                          &KeyTaskHandle));

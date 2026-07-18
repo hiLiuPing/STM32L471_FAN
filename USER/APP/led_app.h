@@ -10,6 +10,7 @@ extern "C" {
 typedef enum {
     LED_EVT_NONE = 0,
     LED_EVT_ON,
+    LED_EVT_FLASH_BLUE,
     LED_EVT_STATIC_RED,
     LED_EVT_STATIC_GREEN,
     LED_EVT_STATIC_BLUE,

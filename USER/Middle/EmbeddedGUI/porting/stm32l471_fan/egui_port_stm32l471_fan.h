@@ -14,6 +14,7 @@ void egui_port_poll(void);
 egui_core_t *egui_port_get_core(void);
 void egui_port_handle_key_event(const key_event_t *key_event);
 void egui_port_set_display_power(bool on);
+bool egui_port_is_display_on(void);
 
 #ifdef __cplusplus
 }

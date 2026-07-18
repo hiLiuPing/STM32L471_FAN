@@ -24,6 +24,21 @@ static void EGUIHandlerTask_DispatchQueuedKeys(void)
     while (xQueueReceive(EGUI_Key_queue, &key_event, 0U) == pdPASS)
     {
         egui_port_handle_key_event(&key_event);
+        if (!egui_port_is_display_on())
+        {
+            return;
+        }
+    }
+}
+
+static void EGUIHandlerTask_WaitForWakeKey(void)
+{
+    key_event_t key_event;
+
+    if ((EGUI_Key_queue != NULL) &&
+        (xQueueReceive(EGUI_Key_queue, &key_event, portMAX_DELAY) == pdPASS))
+    {
+        egui_port_handle_key_event(&key_event);
     }
 }
 
@@ -52,9 +67,25 @@ void EGUIHandlerTask(void *argument)
 
     for (;;)
     {
+        if (!egui_port_is_display_on())
+        {
+            EGUIHandlerTask_WaitForWakeKey();
+            continue;
+        }
+
         EGUIHandlerTask_DispatchQueuedKeys();
+        if (!egui_port_is_display_on())
+        {
+            continue;
+        }
+
         EGUIHandlerTask_DispatchSystemNotification();
         egui_port_poll();
+        if (!egui_port_is_display_on())
+        {
+            continue;
+        }
+
         vTaskDelay(pdMS_TO_TICKS(5U));
     }
 }

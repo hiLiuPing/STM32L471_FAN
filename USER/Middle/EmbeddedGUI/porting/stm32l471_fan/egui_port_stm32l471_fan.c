@@ -239,6 +239,7 @@ void egui_port_poll(void)
     }
 
     now = egui_timer_get_current_time();
+    ui_page_manager_service();
     timeout_ms = (uint32_t)SettingsApp_GetScreenIdleTimeoutMin() * 60U * 1000U;
     if (s_egui_display_on && (timeout_ms > 0U) && ((uint32_t)(now - s_egui_last_activity_ms) >= timeout_ms))
     {
@@ -268,7 +269,9 @@ void egui_port_handle_key_event(const key_event_t *key_event)
     s_egui_last_activity_ms = egui_timer_get_current_time();
     if (!s_egui_display_on)
     {
+        ui_page_manager_wake_to_home();
         egui_port_set_display_power(true);
+        return;
     }
 
     ui_page_manager_handle_key_event((void *)key_event);
@@ -296,4 +299,9 @@ void egui_port_set_display_power(bool on)
         s_egui_brightness_check_ms = egui_timer_get_current_time();
         egui_core_force_refresh(&s_egui_core);
     }
+}
+
+bool egui_port_is_display_on(void)
+{
+    return s_egui_display_on;
 }

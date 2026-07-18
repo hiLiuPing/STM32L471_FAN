@@ -78,6 +78,9 @@ void LED_App_Update(uint32_t dt)
         case LED_EVT_ON:
             RGB_SendCmd(rgb, RGB_EFFECT_STATIC, 0U, 0U, RGB_COLOR_WHITE, 0U);
             break;
+        case LED_EVT_FLASH_BLUE:
+            RGB_SendCmd(rgb, RGB_EFFECT_STATIC, 0U, 100U, RGB_COLOR_BLUE, 0U);
+            break;
         case LED_EVT_STATIC_RED:
             RGB_SendCmd(rgb, RGB_EFFECT_STATIC, 0U, 0U, RGB_COLOR_RED, 0U);
             break;
