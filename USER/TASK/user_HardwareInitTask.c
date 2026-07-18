@@ -83,7 +83,7 @@ void HardwareInitTask(void *argument)
                   u2_rb_buf,
                   UART_Transmit_LWRB_SIZE);
     log_printf("step5: hw ready");
-     g_weather_module.first_sync_done = 0U;
+    //  g_weather_module.first_sync_done = 0U;
     User_Tasks_SetHardwareReady();
     log_printf("step6: delete self");
     // Weather_FillDemoData();
