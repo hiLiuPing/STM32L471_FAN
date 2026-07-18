@@ -39,7 +39,10 @@ void I2C_Bus_Unlock(I2C_Bus_t *bus)
 #ifdef USE_FREERTOS
     if (bus->mutex)
     {
+        /* Clear ownership before waking the next waiter. */
+        bus->locked = 0U;
         xSemaphoreGive(bus->mutex);
+        return;
     }
 #endif
     bus->locked = 0U;
@@ -54,8 +57,9 @@ void I2C_Bus_UnlockFromISR(I2C_Bus_t *bus)
     if (bus->mutex)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(bus->mutex, &xHigherPriorityTaskWoken);
+        /* A woken task may take the semaphore immediately after the give. */
         bus->locked = 0U;
+        xSemaphoreGiveFromISR(bus->mutex, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
         return;
     }

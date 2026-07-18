@@ -8,6 +8,7 @@
 #include "lcd_init.h"
 #include "led_app.h"
 #include "log.h"
+#include "task.h"
 #include "ui_poetry_popup.h"
 #include "weather_app.h"
 
@@ -15,6 +16,7 @@
 #define SETTINGS_APP_STORAGE_VERSION_V3  3U
 #define SETTINGS_APP_STORAGE_VERSION_V2  2U
 #define SETTINGS_APP_STORAGE_VERSION_V1  1U
+#define SETTINGS_APP_SAVE_DELAY_MS       1000U
 
 #pragma pack(push, 1)
 typedef struct
@@ -42,6 +44,8 @@ _Static_assert(offsetof(SettingsApp_Storage_t, crc) == (EE_BLOCK_SIZE - sizeof(u
 
 static AppSettings_t s_settings;
 static uint8_t s_settings_initialized = 0U;
+static TickType_t s_save_deadline_tick = 0U;
+static uint8_t s_save_dirty = 0U;
 
 static uint16_t SettingsApp_ClampU16(uint16_t value, uint16_t min_value, uint16_t max_value)
 {
@@ -131,12 +135,44 @@ static void SettingsApp_ToStorage(const AppSettings_t *settings, SettingsApp_Sto
     storage->screen_idle_timeout_min = settings->screen_idle_timeout_min;
 }
 
-static bool SettingsApp_SaveCurrent(void)
+static void SettingsApp_MarkDirty(TickType_t now)
+{
+    s_save_dirty = 1U;
+    s_save_deadline_tick = now + pdMS_TO_TICKS(SETTINGS_APP_SAVE_DELAY_MS);
+}
+
+static void SettingsApp_EnsureInitializedUnlocked(void)
+{
+    if (s_settings_initialized == 0U)
+    {
+        SettingsApp_LoadDefaults(&s_settings);
+        SettingsApp_Normalize(&s_settings);
+        s_settings_initialized = 1U;
+    }
+}
+
+static void SettingsApp_CopySnapshot(AppSettings_t *out)
+{
+    taskENTER_CRITICAL();
+    SettingsApp_EnsureInitializedUnlocked();
+    *out = s_settings;
+    taskEXIT_CRITICAL();
+}
+
+static bool SettingsApp_SaveSnapshot(const AppSettings_t *settings)
 {
     SettingsApp_Storage_t storage;
 
-    SettingsApp_ToStorage(&s_settings, &storage);
+    SettingsApp_ToStorage(settings, &storage);
     return AppConfig_Save(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage));
+}
+
+static bool SettingsApp_SaveCurrent(void)
+{
+    AppSettings_t snapshot;
+
+    SettingsApp_CopySnapshot(&snapshot);
+    return SettingsApp_SaveSnapshot(&snapshot);
 }
 
 void SettingsApp_Init(void)
@@ -172,9 +208,17 @@ void SettingsApp_Init(void)
     }
 
     s_settings_initialized = 1U;
+    s_save_dirty = 0U;
+    s_save_deadline_tick = 0U;
     if (need_save)
     {
-        (void)SettingsApp_SaveCurrent();
+        if (!SettingsApp_SaveCurrent())
+        {
+            taskENTER_CRITICAL();
+            SettingsApp_MarkDirty(xTaskGetTickCount());
+            taskEXIT_CRITICAL();
+            log_printf("[Settings] save pending");
+        }
     }
 }
 
@@ -185,18 +229,13 @@ void SettingsApp_Get(AppSettings_t *out)
         return;
     }
 
-    if (s_settings_initialized == 0U)
-    {
-        SettingsApp_LoadDefaults(&s_settings);
-        SettingsApp_Normalize(&s_settings);
-    }
-
-    *out = s_settings;
+    SettingsApp_CopySnapshot(out);
 }
 
 bool SettingsApp_Update(const AppSettings_t *next)
 {
     AppSettings_t normalized;
+    uint8_t changed;
 
     if (next == NULL)
     {
@@ -205,10 +244,60 @@ bool SettingsApp_Update(const AppSettings_t *next)
 
     normalized = *next;
     SettingsApp_Normalize(&normalized);
+    taskENTER_CRITICAL();
+    SettingsApp_EnsureInitializedUnlocked();
+    changed = (uint8_t)(memcmp(&s_settings, &normalized, sizeof(s_settings)) != 0);
     s_settings = normalized;
     s_settings_initialized = 1U;
+    if (changed != 0U)
+    {
+        SettingsApp_MarkDirty(xTaskGetTickCount());
+    }
+    taskEXIT_CRITICAL();
 
-    return SettingsApp_SaveCurrent();
+    return true;
+}
+
+void SettingsApp_PersistPending(TickType_t now)
+{
+    AppSettings_t snapshot;
+    TickType_t save_deadline = 0U;
+    uint8_t save_due = 0U;
+
+    taskENTER_CRITICAL();
+    if ((s_save_dirty != 0U) &&
+        ((int32_t)(now - s_save_deadline_tick) >= 0))
+    {
+        SettingsApp_EnsureInitializedUnlocked();
+        snapshot = s_settings;
+        save_deadline = s_save_deadline_tick;
+        save_due = 1U;
+    }
+    taskEXIT_CRITICAL();
+
+    if (save_due == 0U)
+    {
+        return;
+    }
+
+    if (SettingsApp_SaveSnapshot(&snapshot))
+    {
+        taskENTER_CRITICAL();
+        if ((s_save_deadline_tick == save_deadline) &&
+            (memcmp(&s_settings, &snapshot, sizeof(s_settings)) == 0))
+        {
+            s_save_dirty = 0U;
+        }
+        taskEXIT_CRITICAL();
+        log_printf("[Settings] saved");
+    }
+    else
+    {
+        taskENTER_CRITICAL();
+        SettingsApp_MarkDirty(now);
+        taskEXIT_CRITICAL();
+        log_printf("[Settings] save retry");
+    }
 }
 
 uint8_t SettingsApp_GetActiveBrightnessPercent(void)
@@ -216,12 +305,6 @@ uint8_t SettingsApp_GetActiveBrightnessPercent(void)
     uint8_t base_percent;
     uint8_t weather_factor;
     uint16_t adjusted_percent;
-
-    if (s_settings_initialized == 0U)
-    {
-        SettingsApp_LoadDefaults(&s_settings);
-        SettingsApp_Normalize(&s_settings);
-    }
 
     base_percent = (Time_IsDaytime() != 0U) ?
                        SETTINGS_APP_BRIGHTNESS_DAY_PERCENT :
@@ -265,45 +348,36 @@ void SettingsApp_ApplyActiveBrightness(void)
 
 void SettingsApp_Apply(void)
 {
+    AppSettings_t snapshot;
     uint32_t interval_s;
 
-    if (s_settings_initialized == 0U)
-    {
-        SettingsApp_LoadDefaults(&s_settings);
-        SettingsApp_Normalize(&s_settings);
-    }
+    SettingsApp_CopySnapshot(&snapshot);
 
-    interval_s = (uint32_t)s_settings.poetry_popup_interval_min * 60U;
+    interval_s = (uint32_t)snapshot.poetry_popup_interval_min * 60U;
     if (interval_s > 0xFFFFU)
     {
         interval_s = 0xFFFFU;
     }
 
-    ui_poetry_popup_set_timing((uint16_t)interval_s, s_settings.poetry_popup_duration_s);
-    ui_poetry_popup_set_enabled(s_settings.poetry_popup_enabled != 0U);
+    ui_poetry_popup_set_timing((uint16_t)interval_s, snapshot.poetry_popup_duration_s);
+    ui_poetry_popup_set_enabled(snapshot.poetry_popup_enabled != 0U);
     LED_CMD_OnEvent(LED_TARGET_PWR,
-                    (s_settings.rgb_pwr_enabled != 0U) ? LED_EVT_RAINBOW : LED_EVT_STOP);
+                    (snapshot.rgb_pwr_enabled != 0U) ? LED_EVT_RAINBOW : LED_EVT_STOP);
     SettingsApp_ApplyActiveBrightness();
 }
 
 uint16_t SettingsApp_GetWeatherTimeSyncIntervalMin(void)
 {
-    if (s_settings_initialized == 0U)
-    {
-        SettingsApp_LoadDefaults(&s_settings);
-        SettingsApp_Normalize(&s_settings);
-    }
+    AppSettings_t snapshot;
 
-    return s_settings.weather_time_sync_interval_min;
+    SettingsApp_CopySnapshot(&snapshot);
+    return snapshot.weather_time_sync_interval_min;
 }
 
 uint16_t SettingsApp_GetScreenIdleTimeoutMin(void)
 {
-    if (s_settings_initialized == 0U)
-    {
-        SettingsApp_LoadDefaults(&s_settings);
-        SettingsApp_Normalize(&s_settings);
-    }
+    AppSettings_t snapshot;
 
-    return s_settings.screen_idle_timeout_min;
+    SettingsApp_CopySnapshot(&snapshot);
+    return snapshot.screen_idle_timeout_min;
 }

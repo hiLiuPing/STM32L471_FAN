@@ -4,6 +4,7 @@
 #include "log.h"
 #include "rtc.h"
 #include "settings_app.h"
+#include "systemMonitor_app.h"
 #include "system_notify.h"
 #include "task.h"
 #include "user_TasksInit.h"
@@ -137,6 +138,7 @@ void WeatherSyncTask(void *argument)
             {
                 SettingsApp_ApplyActiveBrightness();
                 (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
+                MemDiag_LogSnapshot("weather-first");
             }
             Weather_PowerOff();
             g_weather_module.first_sync_done = 1U;
@@ -166,6 +168,7 @@ void WeatherSyncTask(void *argument)
             {
                 SettingsApp_ApplyActiveBrightness();
                 (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
+                MemDiag_LogSnapshot("weather-sync");
             }
         }
         Weather_PowerOff();

@@ -8,7 +8,6 @@
 #include "lfs_port.h"
 #include "log.h"
 #include "main.h"
-#include "psram_app.h"
 #include "sensors_app.h"
 #include "settings_app.h"
 #include "spi_flash.h"
@@ -32,6 +31,15 @@ void HardwareInitTask(void *argument)
     log_printf("step2: key init...");
     Key_Init();
     log_printf("step3: app init...");
+    log_printf("step3.0: init storage...");
+    if (APP_Storage_Init() != 0)
+    {
+        log_printf("storage init FAIL");
+    }
+    else
+    {
+        log_printf("storage init OK");
+    }
     (void)APP_Sensors_Init();
     log_printf("step3.1: init fan...");
     FanApp_Init();
@@ -60,16 +68,6 @@ void HardwareInitTask(void *argument)
         log_printf("littlefs mount OK");
     }
 
-    log_printf("step3.7: psram init...");
-    if (PSRAM_App_Init() != 0)
-    {
-        log_printf("psram init FAIL");
-    }
-    else
-    {
-        log_printf("psram init OK");
-    }
-
     log_printf("step4: egui init...");
     egui_port_start();
     if (LPTIM1_Start1sTick() != HAL_OK)
@@ -89,6 +87,8 @@ void HardwareInitTask(void *argument)
     // Weather_FillDemoData();
     
     SettingsApp_ApplyActiveBrightness();
+    MemDiag_LogSnapshot("hw-ready");
     log_printf("fill demo weather data");
+    HardwareInitTaskHandle = NULL;
     vTaskDelete(NULL);
 }

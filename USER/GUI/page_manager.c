@@ -5,6 +5,7 @@
 #include "core/egui_timer.h"
 #include "egui_port_stm32l471_fan.h"
 #include "key.h"
+#include "systemMonitor_app.h"
 #include "ui_poetry_popup.h"
 #include "ui_shutdown_popup.h"
 #include "ui_system_popup.h"
@@ -16,6 +17,9 @@ typedef struct
     ui_page_t *pages[UI_PAGE_MANAGER_MAX_PAGES];
     uint8_t count;
     uint8_t current_index;
+    uint8_t diag_logged_mask;
+    uint8_t key_diag_logged;
+    uint16_t key_event_count;
     uint32_t last_switch_tick;
     bool loaded;
 } ui_page_manager_t;
@@ -102,6 +106,16 @@ static void ui_page_manager_load_page(uint8_t index, bool force)
     s_page_manager.loaded = true;
     s_page_manager.last_switch_tick = egui_timer_get_current_time();
     egui_core_force_refresh(s_page_manager.core);
+
+    {
+        uint8_t diag_bit = (uint8_t)(1U << index);
+
+        if ((s_page_manager.diag_logged_mask & diag_bit) == 0U)
+        {
+            s_page_manager.diag_logged_mask |= diag_bit;
+            MemDiag_LogSnapshot(target_page->name);
+        }
+    }
 }
 
 static bool ui_page_manager_find_nav_page(uint8_t start_index, int8_t direction, uint8_t *target_index)
@@ -277,6 +291,16 @@ void ui_page_manager_handle_key_event(void *key_event)
     if (ui_page_manager_is_startup_active())
     {
         return;
+    }
+
+    if ((event != NULL) && (s_page_manager.key_diag_logged == 0U))
+    {
+        s_page_manager.key_event_count++;
+        if (s_page_manager.key_event_count >= 32U)
+        {
+            s_page_manager.key_diag_logged = 1U;
+            MemDiag_LogSnapshot("keys-32");
+        }
     }
 
     if ((event != NULL) &&

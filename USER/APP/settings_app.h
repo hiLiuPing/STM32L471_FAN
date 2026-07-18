@@ -8,6 +8,8 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "FreeRTOS.h"
+
 #define SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT       1U
 #define SETTINGS_APP_POETRY_INTERVAL_MIN_MIN           1U
 #define SETTINGS_APP_POETRY_INTERVAL_MIN_MAX           60U
@@ -44,6 +46,7 @@ typedef struct
 void SettingsApp_Init(void);
 void SettingsApp_Get(AppSettings_t *out);
 bool SettingsApp_Update(const AppSettings_t *next);
+void SettingsApp_PersistPending(TickType_t now);
 void SettingsApp_Apply(void);
 uint16_t SettingsApp_GetWeatherTimeSyncIntervalMin(void);
 uint16_t SettingsApp_GetScreenIdleTimeoutMin(void);

@@ -1405,11 +1405,6 @@
               <FilePath>../USER/APP/home_camp_res.c</FilePath>
             </File>
             <File>
-              <FileName>psram_app.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/APP/psram_app.c</FilePath>
-            </File>
-            <File>
               <FileName>systemMonitor_app.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/systemMonitor_app.c</FilePath>
@@ -1513,11 +1508,6 @@
               <FileName>multi_led.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/BSP/multi_led.c</FilePath>
-            </File>
-            <File>
-              <FileName>qspi_psram.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../USER/BSP/qspi_psram.c</FilePath>
             </File>
             <File>
               <FileName>rgb_led.c</FileName>

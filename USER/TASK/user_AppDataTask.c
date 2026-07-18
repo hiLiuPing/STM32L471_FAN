@@ -4,6 +4,7 @@
 #include "data_app.h"
 #include "fan_app.h"
 #include "sensors_app.h"
+#include "settings_app.h"
 #include "system_notify.h"
 #include "task.h"
 #include "user_TasksInit.h"
@@ -15,6 +16,8 @@
 #define APP_DATA_LOW_BATTERY_REARM        35
 #define APP_DATA_ENV_TEMP_HYST_X10        10
 #define APP_DATA_ENV_HUM_HYST             5
+#define APP_DATA_SENSOR_PERIOD_MS         1000U
+#define APP_DATA_RPM_PERIOD_MS            100U
 
 typedef struct
 {
@@ -239,7 +242,8 @@ static void AppDataNotify_Update(AppDataNotifyState_t *state)
 void AppDataTask(void *argument)
 {
     TickType_t last_wake_time;
-    TickType_t last_1s_tick;
+    TickType_t last_sensor_tick;
+    TickType_t last_rpm_tick;
     TickType_t last_weather_demo_tick;
     AppDataNotifyState_t notify_state = {0};
 
@@ -247,13 +251,15 @@ void AppDataTask(void *argument)
 
     User_Tasks_WaitForHardwareReady();
     last_wake_time = xTaskGetTickCount();
-    last_1s_tick = last_wake_time;
+    last_sensor_tick = last_wake_time;
+    last_rpm_tick = last_wake_time;
     last_weather_demo_tick = last_wake_time;
 
     for (;;)
     {
         TickType_t now = xTaskGetTickCount();
         DataApp_QuoteServiceUpdate(now);
+        SettingsApp_PersistPending(now);
 
         // if ((TickType_t)(now - last_weather_demo_tick) >= pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS))
         // {
@@ -261,9 +267,15 @@ void AppDataTask(void *argument)
         //     Weather_FillDemoData();
         // }
 
-        if ((TickType_t)(now - last_1s_tick) >= pdMS_TO_TICKS(100U))
+        if ((TickType_t)(now - last_rpm_tick) >= pdMS_TO_TICKS(APP_DATA_RPM_PERIOD_MS))
         {
-            last_1s_tick += pdMS_TO_TICKS(100U);
+            last_rpm_tick += pdMS_TO_TICKS(APP_DATA_RPM_PERIOD_MS);
+            FanApp_UpdateRpm(now);
+        }
+
+        if ((TickType_t)(now - last_sensor_tick) >= pdMS_TO_TICKS(APP_DATA_SENSOR_PERIOD_MS))
+        {
+            last_sensor_tick += pdMS_TO_TICKS(APP_DATA_SENSOR_PERIOD_MS);
             Time_BlinkUpdate();
             RTC_ReadToBuffer();
             Buffer_Swap();
@@ -271,7 +283,6 @@ void AppDataTask(void *argument)
             Update_Battery(&g_sensors_battery);
             Update_Charger(&g_sensors_charger);
             Update_INA226(&g_sensors_ina226);
-            FanApp_UpdateRpm(xTaskGetTickCount());
             DataApp_HomeStatus_Update();
             AppDataNotify_Update(&notify_state);
         }

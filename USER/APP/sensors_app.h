@@ -90,6 +90,7 @@ extern env_module_t g_sensors_environment;
 extern motion_module_t g_sensors_motion;
 
 int32_t APP_Sensors_Init(void);
+int32_t APP_Storage_Init(void);
 int32_t APP_Sensors_Update(void);
 
 void Update_Env(env_module_t *m);

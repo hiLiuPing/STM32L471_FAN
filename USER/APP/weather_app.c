@@ -92,8 +92,14 @@ static int Weather_GetEffectiveIcon(void)
     int icon = g_now_weather.icon;
     int fallback_icon = g_future_weather[0].icon_id;
 
-    if (((icon <= 0) || (Weather_ClassifyIcon(icon) == WEATHER_SCENE_UNKNOWN)) &&
-        (fallback_icon > 0))
+    /*
+     * Scene classification and image availability are independent.  Keep any
+     * positive current-condition code so ui_weather_icon_get() can apply its
+     * shared-resource ranges (for example fog/dust codes 500-515).  Falling
+     * back merely because a scene is unknown can replace valid current rain
+     * with today's forecast icon, which is often clear weather.
+     */
+    if ((icon <= 0) && (fallback_icon > 0))
     {
         icon = fallback_icon;
     }

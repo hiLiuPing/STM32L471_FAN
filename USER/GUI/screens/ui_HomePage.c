@@ -1476,30 +1476,30 @@ static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_da
         style.background_rgb = 0x07162F;
         style.text_rgb = 0xD8ECFF;
         style.tint_rgb = 0x020817;
-        style.tint_alpha = 128U;
+        style.tint_alpha = 88U;
 
         switch (scene)
         {
         case WEATHER_SCENE_CLOUDY:
             style.background_rgb = 0x111827;
-            style.tint_alpha = 142U;
+            style.tint_alpha = 96U;
             break;
         case WEATHER_SCENE_LIGHT_RAIN:
             style.background_rgb = 0x102638;
-            style.tint_alpha = 148U;
+            style.tint_alpha = 104U;
             break;
         case WEATHER_SCENE_MODERATE_RAIN:
             style.background_rgb = 0x0B1D2B;
-            style.tint_alpha = 158U;
+            style.tint_alpha = 112U;
             break;
         case WEATHER_SCENE_HEAVY_RAIN:
             style.background_rgb = 0x07131F;
-            style.tint_alpha = 170U;
+            style.tint_alpha = 124U;
             break;
         case WEATHER_SCENE_SNOW:
             style.background_rgb = 0x263848;
             style.tint_rgb = 0x102034;
-            style.tint_alpha = 118U;
+            style.tint_alpha = 88U;
             break;
         case WEATHER_SCENE_CLEAR:
         case WEATHER_SCENE_UNKNOWN:

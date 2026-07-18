@@ -7074,7 +7074,7 @@ const egui_image_std_t *ui_weather_icon_get(uint16_t icon_id)
     {
         return &weather_icon_104;
     }
-    if ((icon_id >= 302U) && (icon_id <= 304U))
+    if ((icon_id >= 300U) && (icon_id <= 304U))
     {
         return &weather_icon_302;
     }
@@ -7091,7 +7091,8 @@ const egui_image_std_t *ui_weather_icon_get(uint16_t icon_id)
         return &weather_icon_509;
     }
 
-    return &weather_icon_100;
+    /* Do not misrepresent an unsupported/invalid condition as clear weather. */
+    return NULL;
 }
 
 // clang-format on

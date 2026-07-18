@@ -22,6 +22,7 @@ typedef struct
 } ui_heiti_font_t;
 
 #define UI_HEITI_GLYPH_CACHE_SLOTS 16U
+#define UI_HEITI_MISSING_GLYPH_CP  0x00B7U
 
 typedef struct
 {
@@ -451,9 +452,30 @@ static int ui_heiti_font_draw_string(const egui_font_t *self,
             break;
         }
 
-        if ((cp < 0x80U) || !ui_heiti_font_draw_glyph(font, canvas, cp, pen_x, y, color, alpha, &adv))
+        if (cp < 0x80U)
         {
             (void)ui_heiti_font_draw_fallback(font, canvas, s, bytes, pen_x, y, color, alpha, &adv);
+        }
+        else if (!ui_heiti_font_draw_glyph(font, canvas, cp, pen_x, y, color, alpha, &adv))
+        {
+            /*
+             * Poetry resources can contain uncommon characters that are not
+             * present in the offline Heiti font.  Use the same middle dot as
+             * the poem titles so a missing glyph remains visible and keeps a
+             * deterministic advance width.
+             */
+            if ((cp == UI_HEITI_MISSING_GLYPH_CP) ||
+                !ui_heiti_font_draw_glyph(font,
+                                          canvas,
+                                          UI_HEITI_MISSING_GLYPH_CP,
+                                          pen_x,
+                                          y,
+                                          color,
+                                          alpha,
+                                          &adv))
+            {
+                (void)ui_heiti_font_draw_fallback(font, canvas, s, bytes, pen_x, y, color, alpha, &adv);
+            }
         }
 
         pen_x = (egui_dim_t)(pen_x + adv);
@@ -553,7 +575,10 @@ static int ui_heiti_font_get_str_size(const egui_font_t *self,
             break;
         }
 
-        if ((cp >= 0x80U) && ui_heiti_font_measure_glyph(font, cp, &adv))
+        if ((cp >= 0x80U) &&
+            (ui_heiti_font_measure_glyph(font, cp, &adv) ||
+             ((cp != UI_HEITI_MISSING_GLYPH_CP) &&
+              ui_heiti_font_measure_glyph(font, UI_HEITI_MISSING_GLYPH_CP, &adv))))
         {
             line_w = (egui_dim_t)(line_w + adv);
         }

@@ -20,6 +20,8 @@
 #define FAN_APP_PWM_ALGO_PERIOD_MS          100U
 #define FAN_APP_PWM_PERIOD                  3199U
 #define FAN_APP_SMART_TEMP_SPAN_X10         40
+#define FAN_APP_SMART_HUM_BOOST_MAX         20.0f
+#define FAN_APP_SMART_HUM_BOOST_PER_PERCENT 0.5f
 #define FAN_APP_NATURAL_AMPLITUDE_DEFAULT   FAN_APP_DEFAULT_NATURAL_AMPLITUDE
 #define FAN_APP_TACH_TIMER_HZ               1000000UL
 #define FAN_APP_TACH_PULSES_PER_REV         2UL
@@ -308,12 +310,16 @@ static void FanApp_ApplyHardware(uint8_t output_percent)
         }
 
         __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, compare);
+        taskENTER_CRITICAL();
         s_state.pwm_compare = compare;
+        taskEXIT_CRITICAL();
         return;
     }
 
     __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, compare);
+    taskENTER_CRITICAL();
     s_state.pwm_compare = compare;
+    taskEXIT_CRITICAL();
 
     if (s_pwm_running == 0U)
     {
@@ -328,10 +334,10 @@ static void FanApp_ApplyHardware(uint8_t output_percent)
     HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_SET);
 }
 
-static void FanApp_UpdatePwmAlgorithmConfig(uint8_t scaled_base_percent)
+static void FanApp_UpdatePwmAlgorithmConfig(const fan_state_t *state, uint8_t scaled_base_percent)
 {
     PwmFanConfig_t config = s_pwm_fan.config;
-    int16_t temp_center_x10 = (int16_t)s_state.smart_temp_threshold_x10;
+    int16_t temp_center_x10 = (int16_t)state->smart_temp_threshold_x10;
     float natural_scale;
 
     config.temp_min = (float)(temp_center_x10 - FAN_APP_SMART_TEMP_SPAN_X10) / 10.0f;
@@ -352,7 +358,7 @@ static void FanApp_UpdatePwmAlgorithmConfig(uint8_t scaled_base_percent)
         config.max_base_duty = config.absolute_max_duty;
     }
 
-    natural_scale = (float)s_state.natural_amplitude_percent /
+    natural_scale = (float)state->natural_amplitude_percent /
                     (float)FAN_APP_NATURAL_AMPLITUDE_DEFAULT;
     config.weather_amp_1 = 10.0f * natural_scale;
     config.weather_amp_2 = 4.0f * natural_scale;
@@ -363,10 +369,10 @@ static void FanApp_UpdatePwmAlgorithmConfig(uint8_t scaled_base_percent)
     PwmFan_Configure(&s_pwm_fan, &config);
 }
 
-static uint8_t FanApp_PwmAlgorithmTarget(TickType_t now)
+static uint8_t FanApp_PwmAlgorithmTarget(const fan_state_t *state, TickType_t now)
 {
-    uint8_t scaled_base = (uint8_t)(((uint16_t)s_state.base_speed_percent *
-                                     (uint16_t)s_state.intensity_percent) /
+    uint8_t scaled_base = (uint8_t)(((uint16_t)state->base_speed_percent *
+                                     (uint16_t)state->intensity_percent) /
                                     100U);
     float ambient_temp;
     float duty;
@@ -384,11 +390,24 @@ static uint8_t FanApp_PwmAlgorithmTarget(TickType_t now)
         return s_pwm_cached_percent;
     }
 
-    FanApp_UpdatePwmAlgorithmConfig(scaled_base);
-    PwmFan_SetTarget(&s_pwm_fan, FanApp_ToPwmFanMode(s_state.mode), (float)scaled_base);
+    FanApp_UpdatePwmAlgorithmConfig(state, scaled_base);
+    PwmFan_SetTarget(&s_pwm_fan, FanApp_ToPwmFanMode(state->mode), (float)scaled_base);
 
-    ambient_temp = (float)s_state.current_temp_x10 / 10.0f;
+    ambient_temp = (float)state->current_temp_x10 / 10.0f;
     duty = PwmFan_ProcessTick100ms(&s_pwm_fan, ambient_temp);
+    if ((state->mode == FAN_MODE_SMART) &&
+        (state->current_hum_percent > state->smart_hum_threshold_percent))
+    {
+        float hum_boost = (float)(state->current_hum_percent -
+                                  state->smart_hum_threshold_percent) *
+                          FAN_APP_SMART_HUM_BOOST_PER_PERCENT;
+
+        if (hum_boost > FAN_APP_SMART_HUM_BOOST_MAX)
+        {
+            hum_boost = FAN_APP_SMART_HUM_BOOST_MAX;
+        }
+        duty += hum_boost;
+    }
     s_pwm_cached_percent = FanApp_ClampPercentFloat(duty);
     s_pwm_last_tick = now;
 
@@ -457,7 +476,6 @@ static void FanApp_SetPowerInternal(bool enable, TickType_t now)
         s_auto_off_timer_active = 0U;
         s_state.auto_off_remaining_min = 0U;
         s_state.auto_off_remaining_s = 0U;
-        FanApp_ApplyHardware(0U);
         FanApp_ResetPwmAlgorithm();
         return;
     }
@@ -503,12 +521,21 @@ static void FanApp_SetModeInternal(fan_mode_t mode, TickType_t now)
     }
 }
 
-static void FanApp_UpdateSensorSnapshot(void)
+static void FanApp_ReadSensorSnapshot(int16_t *temp_x10, uint8_t *hum_percent)
 {
-    float temp = g_sensors_environment.temp;
-    float hum = g_sensors_environment.hum;
+    float temp;
+    float hum;
 
-    if (temp < -20.0f)
+    taskENTER_CRITICAL();
+    temp = g_sensors_environment.temp;
+    hum = g_sensors_environment.hum;
+    taskEXIT_CRITICAL();
+
+    if (temp != temp)
+    {
+        temp = 0.0f;
+    }
+    else if (temp < -20.0f)
     {
         temp = -20.0f;
     }
@@ -517,7 +544,11 @@ static void FanApp_UpdateSensorSnapshot(void)
         temp = 80.0f;
     }
 
-    if (hum < 0.0f)
+    if (hum != hum)
+    {
+        hum = 0.0f;
+    }
+    else if (hum < 0.0f)
     {
         hum = 0.0f;
     }
@@ -526,20 +557,20 @@ static void FanApp_UpdateSensorSnapshot(void)
         hum = 100.0f;
     }
 
-    s_state.current_temp_x10 = (int16_t)(temp * 10.0f);
-    s_state.current_hum_percent = (uint8_t)(hum + 0.5f);
+    *temp_x10 = (int16_t)(temp * 10.0f);
+    *hum_percent = (uint8_t)(hum + 0.5f);
 }
 
-static uint8_t FanApp_ModeTarget(TickType_t now)
+static uint8_t FanApp_ModeTarget(const fan_state_t *state, TickType_t now)
 {
-    switch (s_state.mode)
+    switch (state->mode)
     {
     case FAN_MODE_OFF:
         return 0U;
     case FAN_MODE_MANUAL:
     case FAN_MODE_NATURAL:
     case FAN_MODE_SMART:
-        return FanApp_PwmAlgorithmTarget(now);
+        return FanApp_PwmAlgorithmTarget(state, now);
     default:
         return 0U;
     }
@@ -690,9 +721,9 @@ void FanApp_ForceStop(void)
     s_state.auto_off_remaining_min = 0U;
     s_state.auto_off_remaining_s = 0U;
     FanApp_ResetTachCapture();
-    FanApp_ApplyHardware(0U);
     FanApp_ResetPwmAlgorithm();
     taskEXIT_CRITICAL();
+    FanApp_ApplyHardware(0U);
 }
 
 void FanApp_GetState(fan_state_t *out_state)
@@ -934,7 +965,6 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
     case FAN_CMD_RESET_DEFAULTS:
         FanApp_SetDefaults();
         FanApp_ResetTachCapture();
-        FanApp_ApplyHardware(0U);
         force_save = 1U;
         break;
 
@@ -992,41 +1022,52 @@ void FanApp_PersistPending(TickType_t now)
 
 void FanApp_Service(TickType_t now)
 {
+    fan_state_t snapshot;
+    TickType_t boost_until_tick;
+    int16_t current_temp_x10;
     uint8_t target;
     uint8_t scaled_target;
     uint8_t current;
+    uint8_t current_hum_percent;
+    uint8_t output_percent;
+
+    FanApp_ReadSensorSnapshot(&current_temp_x10, &current_hum_percent);
 
     taskENTER_CRITICAL();
-    FanApp_UpdateSensorSnapshot();
+    s_state.current_temp_x10 = current_temp_x10;
+    s_state.current_hum_percent = current_hum_percent;
     FanApp_UpdateAutoOff(now);
+    snapshot = s_state;
+    boost_until_tick = s_boost_until_tick;
+    taskEXIT_CRITICAL();
 
-    if (s_state.power_on == 0U)
+    if (snapshot.power_on == 0U)
     {
+        taskENTER_CRITICAL();
         s_state.target_speed_percent = 0U;
         s_state.current_speed_percent = 0U;
-        FanApp_ApplyHardware(0U);
         taskEXIT_CRITICAL();
+        FanApp_ApplyHardware(0U);
         return;
     }
 
-    target = FanApp_ModeTarget(now);
-    if (FanApp_IsPwmAlgorithmMode(s_state.mode) != 0U)
+    target = FanApp_ModeTarget(&snapshot, now);
+    if (FanApp_IsPwmAlgorithmMode(snapshot.mode) != 0U)
     {
         scaled_target = target;
     }
     else
     {
-        scaled_target = (uint8_t)(((uint16_t)target * s_state.intensity_percent) / 100U);
+        scaled_target = (uint8_t)(((uint16_t)target * snapshot.intensity_percent) / 100U);
     }
 
-    if ((s_boost_until_tick != 0U) && (now < s_boost_until_tick) &&
+    if ((boost_until_tick != 0U) && (now < boost_until_tick) &&
         (scaled_target > 0U) && (scaled_target < FAN_APP_START_BOOST_PERCENT))
     {
         scaled_target = FAN_APP_START_BOOST_PERCENT;
     }
 
-    s_state.target_speed_percent = scaled_target;
-    current = s_state.current_speed_percent;
+    current = snapshot.current_speed_percent;
 
     if (current < scaled_target)
     {
@@ -1038,7 +1079,19 @@ void FanApp_Service(TickType_t now)
         current = (current > (scaled_target + 4U)) ? (uint8_t)(current - 4U) : scaled_target;
     }
 
-    s_state.current_speed_percent = current;
-    FanApp_ApplyHardware(current);
+    taskENTER_CRITICAL();
+    if (s_state.power_on != 0U)
+    {
+        s_state.target_speed_percent = scaled_target;
+        s_state.current_speed_percent = current;
+        output_percent = current;
+    }
+    else
+    {
+        s_state.target_speed_percent = 0U;
+        s_state.current_speed_percent = 0U;
+        output_percent = 0U;
+    }
     taskEXIT_CRITICAL();
+    FanApp_ApplyHardware(output_percent);
 }
