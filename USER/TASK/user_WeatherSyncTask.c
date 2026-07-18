@@ -132,12 +132,13 @@ void WeatherSyncTask(void *argument)
             (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
             Weather_DelayAbortable(6000U);
             sync_ok = Weather_RunSyncWithRetry("first");
-            // Weather_PowerOff();
+            
             if (sync_ok != 0U)
             {
                 SettingsApp_ApplyActiveBrightness();
                 (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
             }
+            Weather_PowerOff();
             g_weather_module.first_sync_done = 1U;
             continue;
         }
@@ -156,7 +157,7 @@ void WeatherSyncTask(void *argument)
         }
 
         g_weather_module.syncing = 1U;
-        // Weather_PowerOn();
+        Weather_PowerOn();
         (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
         Weather_DelayAbortable(6000U);
         if (g_weather_module.abort_requested == 0U)
@@ -167,7 +168,7 @@ void WeatherSyncTask(void *argument)
                 (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
             }
         }
-        // Weather_PowerOff();
+        Weather_PowerOff();
         g_weather_module.syncing = 0U;
     }
 }
