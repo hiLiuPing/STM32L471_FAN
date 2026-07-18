@@ -12,6 +12,50 @@
 #include "ui_system_popup.h"
 #include "user_TasksInit.h"
 
+uint8_t EGUIHandlerTask_PostDisplayState(EGUI_DisplayState_t state)
+{
+    if (EGUI_DisplayState_queue == NULL)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(xQueueOverwrite(EGUI_DisplayState_queue, &state) == pdPASS);
+}
+
+void EGUIHandlerTask_ClearDisplayState(void)
+{
+    if (EGUI_DisplayState_queue != NULL)
+    {
+        (void)xQueueReset(EGUI_DisplayState_queue);
+    }
+}
+
+static void EGUIHandlerTask_DispatchDisplayState(void)
+{
+    EGUI_DisplayState_t state;
+
+    if ((EGUI_DisplayState_queue == NULL) ||
+        (xQueueReceive(EGUI_DisplayState_queue, &state, 0U) != pdPASS))
+    {
+        return;
+    }
+
+    if (state == EGUI_DISPLAY_STATE_SLEEP)
+    {
+        if (egui_port_is_display_on())
+        {
+            egui_port_set_display_power(false);
+        }
+        return;
+    }
+
+    if (!egui_port_is_display_on())
+    {
+        ui_page_manager_wake_to_home();
+        egui_port_set_display_power(true);
+    }
+}
+
 static void EGUIHandlerTask_DispatchQueuedKeys(void)
 {
     key_event_t key_event;
@@ -70,6 +114,13 @@ void EGUIHandlerTask(void *argument)
         if (!egui_port_is_display_on())
         {
             EGUIHandlerTask_WaitForWakeKey();
+            EGUIHandlerTask_DispatchDisplayState();
+            continue;
+        }
+
+        EGUIHandlerTask_DispatchDisplayState();
+        if (!egui_port_is_display_on())
+        {
             continue;
         }
 

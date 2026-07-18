@@ -11,17 +11,22 @@
 #include "ui_common.h"
 #include "widget/egui_view.h"
 
-#define UI_SETTING_ITEM_COUNT       6U
+#define UI_SETTING_ITEM_COUNT       7U
 #define UI_SETTING_FRAME_MS         50U
 #define UI_SETTING_ROW_X            132
 #define UI_SETTING_ROW_W            288
 #define UI_SETTING_ROW_Y            4
 #define UI_SETTING_ROW_H            20
 #define UI_SETTING_ROW_GAP          2
+#define UI_SETTING_ROW_STEP         (UI_SETTING_ROW_H + UI_SETTING_ROW_GAP)
+#define UI_SETTING_SCROLL_UP_Y      (-UI_SETTING_ROW_STEP)
+#define UI_SETTING_SCROLL_DURATION_MS 200U
 #define UI_SETTING_VALUE_STEP       1U
 #define UI_SETTING_FAST_STEP        5U
 #define UI_SETTING_DURATION_STEP    10U
 #define UI_SETTING_DURATION_FAST_STEP 30U
+#define UI_SETTING_AUTO_OFF_STEP    30U
+#define UI_SETTING_AUTO_OFF_FAST_STEP 60U
 #define UI_SETTING_ENTER_STEP_MS    65U
 #define UI_SETTING_ENTER_LENGTH_MS  260U
 #define UI_SETTING_CONFIRM_MS       360U
@@ -34,7 +39,8 @@ typedef enum
     UI_SETTING_ITEM_POETRY_DURATION,
     UI_SETTING_ITEM_WEATHER_INTERVAL,
     UI_SETTING_ITEM_RGB_PWR_ENABLE,
-    UI_SETTING_ITEM_IDLE_TIMEOUT
+    UI_SETTING_ITEM_IDLE_TIMEOUT,
+    UI_SETTING_ITEM_SYSTEM_AUTO_OFF
 } ui_setting_item_t;
 
 typedef struct
@@ -46,11 +52,16 @@ typedef struct
     uint32_t enter_tick;
     uint32_t frame_tick;
     uint32_t confirm_until;
+    uint32_t scroll_start_tick;
+    int16_t scroll_y;
+    int16_t scroll_start_y;
+    int16_t scroll_target_y;
     uint16_t hue;
     uint8_t selected_index;
     uint8_t editing;
     uint8_t setting_active;
     uint8_t animation_active;
+    uint8_t scroll_animating;
 } ui_setting_page_t;
 
 static const char *const s_setting_labels[UI_SETTING_ITEM_COUNT] = {
@@ -60,6 +71,7 @@ static const char *const s_setting_labels[UI_SETTING_ITEM_COUNT] = {
     "Weather sync",
     "RGB rainbow",
     "Screen sleep",
+    "System power off",
 };
 
 static const int16_t s_particle_base_x[UI_SETTING_PARTICLE_COUNT] = {12, 31, 55, 79, 102, 19, 66, 111};
@@ -75,6 +87,10 @@ static void ui_SettingPage_on_draw(egui_view_t *self);
 static void ui_SettingPage_timer_cb(egui_timer_t *timer);
 static void ui_SettingPage_move_selection(int8_t delta);
 static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast);
+static void ui_SettingPage_scroll_reset(void);
+static void ui_SettingPage_scroll_update(uint32_t now);
+static void ui_SettingPage_scroll_to(int16_t target_y, uint32_t now);
+static void ui_SettingPage_update_scroll_for_selection(uint8_t selected_index);
 static bool ui_SettingPage_is_toggle_item(uint8_t index);
 static bool ui_SettingPage_commit_edit(void);
 
@@ -124,6 +140,38 @@ static uint16_t ui_setting_adjust_u16(uint16_t value, int8_t delta, uint16_t ste
     return (uint16_t)next;
 }
 
+static uint16_t ui_setting_adjust_optional_u16(uint16_t value,
+                                               int8_t delta,
+                                               uint16_t step,
+                                               uint16_t disabled_value,
+                                               uint16_t min_value,
+                                               uint16_t max_value)
+{
+    int32_t next;
+
+    if (delta > 0)
+    {
+        if (value == disabled_value)
+        {
+            return min_value;
+        }
+        next = (int32_t)value + (int32_t)step;
+        return (next > (int32_t)max_value) ? max_value : (uint16_t)next;
+    }
+
+    if (delta < 0)
+    {
+        if (value <= min_value)
+        {
+            return disabled_value;
+        }
+        next = (int32_t)value - (int32_t)step;
+        return (next < (int32_t)min_value) ? disabled_value : (uint16_t)next;
+    }
+
+    return value;
+}
+
 static void ui_SettingPage_activate_animation(void)
 {
     uint32_t now = egui_timer_get_current_time();
@@ -131,6 +179,76 @@ static void ui_SettingPage_activate_animation(void)
     s_setting_page.enter_tick = now;
     s_setting_page.frame_tick = now;
     s_setting_page.animation_active = 1U;
+}
+
+static void ui_SettingPage_scroll_reset(void)
+{
+    s_setting_page.scroll_y = 0;
+    s_setting_page.scroll_start_y = 0;
+    s_setting_page.scroll_target_y = 0;
+    s_setting_page.scroll_start_tick = 0U;
+    s_setting_page.scroll_animating = 0U;
+}
+
+static void ui_SettingPage_scroll_update(uint32_t now)
+{
+    uint32_t elapsed;
+    uint32_t progress;
+    uint32_t eased;
+    int32_t delta;
+
+    if (s_setting_page.scroll_animating == 0U)
+    {
+        return;
+    }
+
+    elapsed = now - s_setting_page.scroll_start_tick;
+    if (elapsed >= UI_SETTING_SCROLL_DURATION_MS)
+    {
+        s_setting_page.scroll_y = s_setting_page.scroll_target_y;
+        s_setting_page.scroll_animating = 0U;
+        return;
+    }
+
+    progress = (elapsed * 256U) / UI_SETTING_SCROLL_DURATION_MS;
+    eased = (progress * progress * (768U - (2U * progress)) + 32768U) / 65536U;
+    delta = (int32_t)s_setting_page.scroll_target_y - (int32_t)s_setting_page.scroll_start_y;
+    s_setting_page.scroll_y = (int16_t)((int32_t)s_setting_page.scroll_start_y +
+                                        ((delta * (int32_t)eased) / 256));
+}
+
+static void ui_SettingPage_scroll_to(int16_t target_y, uint32_t now)
+{
+    ui_SettingPage_scroll_update(now);
+    if (target_y == s_setting_page.scroll_y)
+    {
+        s_setting_page.scroll_start_y = target_y;
+        s_setting_page.scroll_target_y = target_y;
+        s_setting_page.scroll_animating = 0U;
+        return;
+    }
+    if ((s_setting_page.scroll_animating != 0U) &&
+        (target_y == s_setting_page.scroll_target_y))
+    {
+        return;
+    }
+
+    s_setting_page.scroll_start_y = s_setting_page.scroll_y;
+    s_setting_page.scroll_target_y = target_y;
+    s_setting_page.scroll_start_tick = now;
+    s_setting_page.scroll_animating = 1U;
+}
+
+static void ui_SettingPage_update_scroll_for_selection(uint8_t selected_index)
+{
+    if (selected_index == 0U)
+    {
+        ui_SettingPage_scroll_to(0, egui_timer_get_current_time());
+    }
+    else if (selected_index == (UI_SETTING_ITEM_COUNT - 1U))
+    {
+        ui_SettingPage_scroll_to(UI_SETTING_SCROLL_UP_Y, egui_timer_get_current_time());
+    }
 }
 
 void ui_SettingPage_screen_init(void)
@@ -159,6 +277,7 @@ void ui_SettingPage_screen_destroy(void)
     s_setting_page.editing = 0U;
     s_setting_page.selected_index = 0U;
     s_setting_page.animation_active = 0U;
+    ui_SettingPage_scroll_reset();
 }
 
 bool ui_SettingPage_key_handler(void *key_event)
@@ -188,6 +307,7 @@ bool ui_SettingPage_key_handler(void *key_event)
             s_setting_page.setting_active = 1U;
             s_setting_page.editing = 0U;
             s_setting_page.selected_index = 0U;
+            ui_SettingPage_scroll_reset();
             egui_view_invalidate_full(ui_SettingPage);
             return true;
         }
@@ -248,6 +368,7 @@ bool ui_SettingPage_key_handler(void *key_event)
         s_setting_page.setting_active = 0U;
         s_setting_page.editing = 0U;
         s_setting_page.selected_index = 0U;
+        ui_SettingPage_scroll_to(0, egui_timer_get_current_time());
         egui_view_invalidate_full(ui_SettingPage);
         return true;
     }
@@ -273,6 +394,7 @@ static void ui_SettingPage_timer_cb(egui_timer_t *timer)
 
     now = egui_timer_get_current_time();
     s_setting_page.frame_tick = now;
+    ui_SettingPage_scroll_update(now);
     s_setting_page.hue = (uint16_t)((s_setting_page.hue + 4U) % 360U);
     egui_view_invalidate_full(view);
 }
@@ -353,10 +475,37 @@ static void ui_setting_format_value(uint8_t index, char *buf, uint16_t size)
         (void)snprintf(buf, size, "%u s", (unsigned)s_setting_page.settings.poetry_popup_duration_s);
         break;
     case UI_SETTING_ITEM_WEATHER_INTERVAL:
-        (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.weather_time_sync_interval_min);
+        if (s_setting_page.settings.weather_time_sync_interval_min ==
+            SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DISABLED)
+        {
+            (void)snprintf(buf, size, "OFF");
+        }
+        else
+        {
+            (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.weather_time_sync_interval_min);
+        }
         break;
     case UI_SETTING_ITEM_IDLE_TIMEOUT:
-        (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.screen_idle_timeout_min);
+        if (s_setting_page.settings.screen_idle_timeout_min ==
+            SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DISABLED)
+        {
+            (void)snprintf(buf, size, "OFF");
+        }
+        else
+        {
+            (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.screen_idle_timeout_min);
+        }
+        break;
+    case UI_SETTING_ITEM_SYSTEM_AUTO_OFF:
+        if (s_setting_page.settings.system_auto_off_min ==
+            SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DISABLED)
+        {
+            (void)snprintf(buf, size, "OFF");
+        }
+        else
+        {
+            (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.system_auto_off_min);
+        }
         break;
     default:
         buf[0] = '\0';
@@ -382,7 +531,9 @@ static void ui_setting_draw_rows(egui_canvas_t *canvas)
         uint32_t progress = (elapsed > delay) ? (elapsed - delay) : 0U;
         int16_t slide = 0;
         int16_t x;
-        int16_t y = (int16_t)(UI_SETTING_ROW_Y + (int16_t)i * (UI_SETTING_ROW_H + UI_SETTING_ROW_GAP));
+        int16_t y = (int16_t)(UI_SETTING_ROW_Y +
+                              (int16_t)i * UI_SETTING_ROW_STEP +
+                              s_setting_page.scroll_y);
         uint8_t selected = (uint8_t)((s_setting_page.setting_active != 0U) && (s_setting_page.selected_index == i));
         uint32_t fill = selected ? 0x123451 : 0x0D2134;
         uint32_t border = selected ? accent : 0x1E3A50;
@@ -461,6 +612,7 @@ static void ui_SettingPage_move_selection(int8_t delta)
         next = 0;
     }
     s_setting_page.selected_index = (uint8_t)next;
+    ui_SettingPage_update_scroll_for_selection(s_setting_page.selected_index);
     egui_view_invalidate_full(ui_SettingPage);
 }
 
@@ -489,8 +641,11 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
         break;
     case UI_SETTING_ITEM_WEATHER_INTERVAL:
         s_setting_page.settings.weather_time_sync_interval_min =
-            ui_setting_adjust_u16(s_setting_page.settings.weather_time_sync_interval_min, delta, step,
-                                  SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN, SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX);
+            ui_setting_adjust_optional_u16(s_setting_page.settings.weather_time_sync_interval_min,
+                                           delta, step,
+                                           SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DISABLED,
+                                           SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN,
+                                           SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX);
         break;
     case UI_SETTING_ITEM_RGB_PWR_ENABLE:
         if (delta != 0)
@@ -500,8 +655,20 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
         break;
     case UI_SETTING_ITEM_IDLE_TIMEOUT:
         s_setting_page.settings.screen_idle_timeout_min =
-            ui_setting_adjust_u16(s_setting_page.settings.screen_idle_timeout_min, delta, step,
-                                  SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN, SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX);
+            ui_setting_adjust_optional_u16(s_setting_page.settings.screen_idle_timeout_min,
+                                           delta, step,
+                                           SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DISABLED,
+                                           SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN,
+                                           SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX);
+        break;
+    case UI_SETTING_ITEM_SYSTEM_AUTO_OFF:
+        step = (fast != 0U) ? UI_SETTING_AUTO_OFF_FAST_STEP : UI_SETTING_AUTO_OFF_STEP;
+        s_setting_page.settings.system_auto_off_min =
+            ui_setting_adjust_optional_u16(s_setting_page.settings.system_auto_off_min,
+                                           delta, step,
+                                           SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DISABLED,
+                                           SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_MIN,
+                                           SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_MAX);
         break;
     default:
         break;

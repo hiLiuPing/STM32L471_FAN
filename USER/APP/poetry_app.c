@@ -1,10 +1,132 @@
 #include "poetry_app.h"
 
-#include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "lfs_port.h"
 #include "log.h"
+#include "rtc.h"
+
+/* Module-local Weyl sequence; the avalanche mixer turns each state into a PRNG output. */
+#define POETRY_APP_RANDOM_STEP (0x9E3779B9UL)
+
+typedef struct
+{
+    uint32_t state;
+    uint32_t last_index[POETRY_COLL_COUNT];
+    bool initialized;
+} PoetryApp_RandomState_t;
+
+static PoetryApp_RandomState_t s_random;
+
+static uint32_t PoetryApp_Mix32(uint32_t value)
+{
+    value ^= value >> 16;
+    value *= 0x7FEB352DUL;
+    value ^= value >> 15;
+    value *= 0x846CA68BUL;
+    value ^= value >> 16;
+    return value;
+}
+
+static void PoetryApp_RandomInit(void)
+{
+    RTC_TimeTypeDef time = {0};
+    RTC_DateTypeDef date = {0};
+    uint32_t seed;
+
+    if (s_random.initialized)
+    {
+        return;
+    }
+
+    seed = PoetryApp_Mix32(HAL_GetTick() ^ 0xA511E9B3UL);
+    seed = PoetryApp_Mix32(seed ^ HAL_GetUIDw0());
+    seed = PoetryApp_Mix32(seed ^ HAL_GetUIDw1());
+    seed = PoetryApp_Mix32(seed ^ HAL_GetUIDw2());
+
+    if ((HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN) == HAL_OK) &&
+        (HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN) == HAL_OK))
+    {
+        uint32_t calendar = ((uint32_t)date.Year << 24) |
+                            ((uint32_t)date.Month << 16) |
+                            ((uint32_t)date.Date << 8) |
+                            (uint32_t)date.WeekDay;
+        uint32_t clock = ((uint32_t)time.Hours << 24) |
+                         ((uint32_t)time.Minutes << 16) |
+                         ((uint32_t)time.Seconds << 8);
+
+        seed = PoetryApp_Mix32(seed ^ calendar);
+        seed = PoetryApp_Mix32(seed ^ clock ^ time.SubSeconds);
+    }
+
+    if (seed == 0U)
+    {
+        seed = 0x6D2B79F5UL;
+    }
+
+    s_random.state = seed;
+    for (uint32_t i = 0U; i < (uint32_t)POETRY_COLL_COUNT; i++)
+    {
+        s_random.last_index[i] = UINT32_MAX;
+    }
+    s_random.initialized = true;
+}
+
+static uint32_t PoetryApp_RandomNext(void)
+{
+    PoetryApp_RandomInit();
+    s_random.state += POETRY_APP_RANDOM_STEP;
+    return PoetryApp_Mix32(s_random.state);
+}
+
+static uint32_t PoetryApp_RandomBounded(uint32_t bound)
+{
+    uint32_t threshold;
+    uint32_t value;
+
+    if (bound <= 1U)
+    {
+        return 0U;
+    }
+
+    /* Reject the short tail so every result below bound has the same probability. */
+    threshold = (uint32_t)(0U - bound) % bound;
+    do
+    {
+        value = PoetryApp_RandomNext();
+    } while (value < threshold);
+
+    return value % bound;
+}
+
+static uint32_t PoetryApp_SelectIndex(PoetryApp_Collection_t coll, uint32_t poem_count)
+{
+    uint32_t last_index;
+    uint32_t index;
+
+    PoetryApp_RandomInit();
+
+    if (poem_count <= 1U)
+    {
+        return 0U;
+    }
+
+    last_index = s_random.last_index[coll];
+    if (last_index >= poem_count)
+    {
+        return PoetryApp_RandomBounded(poem_count);
+    }
+
+    /* Draw uniformly from N-1 candidates, then map around the previous index. */
+    index = PoetryApp_RandomBounded(poem_count - 1U);
+    if (index >= last_index)
+    {
+        index++;
+    }
+
+    return index;
+}
 
 static uint16_t PoetryApp_ReadLe16(const uint8_t *p)
 {
@@ -43,6 +165,8 @@ uint32_t PoetryApp_CalcCrc32(const uint8_t *data, uint32_t len)
 
 int PoetryApp_ParseHeader(const uint8_t raw[POETRY_APP_HEADER_SIZE], PoetryApp_Header_t *header)
 {
+    uint32_t expected_data_offset;
+
     if ((raw == 0) || (header == 0))
     {
         return POETRY_APP_ERR_PARAM;
@@ -62,8 +186,19 @@ int PoetryApp_ParseHeader(const uint8_t raw[POETRY_APP_HEADER_SIZE], PoetryApp_H
         (header->version != POETRY_APP_VERSION) ||
         (header->header_size != POETRY_APP_HEADER_SIZE) ||
         (header->entry_size != POETRY_APP_ENTRY_SIZE) ||
-        (header->data_offset != (POETRY_APP_HEADER_SIZE + header->poem_count * POETRY_APP_ENTRY_SIZE)) ||
         ((header->flags & POETRY_APP_FLAG_UTF8) == 0U))
+    {
+        return POETRY_APP_ERR_FORMAT;
+    }
+
+    if ((header->poem_count == 0U) ||
+        (header->poem_count > ((UINT32_MAX - POETRY_APP_HEADER_SIZE) / POETRY_APP_ENTRY_SIZE)))
+    {
+        return POETRY_APP_ERR_FORMAT;
+    }
+
+    expected_data_offset = POETRY_APP_HEADER_SIZE + header->poem_count * POETRY_APP_ENTRY_SIZE;
+    if (header->data_offset != expected_data_offset)
     {
         return POETRY_APP_ERR_FORMAT;
     }
@@ -251,14 +386,8 @@ int PoetryApp_GetRandomPoem(PoetryApp_Collection_t coll,
         return POETRY_APP_ERR_PARAM;
     }
 
-    /* ensure buffer is large enough for any poem */
-    if (buf_size < POETRY_APP_MAX_TEXT_SIZE)
-    {
-        buf_size = POETRY_APP_MAX_TEXT_SIZE;
-    }
-
     /* pick a random poem */
-    idx = (uint32_t)(rand() % st->header.poem_count);
+    idx = PoetryApp_SelectIndex(coll, st->header.poem_count);
 
     /* seek to entry */
     uint32_t entry_off = st->header.header_size + idx * st->header.entry_size;
@@ -318,6 +447,12 @@ int PoetryApp_GetRandomPoem(PoetryApp_Collection_t coll,
     }
 
     out->line_count = line_cnt;
+
+    s_random.last_index[coll] = idx;
+    log_printf("[POETRY] pick coll=%u idx=%u count=%u",
+               (unsigned)coll,
+               (unsigned)idx,
+               (unsigned)st->header.poem_count);
 
     return POETRY_APP_OK;
 }

@@ -13,6 +13,7 @@
 #include "main.h"
 #include "page_manager.h"
 #include "settings_app.h"
+#include "systemMonitor_app.h"
 #include "ui.h"
 
 static egui_core_t s_egui_core;
@@ -20,7 +21,6 @@ EGUI_CONFIG_PFB_BUFFER_DECLARE(s_egui_pfb);
 
 static bool s_egui_started = false;
 static bool s_egui_display_on = true;
-static uint32_t s_egui_last_activity_ms = 0U;
 static uint32_t s_egui_brightness_check_ms = 0U;
 
 static void egui_port_assert_handler(const char *file, int line)
@@ -224,14 +224,13 @@ void egui_port_start(void)
 
     s_egui_started = true;
     s_egui_display_on = true;
-    s_egui_last_activity_ms = egui_timer_get_current_time();
-    s_egui_brightness_check_ms = s_egui_last_activity_ms;
+    s_egui_brightness_check_ms = egui_timer_get_current_time();
+    UserMonitor_OnDisplayWake();
 }
 
 void egui_port_poll(void)
 {
     uint32_t now;
-    uint32_t timeout_ms;
 
     if (!s_egui_started)
     {
@@ -240,12 +239,7 @@ void egui_port_poll(void)
 
     now = egui_timer_get_current_time();
     ui_page_manager_service();
-    timeout_ms = (uint32_t)SettingsApp_GetScreenIdleTimeoutMin() * 60U * 1000U;
-    if (s_egui_display_on && (timeout_ms > 0U) && ((uint32_t)(now - s_egui_last_activity_ms) >= timeout_ms))
-    {
-        egui_port_set_display_power(false);
-    }
-    else if (s_egui_display_on && ((uint32_t)(now - s_egui_brightness_check_ms) >= 60000U))
+    if (s_egui_display_on && ((uint32_t)(now - s_egui_brightness_check_ms) >= 60000U))
     {
         s_egui_brightness_check_ms = now;
         LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
@@ -266,7 +260,7 @@ void egui_port_handle_key_event(const key_event_t *key_event)
         return;
     }
 
-    s_egui_last_activity_ms = egui_timer_get_current_time();
+    Key_Event();
     if (!s_egui_display_on)
     {
         ui_page_manager_wake_to_home();
@@ -290,6 +284,14 @@ void egui_port_set_display_power(bool on)
             LCD_SetBacklightPercent(0U);
         }
         s_egui_display_on = on;
+        if (on)
+        {
+            UserMonitor_OnDisplayWake();
+        }
+        else
+        {
+            UserMonitor_OnDisplaySleep();
+        }
         return;
     }
 
@@ -298,6 +300,11 @@ void egui_port_set_display_power(bool on)
     {
         s_egui_brightness_check_ms = egui_timer_get_current_time();
         egui_core_force_refresh(&s_egui_core);
+        UserMonitor_OnDisplayWake();
+    }
+    else
+    {
+        UserMonitor_OnDisplaySleep();
     }
 }
 

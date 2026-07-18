@@ -18,6 +18,7 @@ extern "C" {
 #define SETTINGS_APP_POETRY_DURATION_S_MIN             30U
 #define SETTINGS_APP_POETRY_DURATION_S_MAX             300U
 
+#define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DISABLED 0U
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DEFAULT 60U
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN     30U
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX     300U
@@ -29,9 +30,15 @@ extern "C" {
 
 #define SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT           1U
 
+#define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DISABLED  0U
 #define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DEFAULT   5U
 #define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN       1U
-#define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX       60U
+#define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX       360U
+
+#define SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DISABLED      0U
+#define SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DEFAULT       480U
+#define SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_MIN           30U
+#define SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_MAX           480U
 
 typedef struct
 {
@@ -41,6 +48,7 @@ typedef struct
     uint16_t weather_time_sync_interval_min;
     uint8_t rgb_pwr_enabled;
     uint16_t screen_idle_timeout_min;
+    uint16_t system_auto_off_min;
 } AppSettings_t;
 
 void SettingsApp_Init(void);
@@ -50,6 +58,7 @@ void SettingsApp_PersistPending(TickType_t now);
 void SettingsApp_Apply(void);
 uint16_t SettingsApp_GetWeatherTimeSyncIntervalMin(void);
 uint16_t SettingsApp_GetScreenIdleTimeoutMin(void);
+uint16_t SettingsApp_GetSystemAutoOffMin(void);
 uint8_t SettingsApp_GetActiveBrightnessPercent(void);
 void SettingsApp_ApplyActiveBrightness(void);
 

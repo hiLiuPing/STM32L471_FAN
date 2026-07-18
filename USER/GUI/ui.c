@@ -1,8 +1,5 @@
 #include "ui.h"
 
-#include <stdlib.h>
-
-#include "core/egui_timer.h"
 #include "egui_port_stm32l471_fan.h"
 #include "settings_app.h"
 #include "screens/ui_FanPage.h"
@@ -60,7 +57,6 @@ void ui_init(void)
 {
     egui_core_t *core = egui_port_get_core();
 
-    srand(egui_timer_get_current_time());
     ui_page_manager_init(core);
 
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(s_pages) / sizeof(s_pages[0])); i++)

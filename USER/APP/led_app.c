@@ -52,6 +52,7 @@ void LED_App_Init(void)
 
     RGB_Init(&s_rgb_pwr, &s_led_red, &s_led_green, &s_led_blue);
     RGB_Init(&s_rgb_sw, &s_led2_red, &s_led2_green, &s_led2_blue);
+    RGB_Stop(&s_rgb_sw);
     s_led_command_queue = xQueueCreate(8U, sizeof(LED_App_Command_t));
     if (s_led_command_queue == NULL)
     {

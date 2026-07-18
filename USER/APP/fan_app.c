@@ -7,6 +7,7 @@
 #include "main.h"
 #include "pwm_fan_control.h"
 #include "sensors_app.h"
+#include "systemMonitor_app.h"
 #include "tim.h"
 
 #define FAN_APP_DEFAULT_BASE_SPEED          45U
@@ -18,7 +19,7 @@
 #define FAN_APP_START_BOOST_PERCENT         35U
 #define FAN_APP_START_BOOST_MS              300U
 #define FAN_APP_PWM_ALGO_PERIOD_MS          100U
-#define FAN_APP_PWM_PERIOD                  3199U
+#define FAN_APP_PWM_AUTO_RELOAD             3199U
 #define FAN_APP_SMART_TEMP_SPAN_X10         40
 #define FAN_APP_SMART_HUM_BOOST_MAX         20.0f
 #define FAN_APP_SMART_HUM_BOOST_PER_PERCENT 0.5f
@@ -286,12 +287,25 @@ static PwmFanMode_t FanApp_ToPwmFanMode(fan_mode_t mode)
 
 static uint16_t FanApp_PercentToCompare(uint8_t percent)
 {
-    if (percent == 0U)
+    uint32_t period_counts = (uint32_t)FAN_APP_PWM_AUTO_RELOAD + 1UL;
+
+    return (uint16_t)(((uint32_t)(100U - percent) * period_counts) / 100U);
+}
+
+static bool FanApp_EnsurePwmRunning(void)
+{
+    if (s_pwm_running != 0U)
     {
-        return FAN_APP_PWM_PERIOD;
+        return true;
     }
 
-    return (uint16_t)(((uint32_t)(100U - percent) * FAN_APP_PWM_PERIOD) / 100U);
+    if (HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1) != HAL_OK)
+    {
+        return false;
+    }
+
+    s_pwm_running = 1U;
+    return true;
 }
 
 static void FanApp_ApplyHardware(uint8_t output_percent)
@@ -301,6 +315,7 @@ static void FanApp_ApplyHardware(uint8_t output_percent)
     if (output_percent == 0U)
     {
         HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_RESET);
+
         if (s_pwm_running != 0U)
         {
             if (HAL_TIM_PWM_Stop(&htim17, TIM_CHANNEL_1) == HAL_OK)
@@ -321,17 +336,16 @@ static void FanApp_ApplyHardware(uint8_t output_percent)
     s_state.pwm_compare = compare;
     taskEXIT_CRITICAL();
 
-    if (s_pwm_running == 0U)
+    if (!FanApp_EnsurePwmRunning())
     {
-        if (HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1) != HAL_OK)
-        {
-            HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_RESET);
-            return;
-        }
-        s_pwm_running = 1U;
+        HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_RESET);
+        return;
     }
 
-    HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_SET);
+    if (output_percent != 0U)
+    {
+        HAL_GPIO_WritePin(FAN_EN_GPIO_Port, FAN_EN_Pin, GPIO_PIN_SET);
+    }
 }
 
 static void FanApp_UpdatePwmAlgorithmConfig(const fan_state_t *state, uint8_t scaled_base_percent)
@@ -587,7 +601,8 @@ static void FanApp_UpdateAutoOff(TickType_t now)
 
     if ((int32_t)(now - s_auto_off_deadline_tick) >= 0)
     {
-        FanApp_SetPowerInternal(false, now);
+        s_state.auto_off_remaining_min = 0U;
+        s_state.auto_off_remaining_s = 0U;
         return;
     }
 
@@ -723,6 +738,7 @@ void FanApp_ForceStop(void)
     FanApp_ResetTachCapture();
     FanApp_ResetPwmAlgorithm();
     taskEXIT_CRITICAL();
+    UserMonitor_StopFanAutoOff();
     FanApp_ApplyHardware(0U);
 }
 
@@ -883,6 +899,11 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
     TickType_t now = xTaskGetTickCount();
     FanApp_PersistedSettings_t before;
     FanApp_PersistedSettings_t after;
+    uint16_t auto_off_before;
+    uint16_t monitor_auto_off_min;
+    uint8_t power_before;
+    uint8_t monitor_power_on;
+    uint8_t sync_auto_off_monitor;
     uint8_t force_save = 0U;
 
     if (cmd == NULL)
@@ -892,6 +913,8 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
 
     taskENTER_CRITICAL();
     FanApp_GetPersistedSettings(&before);
+    power_before = s_state.power_on;
+    auto_off_before = s_state.auto_off_min;
 
     switch (cmd->type)
     {
@@ -968,6 +991,16 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
         force_save = 1U;
         break;
 
+    case FAN_CMD_AUTO_OFF_EXPIRED:
+        if ((s_state.power_on != 0U) &&
+            (s_auto_off_timer_active != 0U) &&
+            (s_state.auto_off_min != FAN_AUTO_OFF_MINUTES_DISABLED) &&
+            ((int32_t)(now - s_auto_off_deadline_tick) >= 0))
+        {
+            FanApp_SetPowerInternal(false, now);
+        }
+        break;
+
     default:
         break;
     }
@@ -978,7 +1011,25 @@ void FanApp_HandleCommand(const fan_cmd_t *cmd)
         FanApp_MarkSettingsDirty(now);
     }
 
+    sync_auto_off_monitor = (uint8_t)((power_before != s_state.power_on) ||
+                                      (auto_off_before != s_state.auto_off_min));
+    monitor_power_on = s_state.power_on;
+    monitor_auto_off_min = s_state.auto_off_min;
+
     taskEXIT_CRITICAL();
+
+    if (sync_auto_off_monitor != 0U)
+    {
+        if ((monitor_power_on != 0U) &&
+            (monitor_auto_off_min != FAN_AUTO_OFF_MINUTES_DISABLED))
+        {
+            UserMonitor_RestartFanAutoOff(monitor_auto_off_min);
+        }
+        else
+        {
+            UserMonitor_StopFanAutoOff();
+        }
+    }
 }
 
 void FanApp_PersistPending(TickType_t now)
@@ -1061,13 +1112,20 @@ void FanApp_Service(TickType_t now)
         scaled_target = (uint8_t)(((uint16_t)target * snapshot.intensity_percent) / 100U);
     }
 
-    if ((boost_until_tick != 0U) && (now < boost_until_tick) &&
-        (scaled_target > 0U) && (scaled_target < FAN_APP_START_BOOST_PERCENT))
-    {
-        scaled_target = FAN_APP_START_BOOST_PERCENT;
-    }
-
     current = snapshot.current_speed_percent;
+
+    if ((boost_until_tick != 0U) && (now < boost_until_tick) &&
+        (scaled_target > 0U))
+    {
+        if (scaled_target < FAN_APP_START_BOOST_PERCENT)
+        {
+            scaled_target = FAN_APP_START_BOOST_PERCENT;
+        }
+        if (current < FAN_APP_START_BOOST_PERCENT)
+        {
+            current = FAN_APP_START_BOOST_PERCENT;
+        }
+    }
 
     if (current < scaled_target)
     {

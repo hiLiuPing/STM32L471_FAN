@@ -8,11 +8,13 @@
 #include "lcd_init.h"
 #include "led_app.h"
 #include "log.h"
+#include "systemMonitor_app.h"
 #include "task.h"
 #include "ui_poetry_popup.h"
 #include "weather_app.h"
 
-#define SETTINGS_APP_STORAGE_VERSION     4U
+#define SETTINGS_APP_STORAGE_VERSION     5U
+#define SETTINGS_APP_STORAGE_VERSION_V4  4U
 #define SETTINGS_APP_STORAGE_VERSION_V3  3U
 #define SETTINGS_APP_STORAGE_VERSION_V2  2U
 #define SETTINGS_APP_STORAGE_VERSION_V1  1U
@@ -30,7 +32,8 @@ typedef struct
     uint8_t legacy_brightness_night_percent;
     uint16_t screen_idle_timeout_min;
     uint16_t poetry_popup_duration_s;
-    uint8_t reserved[238];
+    uint16_t system_auto_off_min;
+    uint8_t reserved[236];
     uint16_t crc;
 } SettingsApp_Storage_t;
 #pragma pack(pop)
@@ -39,6 +42,8 @@ _Static_assert(sizeof(SettingsApp_Storage_t) == EE_BLOCK_SIZE,
                "Settings storage must remain one EEPROM block");
 _Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_duration_s) == 14U,
                "New settings must not move legacy storage fields");
+_Static_assert(offsetof(SettingsApp_Storage_t, system_auto_off_min) == 16U,
+               "System auto-off storage offset changed");
 _Static_assert(offsetof(SettingsApp_Storage_t, crc) == (EE_BLOCK_SIZE - sizeof(uint16_t)),
                "Settings CRC must remain at the end of the EEPROM block");
 
@@ -60,6 +65,18 @@ static uint16_t SettingsApp_ClampU16(uint16_t value, uint16_t min_value, uint16_
     return value;
 }
 
+static uint16_t SettingsApp_ClampOptionalU16(uint16_t value,
+                                             uint16_t disabled_value,
+                                             uint16_t min_value,
+                                             uint16_t max_value)
+{
+    if (value == disabled_value)
+    {
+        return disabled_value;
+    }
+    return SettingsApp_ClampU16(value, min_value, max_value);
+}
+
 static void SettingsApp_LoadDefaults(AppSettings_t *settings)
 {
     if (settings == NULL)
@@ -73,6 +90,7 @@ static void SettingsApp_LoadDefaults(AppSettings_t *settings)
     settings->weather_time_sync_interval_min = SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DEFAULT;
     settings->rgb_pwr_enabled = SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
     settings->screen_idle_timeout_min = SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DEFAULT;
+    settings->system_auto_off_min = SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DEFAULT;
 }
 
 static void SettingsApp_Normalize(AppSettings_t *settings)
@@ -89,13 +107,22 @@ static void SettingsApp_Normalize(AppSettings_t *settings)
     settings->poetry_popup_duration_s = SettingsApp_ClampU16(settings->poetry_popup_duration_s,
                                                               SETTINGS_APP_POETRY_DURATION_S_MIN,
                                                               SETTINGS_APP_POETRY_DURATION_S_MAX);
-    settings->weather_time_sync_interval_min = SettingsApp_ClampU16(settings->weather_time_sync_interval_min,
-                                                                     SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN,
-                                                                     SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX);
+    settings->weather_time_sync_interval_min =
+        SettingsApp_ClampOptionalU16(settings->weather_time_sync_interval_min,
+                                     SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DISABLED,
+                                     SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MIN,
+                                     SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_MAX);
     settings->rgb_pwr_enabled = (settings->rgb_pwr_enabled != 0U) ? 1U : 0U;
-    settings->screen_idle_timeout_min = SettingsApp_ClampU16(settings->screen_idle_timeout_min,
-                                                             SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN,
-                                                             SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX);
+    settings->screen_idle_timeout_min =
+        SettingsApp_ClampOptionalU16(settings->screen_idle_timeout_min,
+                                     SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DISABLED,
+                                     SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN,
+                                     SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MAX);
+    settings->system_auto_off_min =
+        SettingsApp_ClampOptionalU16(settings->system_auto_off_min,
+                                     SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DISABLED,
+                                     SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_MIN,
+                                     SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_MAX);
 }
 
 static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSettings_t *settings)
@@ -107,7 +134,7 @@ static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSet
 
     settings->poetry_popup_enabled = storage->poetry_popup_enabled;
     settings->poetry_popup_interval_min = storage->poetry_popup_interval_min;
-    settings->poetry_popup_duration_s = (storage->version == SETTINGS_APP_STORAGE_VERSION) ?
+    settings->poetry_popup_duration_s = (storage->version >= SETTINGS_APP_STORAGE_VERSION_V4) ?
                                             storage->poetry_popup_duration_s :
                                             SETTINGS_APP_POETRY_DURATION_S_DEFAULT;
     settings->weather_time_sync_interval_min = storage->weather_time_sync_interval_min;
@@ -115,6 +142,9 @@ static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSet
                                     storage->rgb_pwr_enabled :
                                     SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
     settings->screen_idle_timeout_min = storage->screen_idle_timeout_min;
+    settings->system_auto_off_min = (storage->version == SETTINGS_APP_STORAGE_VERSION) ?
+                                        storage->system_auto_off_min :
+                                        SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DEFAULT;
     SettingsApp_Normalize(settings);
 }
 
@@ -133,6 +163,7 @@ static void SettingsApp_ToStorage(const AppSettings_t *settings, SettingsApp_Sto
     storage->weather_time_sync_interval_min = settings->weather_time_sync_interval_min;
     storage->rgb_pwr_enabled = settings->rgb_pwr_enabled;
     storage->screen_idle_timeout_min = settings->screen_idle_timeout_min;
+    storage->system_auto_off_min = settings->system_auto_off_min;
 }
 
 static void SettingsApp_MarkDirty(TickType_t now)
@@ -184,6 +215,7 @@ void SettingsApp_Init(void)
 
     if (AppConfig_Load(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage)) &&
         ((storage.version == SETTINGS_APP_STORAGE_VERSION) ||
+         (storage.version == SETTINGS_APP_STORAGE_VERSION_V4) ||
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V3) ||
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V2) ||
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V1)))
@@ -364,6 +396,7 @@ void SettingsApp_Apply(void)
     LED_CMD_OnEvent(LED_TARGET_PWR,
                     (snapshot.rgb_pwr_enabled != 0U) ? LED_EVT_RAINBOW : LED_EVT_STOP);
     SettingsApp_ApplyActiveBrightness();
+    UserMonitor_ApplySettings();
 }
 
 uint16_t SettingsApp_GetWeatherTimeSyncIntervalMin(void)
@@ -380,4 +413,12 @@ uint16_t SettingsApp_GetScreenIdleTimeoutMin(void)
 
     SettingsApp_CopySnapshot(&snapshot);
     return snapshot.screen_idle_timeout_min;
+}
+
+uint16_t SettingsApp_GetSystemAutoOffMin(void)
+{
+    AppSettings_t snapshot;
+
+    SettingsApp_CopySnapshot(&snapshot);
+    return snapshot.system_auto_off_min;
 }

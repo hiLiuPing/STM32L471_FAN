@@ -76,19 +76,19 @@ MonitorID_t Monitor_CreateEx(MonitorID_t id,
                              MonitorCallback_t cb);
 
 /* 启动 */
-void Monitor_Start(MonitorID_t id);
+BaseType_t Monitor_Start(MonitorID_t id);
 
 /* 停止 */
-void Monitor_Stop(MonitorID_t id);
+BaseType_t Monitor_Stop(MonitorID_t id);
 
 /* 重启 / 喂狗 */
-void Monitor_Restart(MonitorID_t id);
+BaseType_t Monitor_Restart(MonitorID_t id);
 
 /* 删除 */
-void Monitor_Delete(MonitorID_t id);
+BaseType_t Monitor_Delete(MonitorID_t id);
 
 /* 修改超时 */
-void Monitor_ChangeTimeout(MonitorID_t id, uint32_t timeout_ms);
+BaseType_t Monitor_ChangeTimeout(MonitorID_t id, uint32_t timeout_ms);
 
 /* 查询运行状态 */
 uint8_t Monitor_IsActive(MonitorID_t id);

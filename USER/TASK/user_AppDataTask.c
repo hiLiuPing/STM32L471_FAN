@@ -5,6 +5,7 @@
 #include "fan_app.h"
 #include "sensors_app.h"
 #include "settings_app.h"
+#include "systemMonitor_app.h"
 #include "system_notify.h"
 #include "task.h"
 #include "user_TasksInit.h"
@@ -259,6 +260,7 @@ void AppDataTask(void *argument)
     {
         TickType_t now = xTaskGetTickCount();
         DataApp_QuoteServiceUpdate(now);
+        UserMonitor_Service();
         SettingsApp_PersistPending(now);
 
         // if ((TickType_t)(now - last_weather_demo_tick) >= pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS))

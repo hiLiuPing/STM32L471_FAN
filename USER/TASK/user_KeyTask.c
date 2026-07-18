@@ -2,29 +2,22 @@
 
 #include "FreeRTOS.h"
 #include "queue.h"
-#include "semphr.h"
 #include "task.h"
 
 #include "data_app.h"
-#include "fan_app.h"
 #include "key.h"
 #include "log.h"
 #include "sensors_app.h"
+#include "systemMonitor_app.h"
 #include "user_TasksInit.h"
 
-#define KEY_TASK_SCAN_PERIOD_MS          10U
-#define KEY_TASK_MOTION_PERIOD_MS        30U
-#define KEY_TASK_PWR_DOUBLE_CLICK_MS      300U
-#define KEY_TASK_TILT_WINDOW_MS          3000U
-#define KEY_TASK_TILT_SPEED_STEP_PERCENT 5U
+#define KEY_TASK_SCAN_PERIOD_MS   10U
+#define KEY_TASK_MOTION_PERIOD_MS 30U
 
 typedef struct
 {
     TickType_t motion_last_tick;
-    TickType_t pwr_click_tick;
-    TickType_t tilt_deadline_tick;
-    uint8_t pwr_click_pending;
-    uint8_t tilt_active;
+    uint32_t last_pressed_mask;
 } KeyTask_State_t;
 
 static void KeyTask_SendEvent(const key_event_t *event)
@@ -61,79 +54,6 @@ static const char *KeyTask_TiltName(TiltKey_t event)
     }
 }
 
-static void KeyTask_ArmTiltControl(KeyTask_State_t *state, TickType_t now)
-{
-    fan_state_t fan_state;
-
-    FanApp_GetState(&fan_state);
-    if (fan_state.power_on == 0U)
-    {
-        state->tilt_active = 0U;
-        return;
-    }
-
-    state->tilt_active = 1U;
-    state->tilt_deadline_tick = now + pdMS_TO_TICKS(KEY_TASK_TILT_WINDOW_MS);
-}
-
-static void KeyTask_RecordPowerClick(KeyTask_State_t *state, TickType_t now)
-{
-    if ((state->pwr_click_pending != 0U) &&
-        ((TickType_t)(now - state->pwr_click_tick) <
-         pdMS_TO_TICKS(KEY_TASK_PWR_DOUBLE_CLICK_MS)))
-    {
-        state->pwr_click_pending = 0U;
-        return;
-    }
-
-    state->pwr_click_pending = 1U;
-    state->pwr_click_tick = now;
-}
-
-static void KeyTask_ProcessPendingPowerClick(KeyTask_State_t *state, TickType_t now)
-{
-    if ((state->pwr_click_pending != 0U) &&
-        ((TickType_t)(now - state->pwr_click_tick) >=
-         pdMS_TO_TICKS(KEY_TASK_PWR_DOUBLE_CLICK_MS)))
-    {
-        state->pwr_click_pending = 0U;
-        KeyTask_ArmTiltControl(state, now);
-    }
-}
-
-static void KeyTask_AdjustFanFromTilt(KeyTask_State_t *state, TickType_t now)
-{
-    fan_state_t fan_state;
-    uint8_t next_speed;
-
-    if (state->tilt_active == 0U)
-    {
-        return;
-    }
-
-    if ((int32_t)(now - state->tilt_deadline_tick) >= 0)
-    {
-        state->tilt_active = 0U;
-        return;
-    }
-
-    FanApp_GetState(&fan_state);
-    if (fan_state.power_on == 0U)
-    {
-        state->tilt_active = 0U;
-        return;
-    }
-
-    next_speed = (fan_state.base_speed_percent > KEY_TASK_TILT_SPEED_STEP_PERCENT) ?
-                     (uint8_t)(fan_state.base_speed_percent - KEY_TASK_TILT_SPEED_STEP_PERCENT) :
-                     0U;
-    if (FanApp_SetSpeed(next_speed, 0U))
-    {
-        state->tilt_deadline_tick = now + pdMS_TO_TICKS(KEY_TASK_TILT_WINDOW_MS);
-        log_printf("[Motion] fan speed=%u", (unsigned)next_speed);
-    }
-}
-
 static void KeyTask_ProcessMotion(KeyTask_State_t *state, TickType_t now)
 {
     TiltKey_t tilt_event;
@@ -157,17 +77,7 @@ static void KeyTask_ProcessMotion(KeyTask_State_t *state, TickType_t now)
         if ((tilt_event == MSG_TILT_SHAKE_HORIZONTAL) ||
             (tilt_event == MSG_TILT_SHAKE_VERTICAL))
         {
-            if (xWeatherSyncTaskWakeSemaphore != NULL)
-            {
-                (void)xSemaphoreGive(xWeatherSyncTaskWakeSemaphore);
-            }
-        }
-        else if ((tilt_event == MSG_TILT_LEFT) ||
-                 (tilt_event == MSG_TILT_RIGHT) ||
-                 (tilt_event == MSG_TILT_UP) ||
-                 (tilt_event == MSG_TILT_DOWN))
-        {
-            KeyTask_AdjustFanFromTilt(state, now);
+            UserMonitor_RequestWeatherSync();
         }
     }
 
@@ -188,20 +98,23 @@ void KeyTask(void *argument)
     User_Tasks_WaitForHardwareReady();
     last_wake_time = xTaskGetTickCount();
     state.motion_last_tick = last_wake_time;
+    state.last_pressed_mask = Key_GetPressedMask();
 
     for (;;)
     {
         TickType_t now = xTaskGetTickCount();
+        uint32_t pressed_mask;
 
-        KeyTask_ProcessPendingPowerClick(&state, now);
         if (Key_Scan(&key_event))
         {
-            if ((key_event.id == KEY_ID_PWR) && (key_event.type == KEY_EVT_CLICK))
-            {
-                KeyTask_RecordPowerClick(&state, now);
-            }
             KeyTask_SendEvent(&key_event);
         }
+        pressed_mask = Key_GetPressedMask();
+        if ((pressed_mask & ~state.last_pressed_mask) != 0U)
+        {
+            UserMonitor_OnKeyActivity();
+        }
+        state.last_pressed_mask = pressed_mask;
 
         KeyTask_ProcessMotion(&state, now);
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(KEY_TASK_SCAN_PERIOD_MS));

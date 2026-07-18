@@ -6,6 +6,21 @@
 
 SystemMonitor_t sys_monitor = {0};
 
+static TickType_t Monitor_MillisecondsToTicks(uint32_t timeout_ms)
+{
+    uint64_t ticks = ((uint64_t)timeout_ms * (uint64_t)configTICK_RATE_HZ) / 1000ULL;
+
+    if (ticks == 0ULL)
+    {
+        return 1U;
+    }
+    if (ticks > (uint64_t)portMAX_DELAY)
+    {
+        return portMAX_DELAY;
+    }
+    return (TickType_t)ticks;
+}
+
 /* 初始化 */
 
 
@@ -36,11 +51,16 @@ MonitorID_t Monitor_CreateEx(MonitorID_t id,
                              MonitorCallback_t cb)
 {
     MonitorItem_t *m;
+    TickType_t timeout_ticks;
 
-    if(id >= MONITOR_MAX_NUM)
+    if ((id >= MONITOR_MAX_NUM) || (name == NULL) || (cb == NULL) || (timeout_ms == 0U))
         return MONITOR_INVALID_ID;
 
     m = &sys_monitor.item[id];
+    if (m->used != 0U)
+        return MONITOR_INVALID_ID;
+
+    timeout_ticks = Monitor_MillisecondsToTicks(timeout_ms);
 
     memset(m, 0, sizeof(MonitorItem_t));
 
@@ -53,7 +73,7 @@ MonitorID_t Monitor_CreateEx(MonitorID_t id,
 
     m->timer = xTimerCreate(
                 m->name,
-                pdMS_TO_TICKS(timeout_ms),
+                timeout_ticks,
                 pdFALSE,
                 0,
                 cb);
@@ -66,56 +86,78 @@ MonitorID_t Monitor_CreateEx(MonitorID_t id,
 
     if(auto_start)
     {
-        xTimerStart(m->timer, 0);
+        if (xTimerStart(m->timer, 0U) != pdPASS)
+        {
+            (void)xTimerDelete(m->timer, 0U);
+            memset(m, 0, sizeof(MonitorItem_t));
+            return MONITOR_INVALID_ID;
+        }
     }
 
     return id;
 }
 
-void Monitor_Start(MonitorID_t id)
+static MonitorItem_t *Monitor_GetItem(MonitorID_t id)
 {
-    if(id >= MONITOR_MAX_NUM) return;
-    if(sys_monitor.item[id].used == 0) return;
+    if (id >= MONITOR_MAX_NUM) return NULL;
+    if ((sys_monitor.item[id].used == 0U) || (sys_monitor.item[id].timer == NULL)) return NULL;
 
-    xTimerStart(sys_monitor.item[id].timer, 0);
+    return &sys_monitor.item[id];
 }
 
-void Monitor_Stop(MonitorID_t id)
+BaseType_t Monitor_Start(MonitorID_t id)
 {
-    if(id >= MONITOR_MAX_NUM) return;
-    if(sys_monitor.item[id].used == 0) return;
+    MonitorItem_t *m = Monitor_GetItem(id);
 
-    xTimerStop(sys_monitor.item[id].timer, 0);
+    if (m == NULL) return pdFAIL;
+    return xTimerStart(m->timer, 0U);
 }
 
-void Monitor_Restart(MonitorID_t id)
+BaseType_t Monitor_Stop(MonitorID_t id)
 {
-    if(id >= MONITOR_MAX_NUM) return;
-    if(sys_monitor.item[id].used == 0) return;
+    MonitorItem_t *m = Monitor_GetItem(id);
 
-    xTimerReset(sys_monitor.item[id].timer, 0);
+    if (m == NULL) return pdFAIL;
+    return xTimerStop(m->timer, 0U);
 }
 
-void Monitor_Delete(MonitorID_t id)
+BaseType_t Monitor_Restart(MonitorID_t id)
 {
-    if(id >= MONITOR_MAX_NUM) return;
-    if(sys_monitor.item[id].used == 0) return;
+    MonitorItem_t *m = Monitor_GetItem(id);
 
-    xTimerDelete(sys_monitor.item[id].timer, 0);
-    memset(&sys_monitor.item[id], 0, sizeof(MonitorItem_t));
+    if (m == NULL) return pdFAIL;
+    return xTimerReset(m->timer, 0U);
 }
 
-void Monitor_ChangeTimeout(MonitorID_t id, uint32_t timeout_ms)
+BaseType_t Monitor_Delete(MonitorID_t id)
 {
-    if(id >= MONITOR_MAX_NUM) return;
-    if(sys_monitor.item[id].used == 0) return;
+    MonitorItem_t *m = Monitor_GetItem(id);
+    BaseType_t status;
 
-    sys_monitor.item[id].timeout_ms = timeout_ms;
+    if (m == NULL) return pdFAIL;
+    status = xTimerDelete(m->timer, 0U);
+    if (status == pdPASS)
+    {
+        memset(m, 0, sizeof(*m));
+    }
+    return status;
+}
 
-    xTimerChangePeriod(
-        sys_monitor.item[id].timer,
-        pdMS_TO_TICKS(timeout_ms),
-        0);
+BaseType_t Monitor_ChangeTimeout(MonitorID_t id, uint32_t timeout_ms)
+{
+    MonitorItem_t *m = Monitor_GetItem(id);
+    TickType_t timeout_ticks;
+    BaseType_t status;
+
+    if ((m == NULL) || (timeout_ms == 0U)) return pdFAIL;
+    timeout_ticks = Monitor_MillisecondsToTicks(timeout_ms);
+
+    status = xTimerChangePeriod(m->timer, timeout_ticks, 0U);
+    if (status == pdPASS)
+    {
+        m->timeout_ms = timeout_ms;
+    }
+    return status;
 }
 
 uint8_t Monitor_IsActive(MonitorID_t id)

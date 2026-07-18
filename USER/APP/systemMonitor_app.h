@@ -11,12 +11,26 @@ extern "C" {
 
 typedef enum
 {
-    MON_KEY_IDLE = 0,
+    MON_SCREEN_IDLE = 0,
+    MON_WEATHER_SYNC,
+    MON_FAN_AUTO_OFF,
+    MON_SYSTEM_AUTO_OFF,
     MON_SENSOR_LOG,
     MON_APP_MAX
 } AppMonitorID_t;
 
 void UserMonitor_Init(void);
+void UserMonitor_Service(void);
+void UserMonitor_ApplySettings(void);
+void UserMonitor_OnKeyActivity(void);
+void UserMonitor_OnDisplayWake(void);
+void UserMonitor_OnDisplaySleep(void);
+void UserMonitor_RequestWeatherSync(void);
+void UserMonitor_RestartWeatherSync(void);
+void UserMonitor_StopWeatherSync(void);
+void UserMonitor_RestartFanAutoOff(uint16_t minutes);
+void UserMonitor_StopFanAutoOff(void);
+void UserMonitor_StopAll(void);
 void Key_Event(void);
 void MemDiag_LogSnapshot(const char *tag);
 

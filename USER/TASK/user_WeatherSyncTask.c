@@ -115,6 +115,23 @@ static uint8_t Weather_RunSyncWithRetry(const char *tag)
     return 0U;
 }
 
+static void Weather_RestartPeriodicMonitor(void)
+{
+    if (xWeatherSyncTaskWakeSemaphore != NULL)
+    {
+        while (xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, 0U) == pdPASS)
+        {
+        }
+    }
+    UserMonitor_RestartWeatherSync();
+    if (xWeatherSyncTaskWakeSemaphore != NULL)
+    {
+        while (xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, 0U) == pdPASS)
+        {
+        }
+    }
+}
+
 void WeatherSyncTask(void *argument)
 {
     (void)argument;
@@ -142,19 +159,21 @@ void WeatherSyncTask(void *argument)
             }
             Weather_PowerOff();
             g_weather_module.first_sync_done = 1U;
+            Weather_RestartPeriodicMonitor();
             continue;
         }
 
+        (void)xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, portMAX_DELAY);
+        UserMonitor_StopWeatherSync();
+        while (xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, 0U) == pdPASS)
         {
-            TickType_t interval_ticks = (TickType_t)SettingsApp_GetWeatherTimeSyncIntervalMin() *
-                                        60U * pdMS_TO_TICKS(1000U);
-            (void)xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, interval_ticks);
         }
 
         Weather_WaitForSyncWindow();
 
         if (g_weather_module.syncing != 0U)
         {
+            Weather_RestartPeriodicMonitor();
             continue;
         }
 
@@ -173,5 +192,6 @@ void WeatherSyncTask(void *argument)
         }
         Weather_PowerOff();
         g_weather_module.syncing = 0U;
+        Weather_RestartPeriodicMonitor();
     }
 }
