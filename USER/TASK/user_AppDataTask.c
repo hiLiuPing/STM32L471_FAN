@@ -7,6 +7,7 @@
 #include "settings_app.h"
 #include "systemMonitor_app.h"
 #include "system_notify.h"
+#include "system_power.h"
 #include "task.h"
 #include "user_TasksInit.h"
 #include "weather_app.h"
@@ -300,6 +301,7 @@ void AppDataTask(void *argument)
     {
         TickType_t now = xTaskGetTickCount();
         UserMonitor_Service();
+        SystemPower_Service();
         SettingsApp_PersistPending(now);
 
 #if defined(WEATHER_DEMO_ENABLE) && WEATHER_DEMO_ENABLE

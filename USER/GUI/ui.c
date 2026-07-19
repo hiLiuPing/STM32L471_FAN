@@ -75,6 +75,7 @@ static ui_page_t s_pages[] = {
     {
         .init = ui_SettingPage_screen_init,
         .deinit = ui_SettingPage_screen_destroy,
+        .enter = ui_SettingPage_screen_enter,
         .page_view = &ui_SettingPage,
         .key_consume = ui_SettingPage_key_handler,
         .service = NULL,

@@ -1,6 +1,8 @@
 #ifndef __SYSTEMMONITOR_APP_H
 #define __SYSTEMMONITOR_APP_H
 
+#define MEM_DIAG_ENABLE 0
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -28,7 +30,11 @@ void UserMonitor_RestartWeatherSync(void);
 void UserMonitor_StopWeatherSync(void);
 void UserMonitor_StopAll(void);
 void Key_Event(void);
+#if MEM_DIAG_ENABLE
 void MemDiag_LogSnapshot(const char *tag);
+#else
+#define MemDiag_LogSnapshot(tag) ((void)(tag))
+#endif
 
 #ifdef __cplusplus
 }

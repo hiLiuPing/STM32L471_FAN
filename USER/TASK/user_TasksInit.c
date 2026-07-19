@@ -30,9 +30,6 @@ QueueHandle_t EGUI_Key_queue = NULL;
 QueueHandle_t EGUI_DisplayState_queue = NULL;
 QueueHandle_t Fan_Command_queue = NULL;
 
-SemaphoreHandle_t xKeyScanTaskWakeSemaphore = NULL;
-SemaphoreHandle_t xLedTaskWakeSemaphore = NULL;
-SemaphoreHandle_t xAppDataTaskWakeSemaphore = NULL;
 SemaphoreHandle_t xTransmitTaskWakeSemaphore = NULL;
 SemaphoreHandle_t xWeatherSyncTaskWakeSemaphore = NULL;
 
@@ -73,14 +70,8 @@ void User_Tasks_Init(void)
 
     g_system_hw_ready = 0U;
 
-    xKeyScanTaskWakeSemaphore = xSemaphoreCreateBinary();
-    xLedTaskWakeSemaphore = xSemaphoreCreateBinary();
-    xAppDataTaskWakeSemaphore = xSemaphoreCreateBinary();
     xTransmitTaskWakeSemaphore = xSemaphoreCreateBinary();
     xWeatherSyncTaskWakeSemaphore = xSemaphoreCreateBinary();
-    User_Tasks_RequireHandle(xKeyScanTaskWakeSemaphore);
-    User_Tasks_RequireHandle(xLedTaskWakeSemaphore);
-    User_Tasks_RequireHandle(xAppDataTaskWakeSemaphore);
     User_Tasks_RequireHandle(xTransmitTaskWakeSemaphore);
     User_Tasks_RequireHandle(xWeatherSyncTaskWakeSemaphore);
 

@@ -27,9 +27,6 @@ extern QueueHandle_t EGUI_Key_queue;
 extern QueueHandle_t EGUI_DisplayState_queue;
 extern QueueHandle_t Fan_Command_queue;
 
-extern SemaphoreHandle_t xKeyScanTaskWakeSemaphore;
-extern SemaphoreHandle_t xLedTaskWakeSemaphore;
-extern SemaphoreHandle_t xAppDataTaskWakeSemaphore;
 extern SemaphoreHandle_t xTransmitTaskWakeSemaphore;
 extern SemaphoreHandle_t xWeatherSyncTaskWakeSemaphore;
 

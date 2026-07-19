@@ -13,7 +13,7 @@ extern "C" {
 #define POETRY_APP_ENTRY_SIZE          (8U)
 #define POETRY_APP_FLAG_UTF8           (1UL << 0)
 #define POETRY_APP_FLAG_LF_LINE_ENDING (1UL << 1)
-#define POETRY_APP_MAX_TEXT_SIZE       (4096U)
+#define POETRY_APP_MAX_TEXT_SIZE       (3072U)
 
 typedef enum
 {

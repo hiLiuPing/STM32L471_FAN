@@ -17,9 +17,11 @@ typedef struct
     ui_page_t *pages[UI_PAGE_MANAGER_MAX_PAGES];
     uint8_t count;
     uint8_t current_index;
+#if MEM_DIAG_ENABLE
     uint8_t diag_logged_mask;
     uint8_t key_diag_logged;
     uint16_t key_event_count;
+#endif
     uint32_t last_switch_tick;
     bool loaded;
 } ui_page_manager_t;
@@ -122,6 +124,7 @@ static void ui_page_manager_load_page(uint8_t index, bool force)
     s_page_manager.last_switch_tick = egui_timer_get_current_time();
     egui_core_force_refresh(s_page_manager.core);
 
+#if MEM_DIAG_ENABLE
     {
         uint8_t diag_bit = (uint8_t)(1U << index);
 
@@ -131,6 +134,7 @@ static void ui_page_manager_load_page(uint8_t index, bool force)
             MemDiag_LogSnapshot(target_page->name);
         }
     }
+#endif
 }
 
 static bool ui_page_manager_find_nav_page(uint8_t start_index, int8_t direction, uint8_t *target_index)
@@ -308,6 +312,7 @@ void ui_page_manager_handle_key_event(void *key_event)
         return;
     }
 
+#if MEM_DIAG_ENABLE
     if ((event != NULL) && (s_page_manager.key_diag_logged == 0U))
     {
         s_page_manager.key_event_count++;
@@ -317,6 +322,7 @@ void ui_page_manager_handle_key_event(void *key_event)
             MemDiag_LogSnapshot("keys-32");
         }
     }
+#endif
 
     if ((event != NULL) &&
         (event->id == KEY_ID_PWR) &&

@@ -138,7 +138,7 @@ static void ui_shutdown_popup_timer_cb(egui_timer_t *timer)
                 s_popup.phase = UI_SHUTDOWN_PHASE_COMMITTED;
                 egui_view_invalidate_full(EGUI_VIEW_OF(&s_popup.base));
                 egui_core_force_refresh(egui_port_get_core());
-                SystemPower_ShutdownNow();
+                SystemPower_RequestShutdown();
                 return;
             }
 

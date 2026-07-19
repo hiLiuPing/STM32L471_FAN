@@ -269,17 +269,42 @@ void ui_SettingPage_screen_init(void)
     egui_view_set_position(view, 0, 0);
     egui_view_set_size(view, UI_SCREEN_W, UI_SCREEN_H);
     egui_view_set_visible(view, 1);
+}
 
+void ui_SettingPage_screen_enter(void)
+{
+    egui_view_t *view = ui_SettingPage;
+
+    if (view == NULL)
+    {
+        return;
+    }
+    if (egui_view_check_timer_start(view, &s_setting_page.timer))
+    {
+        egui_view_stop_periodic(view, &s_setting_page.timer);
+    }
     SettingsApp_Get(&s_setting_page.settings);
+    s_setting_page.setting_active = 0U;
+    s_setting_page.editing = 0U;
+    s_setting_page.selected_index = 0U;
+    s_setting_page.confirm_until = 0U;
+    ui_SettingPage_scroll_reset();
     ui_SettingPage_activate_animation();
     egui_view_start_periodic(view, &s_setting_page.timer, view, ui_SettingPage_timer_cb, UI_SETTING_FRAME_MS);
+    egui_view_invalidate_full(view);
 }
 
 void ui_SettingPage_screen_destroy(void)
 {
+    if ((ui_SettingPage != NULL) &&
+        egui_view_check_timer_start(ui_SettingPage, &s_setting_page.timer))
+    {
+        egui_view_stop_periodic(ui_SettingPage, &s_setting_page.timer);
+    }
     s_setting_page.setting_active = 0U;
     s_setting_page.editing = 0U;
     s_setting_page.selected_index = 0U;
+    s_setting_page.confirm_until = 0U;
     s_setting_page.animation_active = 0U;
     ui_SettingPage_scroll_reset();
 }

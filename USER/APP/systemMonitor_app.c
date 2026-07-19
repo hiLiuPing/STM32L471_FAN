@@ -33,6 +33,7 @@ static TickType_t s_retry_after_tick = 0U;
 static uint16_t s_applied_screen_timeout_min = 0U;
 static uint16_t s_applied_weather_interval_min = 0U;
 static uint16_t s_applied_system_auto_off_min = 0U;
+#if MEM_DIAG_ENABLE
 static UBaseType_t s_queue_peak_key_power = 0U;
 static UBaseType_t s_queue_peak_egui_key = 0U;
 static UBaseType_t s_queue_peak_display = 0U;
@@ -45,6 +46,7 @@ static UBaseType_t UserMonitor_TrackQueuePeak(QueueHandle_t queue, UBaseType_t *
     if ((peak != NULL) && (current > *peak)) *peak = current;
     return current;
 }
+#endif
 
 static uint32_t UserMonitor_MinutesToMs(uint16_t minutes)
 {
@@ -94,6 +96,7 @@ static void SystemAutoOffTimeout(TimerHandle_t timer)
     taskEXIT_CRITICAL();
 }
 
+#if MEM_DIAG_ENABLE
 static void MemDiag_LogTaskStack(const char *task_name, TaskHandle_t task_handle)
 {
     UBaseType_t high_water_words;
@@ -109,6 +112,7 @@ static void MemDiag_LogTaskStack(const char *task_name, TaskHandle_t task_handle
                (task_name != NULL) ? task_name : "task",
                (unsigned long)high_water_words);
 }
+#endif
 
 void UserMonitor_Init(void)
 {
@@ -155,10 +159,12 @@ void UserMonitor_Service(void)
     uint8_t retry_mask = 0U;
     uint8_t system_auto_off = 0U;
 
+#if MEM_DIAG_ENABLE
     (void)UserMonitor_TrackQueuePeak(Key_Power_queue, &s_queue_peak_key_power);
     (void)UserMonitor_TrackQueuePeak(EGUI_Key_queue, &s_queue_peak_egui_key);
     (void)UserMonitor_TrackQueuePeak(EGUI_DisplayState_queue, &s_queue_peak_display);
     (void)UserMonitor_TrackQueuePeak(Fan_Command_queue, &s_queue_peak_fan);
+#endif
 
     taskENTER_CRITICAL();
     if ((s_retry_mask != 0U) && Time32_Reached(xTaskGetTickCount(), s_retry_after_tick))
@@ -176,7 +182,7 @@ void UserMonitor_Service(void)
     if ((system_auto_off != 0U) &&
         (SettingsApp_GetSystemAutoOffMin() != SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DISABLED))
     {
-        SystemPower_ShutdownNow();
+        SystemPower_RequestShutdown();
         return;
     }
 
@@ -408,6 +414,7 @@ void Key_Event(void)
     UserMonitor_OnKeyActivity();
 }
 
+#if MEM_DIAG_ENABLE
 void MemDiag_LogSnapshot(const char *tag)
 {
     UBaseType_t key_current;
@@ -449,3 +456,4 @@ void MemDiag_LogSnapshot(const char *tag)
                (unsigned long)fan_current, (unsigned long)s_queue_peak_fan,
                (unsigned long)notify_current, (unsigned long)notify_peak);
 }
+#endif

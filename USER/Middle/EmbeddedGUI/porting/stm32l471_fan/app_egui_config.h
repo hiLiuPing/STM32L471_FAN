@@ -36,8 +36,8 @@
 #define EGUI_CONFIG_FUNCTION_IMAGE_CODEC_QOI   1
 /* Frame-local row cache follows the 16-row PFB and avoids cross-tile re-decode. */
 #define EGUI_CONFIG_FUNCTION_IMAGE_CODEC_FAST_DRAW 1
-/* Persistent cache: 16KB heap, enough for bike image (12KB decoded) */
-#define EGUI_CONFIG_IMAGE_CODEC_PERSISTENT_CACHE_MAX_BYTES 16384
+/* ARM C heap is only 4KB; keep full-image persistent decode caching disabled. */
+#define EGUI_CONFIG_IMAGE_CODEC_PERSISTENT_CACHE_MAX_BYTES 0
 #define EGUI_CONFIG_FUNCTION_FONT_TTF          0
 #define EGUI_CONFIG_FUNCTION_FONT_STD_FAST_DRAW 0
 #define EGUI_CONFIG_FUNCTION_FONT_TRANSFORM_FAST_DRAW 0

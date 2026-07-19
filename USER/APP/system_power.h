@@ -5,7 +5,8 @@
 extern "C" {
 #endif
 
-void SystemPower_ShutdownNow(void);
+void SystemPower_RequestShutdown(void);
+void SystemPower_Service(void);
 
 #ifdef __cplusplus
 }
