@@ -164,7 +164,7 @@ void WeatherSyncTask(void *argument)
     vTaskSuspend(NULL);
     return;
 #endif
-    vTaskDelay(pdMS_TO_TICKS(10000U));
+    vTaskDelay(pdMS_TO_TICKS(5000U));
 
     for (;;)
     {

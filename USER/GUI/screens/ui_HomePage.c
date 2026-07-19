@@ -182,7 +182,6 @@ static void ui_HomePage_weather_reset(WeatherScene_t scene, uint8_t is_day, uint
 static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_day);
 static ui_home_theme2_style_t ui_HomePage_get_theme2_style(WeatherScene_t scene, uint8_t is_day, uint16_t minute_of_day);
 static uint8_t ui_HomePage_theme2_style_equals(const ui_home_theme2_style_t *a, const ui_home_theme2_style_t *b);
-static void ui_HomePage_prepare_theme2_cloud_blend(void);
 static void ui_HomePage_update_render_snapshot(const DataApp_HomeStatus_t *status);
 static uint8_t ui_HomePage_battery_update(const DataApp_HomeStatus_t *status, uint32_t now, uint8_t restart);
 static void ui_HomePage_draw_battery(egui_canvas_t *canvas,
@@ -1152,7 +1151,6 @@ void ui_HomePage_screen_init(void)
     s_home_heiti_16 = NULL;
     DataApp_HomeStatus_Get(&status);
     ui_HomePage_update_render_snapshot(&status);
-    ui_HomePage_prepare_theme2_cloud_blend();
     (void)ui_HomePage_battery_update(&status, s_home_scene_tick, 1U);
     ui_HomePage_weather_reset(s_home_render_scene, status.is_day, s_home_scene_tick);
     egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 50U);
@@ -1323,7 +1321,6 @@ void ui_HomePage_set_animation_enabled(bool enable)
         s_home_scene_state.is_valid = 0U;
         DataApp_HomeStatus_Get(&status);
         ui_HomePage_update_render_snapshot(&status);
-        ui_HomePage_prepare_theme2_cloud_blend();
         (void)ui_HomePage_battery_update(&status, s_home_scene_tick, 1U);
         ui_HomePage_weather_reset(s_home_render_scene, status.is_day, s_home_scene_tick);
         if ((ui_HomePage != NULL) && egui_view_get_visible(ui_HomePage))
@@ -1374,14 +1371,6 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer)
     previous_theme = s_home_render_theme;
     previous_theme2_style = s_home_theme2_style;
     ui_HomePage_update_render_snapshot(&status);
-    if ((s_home_render_theme == SETTINGS_APP_HOME_THEME_2) &&
-        ((previous_theme != s_home_render_theme) ||
-         (previous_theme2_style.cloud_from_state != s_home_theme2_style.cloud_from_state) ||
-         (previous_theme2_style.cloud_to_state != s_home_theme2_style.cloud_to_state) ||
-         (previous_theme2_style.cloud_blend != s_home_theme2_style.cloud_blend)))
-    {
-        ui_HomePage_prepare_theme2_cloud_blend();
-    }
     if (previous_theme != s_home_render_theme)
     {
         s_home_scene_state.is_valid = 0U;
@@ -1507,7 +1496,6 @@ static void ui_HomePage_draw_theme2_cloud(egui_canvas_t *canvas,
 {
     const egui_image_qoi_t *from_image;
     const egui_image_qoi_t *to_image;
-    const egui_image_std_t *blended_image;
     const egui_image_std_t *from_cached_image;
     const egui_image_std_t *to_cached_image;
     egui_alpha_t saved_alpha;
@@ -1520,16 +1508,6 @@ static void ui_HomePage_draw_theme2_cloud(egui_canvas_t *canvas,
 
     from_image = ui_HomePage_theme2_cloud_image(shape, s_home_theme2_style.cloud_from_state);
     to_image = ui_HomePage_theme2_cloud_image(shape, s_home_theme2_style.cloud_to_state);
-    blended_image = HomeTheme2CloudCache_GetBlended(shape,
-                                                     s_home_theme2_style.cloud_from_state,
-                                                     s_home_theme2_style.cloud_to_state,
-                                                     s_home_theme2_style.cloud_blend);
-    if (blended_image != NULL)
-    {
-        egui_image_draw_image(&blended_image->base, canvas, x, y);
-        return;
-    }
-
     from_cached_image = HomeTheme2CloudCache_Get(shape, s_home_theme2_style.cloud_from_state);
     to_cached_image = HomeTheme2CloudCache_Get(shape, s_home_theme2_style.cloud_to_state);
 
@@ -1935,20 +1913,6 @@ static uint8_t ui_HomePage_theme2_style_equals(const ui_home_theme2_style_t *a,
                      (a->cloud_from_state == b->cloud_from_state) &&
                      (a->cloud_to_state == b->cloud_to_state) &&
                      (a->cloud_blend == b->cloud_blend));
-}
-
-static void ui_HomePage_prepare_theme2_cloud_blend(void)
-{
-    if ((s_home_render_theme != SETTINGS_APP_HOME_THEME_2) ||
-        (s_home_theme2_style.cloud_from_state == s_home_theme2_style.cloud_to_state) ||
-        (s_home_theme2_style.cloud_blend == 0U))
-    {
-        return;
-    }
-
-    (void)HomeTheme2CloudCache_PrepareBlend(s_home_theme2_style.cloud_from_state,
-                                             s_home_theme2_style.cloud_to_state,
-                                             s_home_theme2_style.cloud_blend);
 }
 
 static void ui_HomePage_update_render_snapshot(const DataApp_HomeStatus_t *status)

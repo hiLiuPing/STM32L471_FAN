@@ -2,7 +2,7 @@
 #define __WEATHER_APP_H
 
 /* Set to 1 to enable the Home time/weather scene demo; 0 for normal operation. */
-#define WEATHER_DEMO_ENABLE 1
+#define WEATHER_DEMO_ENABLE 0
 
 #ifdef __cplusplus
 extern "C" {

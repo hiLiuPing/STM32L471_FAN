@@ -23,13 +23,6 @@ typedef enum
 bool HomeTheme2CloudCache_Init(void);
 bool HomeTheme2CloudCache_IsReady(void);
 const egui_image_std_t *HomeTheme2CloudCache_Get(uint8_t shape, uint8_t state);
-bool HomeTheme2CloudCache_PrepareBlend(uint8_t from_state,
-                                      uint8_t to_state,
-                                      uint8_t blend);
-const egui_image_std_t *HomeTheme2CloudCache_GetBlended(uint8_t shape,
-                                                        uint8_t from_state,
-                                                        uint8_t to_state,
-                                                        uint8_t blend);
 
 #ifdef __cplusplus
 }
