@@ -190,7 +190,7 @@ void WeatherSyncTask(void *argument)
             {
                 WeatherApp_MarkSyncFailed();
             }
-            Weather_PowerOff();
+            Weather_PowerOffUnlessProvisioning();
             WeatherApp_SetSyncing(0U);
             WeatherApp_SetFirstSyncDone(1U);
             Weather_RestartPeriodicMonitor();
@@ -229,7 +229,7 @@ void WeatherSyncTask(void *argument)
                 WeatherApp_MarkSyncFailed();
             }
         }
-        Weather_PowerOff();
+        Weather_PowerOffUnlessProvisioning();
         WeatherApp_SetSyncing(0U);
         Weather_RestartPeriodicMonitor();
     }

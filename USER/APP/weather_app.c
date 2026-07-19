@@ -678,21 +678,88 @@ void process_protocol_data(uint8_t cmd, char *data)
 
 void Weather_PowerOn(void)
 {
+    uint8_t changed = 0U;
+
+    taskENTER_CRITICAL();
     if (s_weather_module.power_on == 0U)
     {
         HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_SET);
         s_weather_module.power_on = 1U;
         s_weather_module.abort_requested = 0U;
+        changed = 1U;
+    }
+    taskEXIT_CRITICAL();
+
+    if (changed != 0U)
+    {
         log_printf("[Weather] power on");
     }
 }
 
 void Weather_PowerOff(void)
 {
+    uint8_t changed = 0U;
+
+    taskENTER_CRITICAL();
     if (s_weather_module.power_on != 0U)
     {
         HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_RESET);
         s_weather_module.power_on = 0U;
+        changed = 1U;
+    }
+    taskEXIT_CRITICAL();
+
+    if (changed != 0U)
+    {
+        log_printf("[Weather] power off");
+    }
+}
+
+void WeatherApp_SetProvisioningEnabled(uint8_t enabled)
+{
+    enabled = (enabled != 0U) ? 1U : 0U;
+
+    taskENTER_CRITICAL();
+    s_weather_module.provisioning_enabled = enabled;
+    taskEXIT_CRITICAL();
+
+    if (enabled != 0U)
+    {
+        Weather_PowerOn();
+    }
+    else
+    {
+        Weather_PowerOff();
+    }
+}
+
+uint8_t WeatherApp_IsProvisioningEnabled(void)
+{
+    uint8_t enabled;
+
+    taskENTER_CRITICAL();
+    enabled = s_weather_module.provisioning_enabled;
+    taskEXIT_CRITICAL();
+
+    return enabled;
+}
+
+void Weather_PowerOffUnlessProvisioning(void)
+{
+    uint8_t changed = 0U;
+
+    taskENTER_CRITICAL();
+    if ((s_weather_module.provisioning_enabled == 0U) &&
+        (s_weather_module.power_on != 0U))
+    {
+        HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_RESET);
+        s_weather_module.power_on = 0U;
+        changed = 1U;
+    }
+    taskEXIT_CRITICAL();
+
+    if (changed != 0U)
+    {
         log_printf("[Weather] power off");
     }
 }

@@ -9,9 +9,10 @@
 #include "page_manager.h"
 #include "settings_app.h"
 #include "ui_common.h"
+#include "weather_app.h"
 #include "widget/egui_view.h"
 
-#define UI_SETTING_ITEM_COUNT       8U
+#define UI_SETTING_ITEM_COUNT       9U
 #define UI_SETTING_FRAME_MS         50U
 #define UI_SETTING_ROW_X            132
 #define UI_SETTING_ROW_W            288
@@ -38,6 +39,7 @@ typedef enum
     UI_SETTING_ITEM_POETRY_INTERVAL,
     UI_SETTING_ITEM_POETRY_DURATION,
     UI_SETTING_ITEM_WEATHER_INTERVAL,
+    UI_SETTING_ITEM_NETWORK_CONFIG,
     UI_SETTING_ITEM_RGB_PWR_ENABLE,
     UI_SETTING_ITEM_IDLE_TIMEOUT,
     UI_SETTING_ITEM_SYSTEM_AUTO_OFF
@@ -70,6 +72,7 @@ static const char *const s_setting_labels[UI_SETTING_ITEM_COUNT] = {
     "Poetry gap",
     "Poetry stay",
     "Weather sync",
+    "Network config",
     "RGB rainbow",
     "Screen sleep",
     "System power off",
@@ -381,6 +384,14 @@ bool ui_SettingPage_key_handler(void *key_event)
     }
     if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
     {
+        if (s_setting_page.selected_index == (uint8_t)UI_SETTING_ITEM_NETWORK_CONFIG)
+        {
+            WeatherApp_SetProvisioningEnabled(
+                (uint8_t)!WeatherApp_IsProvisioningEnabled());
+            s_setting_page.confirm_until = egui_timer_get_current_time() + UI_SETTING_CONFIRM_MS;
+            egui_view_invalidate_full(ui_SettingPage);
+            return true;
+        }
         if (ui_SettingPage_is_cycle_item(s_setting_page.selected_index))
         {
             ui_SettingPage_adjust_selected(1, 0U);
@@ -612,6 +623,11 @@ static void ui_setting_draw_rows(egui_canvas_t *canvas)
             ui_setting_draw_switch(canvas, x + UI_SETTING_ROW_W - 50, y + 3,
                                    s_setting_page.settings.poetry_popup_enabled, accent);
         }
+        else if (i == UI_SETTING_ITEM_NETWORK_CONFIG)
+        {
+            ui_setting_draw_switch(canvas, x + UI_SETTING_ROW_W - 50, y + 3,
+                                   WeatherApp_IsProvisioningEnabled(), accent);
+        }
         else if (i == UI_SETTING_ITEM_RGB_PWR_ENABLE)
         {
             ui_setting_draw_switch(canvas, x + UI_SETTING_ROW_W - 50, y + 3,
@@ -731,6 +747,7 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
 static bool ui_SettingPage_is_toggle_item(uint8_t index)
 {
     return ((index == (uint8_t)UI_SETTING_ITEM_POETRY_ENABLE) ||
+            (index == (uint8_t)UI_SETTING_ITEM_NETWORK_CONFIG) ||
             (index == (uint8_t)UI_SETTING_ITEM_RGB_PWR_ENABLE));
 }
 

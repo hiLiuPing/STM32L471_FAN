@@ -104,6 +104,7 @@ typedef struct
 {
     uint8_t first_sync_done;
     uint8_t power_on;
+    uint8_t provisioning_enabled;
     uint8_t syncing;
     uint8_t abort_requested;
     uint8_t time_synced;
@@ -144,8 +145,11 @@ uint8_t WeatherApp_IsAbortRequested(void);
 EventBits_t WeatherApp_WaitSyncBits(TickType_t timeout);
 void WeatherApp_CommitSync(void);
 void WeatherApp_MarkSyncFailed(void);
+void WeatherApp_SetProvisioningEnabled(uint8_t enabled);
+uint8_t WeatherApp_IsProvisioningEnabled(void);
 void Weather_PowerOn(void);
 void Weather_PowerOff(void);
+void Weather_PowerOffUnlessProvisioning(void);
 void Weather_RequestAbortForSleep(void);
 uint8_t Weather_CanEnterStop(void);
 void Weather_SendCommand(Weather_cmd_t cmd);
