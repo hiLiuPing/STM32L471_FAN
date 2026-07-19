@@ -8,10 +8,26 @@
 #include "system_notify.h"
 #include "task.h"
 #include "user_TasksInit.h"
+#include "user_TransmitTask.h"
 #include "weather_app.h"
 
 #define WEATHER_SYNC_START_HOUR 6U
 #define WEATHER_SYNC_END_HOUR   21U
+
+static uint8_t Weather_PrepareUartRx(const char *tag)
+{
+    HAL_StatusTypeDef status = uart_dma_restart_rx(&uart2_admin);
+
+    TransmitTask_ResetProtocolState();
+    if (status != HAL_OK)
+    {
+        log_printf("[Weather] %s rx restart fail=%u",
+                   (tag != NULL) ? tag : "sync",
+                   (unsigned int)status);
+        return 0U;
+    }
+    return 1U;
+}
 
 static TickType_t Weather_GetSyncWindowDelayTicks(void)
 {
@@ -150,7 +166,9 @@ void WeatherSyncTask(void *argument)
             Weather_PowerOn();
             (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
             Weather_DelayAbortable(10000U);
-            sync_ok = Weather_RunSyncWithRetry("first");
+            sync_ok = (uint8_t)((WeatherApp_IsAbortRequested() == 0U) &&
+                                (Weather_PrepareUartRx("first") != 0U) &&
+                                (Weather_RunSyncWithRetry("first") != 0U));
             
             if (sync_ok != 0U)
             {
@@ -189,7 +207,8 @@ void WeatherSyncTask(void *argument)
         Weather_DelayAbortable(6000U);
         if (WeatherApp_IsAbortRequested() == 0U)
         {
-            if (Weather_RunSyncWithRetry("sync") != 0U)
+            if ((Weather_PrepareUartRx("sync") != 0U) &&
+                (Weather_RunSyncWithRetry("sync") != 0U))
             {
                 SettingsApp_ApplyActiveBrightness();
                 (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);

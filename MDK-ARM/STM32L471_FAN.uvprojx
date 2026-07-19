@@ -1665,6 +1665,11 @@
               <FilePath>../USER/GUI/screens/ui_WeatherPage.c</FilePath>
             </File>
             <File>
+              <FileName>ui_PoetryPage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/GUI/screens/ui_PoetryPage.c</FilePath>
+            </File>
+            <File>
               <FileName>ui_SettingPage.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/GUI/screens/ui_SettingPage.c</FilePath>

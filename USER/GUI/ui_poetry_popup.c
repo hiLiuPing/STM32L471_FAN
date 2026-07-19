@@ -42,6 +42,7 @@
 #define UI_POETRY_POPUP_BODY_INDENT_SPACES 2U
 #define UI_POETRY_POPUP_MAX_LAYOUT_LINES   96U
 #define UI_POETRY_POPUP_TITLE_TEXT_SIZE    128U
+#define UI_POETRY_POPUP_PREPARE_RETRIES    24U
 
 typedef enum
 {
@@ -63,6 +64,7 @@ typedef struct
     int16_t target_panel_y;
     uint16_t body_total_h;
     uint8_t line_count;
+    uint8_t text_ready;
     egui_dim_t title_width;
     egui_dim_t body_indent_w;
     uint8_t home_anim_was_enabled;
@@ -116,6 +118,7 @@ void ui_poetry_popup_init(void)
     egui_view_set_visible(view, 0);
     egui_core_add_user_root_view(view);
     egui_view_start_periodic(view, &s_popup.timer, &s_popup, ui_poetry_popup_timer_cb, UI_POETRY_POPUP_TIMER_MS);
+    (void)ui_poetry_popup_prepare_text();
 }
 
 void ui_poetry_popup_set_timing(uint16_t interval_s, uint16_t duration_s)
@@ -178,6 +181,23 @@ void ui_poetry_popup_dismiss(void)
     {
         ui_poetry_popup_hide();
     }
+}
+
+bool ui_poetry_popup_refresh_cached(void)
+{
+    s_popup.text_ready = 0U;
+    return ui_poetry_popup_prepare_text();
+}
+
+bool ui_poetry_popup_draw_cached(egui_canvas_t *canvas)
+{
+    if ((canvas == NULL) || (s_popup.text_ready == 0U))
+    {
+        return false;
+    }
+
+    ui_poetry_popup_draw_text(canvas, UI_POETRY_POPUP_PANEL_Y);
+    return true;
 }
 
 static void ui_poetry_popup_timer_cb(egui_timer_t *timer)
@@ -243,18 +263,13 @@ static bool ui_poetry_popup_time_reached(uint32_t now, uint32_t target)
 
 static bool ui_poetry_popup_prepare_text(void)
 {
-    PoetryApp_Poem_t poem;
     PoetryApp_Collection_t coll = UI_POETRY_POPUP_COLLECTION;
-    const char *title;
-    uint8_t title_idx = 0U;
     int ret;
 
-    s_popup.title[0] = '\0';
-    s_popup.text[0] = '\0';
-    s_popup.line_count = 0U;
-    s_popup.title_width = 0;
-    s_popup.body_indent_w = 0;
-    s_popup.body_total_h = 0U;
+    if (s_popup.text_ready != 0U)
+    {
+        return true;
+    }
 
     if (!ui_heiti_font_is_ready(UI_POETRY_POPUP_FONT_SIZE))
     {
@@ -269,29 +284,49 @@ static bool ui_poetry_popup_prepare_text(void)
         return false;
     }
 
-    ret = PoetryApp_GetRandomPoem(coll, s_popup.poem_buf, sizeof(s_popup.poem_buf), &poem);
-    if (ret != POETRY_APP_OK)
+    for (uint8_t retry = 0U; retry < UI_POETRY_POPUP_PREPARE_RETRIES; retry++)
     {
-        log_printf("[UI_POETRY] get poem coll=%u ret=%d", (unsigned)coll, ret);
-        return false;
+        PoetryApp_Poem_t poem;
+        const char *title;
+        uint8_t title_idx = 0U;
+
+        s_popup.title[0] = '\0';
+        s_popup.text[0] = '\0';
+        s_popup.line_count = 0U;
+        s_popup.title_width = 0;
+        s_popup.body_indent_w = 0;
+        s_popup.body_total_h = 0U;
+
+        ret = PoetryApp_GetRandomPoem(coll, s_popup.poem_buf, sizeof(s_popup.poem_buf), &poem);
+        if (ret != POETRY_APP_OK)
+        {
+            continue;
+        }
+
+        title = ui_poetry_popup_find_title(&poem, &title_idx);
+        if (title != NULL)
+        {
+            ui_poetry_popup_copy_utf8_text(s_popup.title, sizeof(s_popup.title), title);
+            ui_poetry_popup_layout_body(&poem, (uint8_t)(title_idx + 1U));
+        }
+
+        if ((s_popup.title[0] == '\0') || (s_popup.text[0] == '\0'))
+        {
+            continue;
+        }
+
+        ui_poetry_popup_collect_lines();
+        if ((s_popup.line_count != 0U) &&
+            (s_popup.title_width <= UI_POETRY_POPUP_DISPLAY_W) &&
+            (s_popup.body_total_h <= UI_POETRY_POPUP_BODY_H))
+        {
+            s_popup.text_ready = 1U;
+            return true;
+        }
     }
 
-    title = ui_poetry_popup_find_title(&poem, &title_idx);
-    if (title != NULL)
-    {
-        ui_poetry_popup_copy_utf8_text(s_popup.title, sizeof(s_popup.title), title);
-        ui_poetry_popup_layout_body(&poem, (uint8_t)(title_idx + 1U));
-    }
-
-    if ((s_popup.title[0] == '\0') && (s_popup.text[0] == '\0'))
-    {
-        log_printf("[UI_POETRY] empty poem coll=%u", (unsigned)coll);
-        return false;
-    }
-
-    ui_poetry_popup_collect_lines();
-
-    return true;
+    log_printf("[UI_POETRY] no fitting poem coll=%u", (unsigned)coll);
+    return false;
 }
 
 static const char *ui_poetry_popup_find_title(const PoetryApp_Poem_t *poem, uint8_t *title_idx)
@@ -652,6 +687,9 @@ static void ui_poetry_popup_draw_text(egui_canvas_t *canvas, int16_t panel_y)
     egui_region_t clipped_work;
     egui_region_t *work_region;
 
+    work_region = egui_canvas_get_base_view_work_region(canvas);
+    prev_work = *work_region;
+
     if (s_popup.title[0] != '\0')
     {
         egui_dim_t title_x = display_x;
@@ -661,7 +699,12 @@ static void ui_poetry_popup_draw_text(egui_canvas_t *canvas, int16_t panel_y)
             title_x = (egui_dim_t)(display_x + (UI_POETRY_POPUP_DISPLAY_W - s_popup.title_width) / 2U);
         }
 
-        egui_canvas_draw_text(canvas, font, s_popup.title, title_x, title_y, ui_color(0xF8FAFC), EGUI_ALPHA_100);
+        if (((egui_dim_t)(title_y + UI_POETRY_POPUP_FONT_H) > prev_work.location.y) &&
+            ((egui_dim_t)(title_y - UI_POETRY_POPUP_FONT_TOP_GUARD) <
+             (egui_dim_t)(prev_work.location.y + prev_work.size.height)))
+        {
+            egui_canvas_draw_text(canvas, font, s_popup.title, title_x, title_y, ui_color(0xF8FAFC), EGUI_ALPHA_100);
+        }
     }
 
     if (s_popup.line_count == 0U)
@@ -682,8 +725,6 @@ static void ui_poetry_popup_draw_text(egui_canvas_t *canvas, int16_t panel_y)
     text_clip.location.y = (egui_dim_t)(body_y - UI_POETRY_POPUP_FONT_TOP_GUARD);
     text_clip.size.width = UI_POETRY_POPUP_BODY_W;
     text_clip.size.height = (egui_dim_t)(UI_POETRY_POPUP_BODY_H + UI_POETRY_POPUP_FONT_TOP_GUARD);
-    work_region = egui_canvas_get_base_view_work_region(canvas);
-    prev_work = *work_region;
     egui_region_intersect(&prev_work, &text_clip, &clipped_work);
     *work_region = clipped_work;
 
@@ -693,6 +734,17 @@ static void ui_poetry_popup_draw_text(egui_canvas_t *canvas, int16_t panel_y)
         egui_dim_t line_x = body_x;
 
         if (((egui_dim_t)(line_y + line_h) <= body_y) || (line_y >= (egui_dim_t)(body_y + UI_POETRY_POPUP_BODY_H)))
+        {
+            continue;
+        }
+        /*
+         * Heiti glyph boxes can extend above their logical line origin.  Keep
+         * that top bearing in the PFB visibility test so a line crossing a
+         * 14 px tile boundary is also rendered into the preceding tile.
+         */
+        if (((egui_dim_t)(line_y + line_h) <= clipped_work.location.y) ||
+            ((egui_dim_t)(line_y - UI_POETRY_POPUP_FONT_TOP_GUARD) >=
+             (egui_dim_t)(clipped_work.location.y + clipped_work.size.height)))
         {
             continue;
         }

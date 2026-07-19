@@ -103,6 +103,7 @@ typedef struct
     uint8_t power_on;
     uint8_t syncing;
     uint8_t abort_requested;
+    uint8_t time_synced;
 } WeatherModule_t;
 
 typedef struct
@@ -135,6 +136,7 @@ uint8_t WeatherApp_IsFirstSyncDone(void);
 void WeatherApp_SetFirstSyncDone(uint8_t done);
 uint8_t WeatherApp_IsSyncing(void);
 void WeatherApp_SetSyncing(uint8_t syncing);
+uint8_t WeatherApp_IsTimeSynced(void);
 uint8_t WeatherApp_IsAbortRequested(void);
 EventBits_t WeatherApp_WaitSyncBits(TickType_t timeout);
 void WeatherApp_CommitSync(void);

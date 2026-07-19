@@ -31,8 +31,8 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
-extern TaskHandle_t TransmitTaskHandle; // 声明外部任务句柄
-extern uart_dma_t uart1_admin; // 唯一实体的定义
+extern TaskHandle_t xTransmitTaskWakeSemaphore; // 声明外部任务句柄
+extern uart_dma_t uart2_admin; // 唯一实体的定义
 
 /* USER CODE END TD */
 

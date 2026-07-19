@@ -24,9 +24,10 @@ void HardwareInitTask(void *argument)
     (void)argument;
 
     log_init(&huart1);
-    WeatherApp_Init();
+   
     Weather_PowerOn();
     log_printf("start app");
+     WeatherApp_Init();
     log_printf("step1: init leds...");
     LED_App_Init();
     log_printf("step2: key init...");

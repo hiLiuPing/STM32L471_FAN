@@ -174,6 +174,11 @@ void WeatherApp_SetSyncing(uint8_t syncing)
     s_weather_module.syncing = (syncing != 0U) ? 1U : 0U;
 }
 
+uint8_t WeatherApp_IsTimeSynced(void)
+{
+    return s_weather_module.time_synced;
+}
+
 uint8_t WeatherApp_IsAbortRequested(void)
 {
     return s_weather_module.abort_requested;
@@ -352,8 +357,11 @@ void Weather_FillDemoData(void)
     time.Seconds = 0U;
     time.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
     time.StoreOperation = RTC_STOREOPERATION_RESET;
-    (void)HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN);
-    (void)HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN);
+    if ((HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN) == HAL_OK) &&
+        (HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN) == HAL_OK))
+    {
+        s_weather_module.time_synced = 1U;
+    }
 
     log_printf("[WeatherDemo] %u/%u %s icon=%d %02u:00",
                (unsigned int)(s_weather_demo_index + 1U),
@@ -375,6 +383,50 @@ uint8_t stm32_calc_crc8(uint8_t *ptr, uint16_t len)
     return Protocol_Crc8(ptr, len);
 }
 
+static uint8_t RTC_IsLeapYear(int year)
+{
+    return (uint8_t)(((year % 4 == 0) && (year % 100 != 0)) ||
+                     (year % 400 == 0));
+}
+
+static uint8_t RTC_GetDaysInMonth(int year, int month)
+{
+    static const uint8_t days_in_month[] = {
+        31U, 28U, 31U, 30U, 31U, 30U,
+        31U, 31U, 30U, 31U, 30U, 31U,
+    };
+    uint8_t days;
+
+    if ((month < 1) || (month > 12))
+    {
+        return 0U;
+    }
+
+    days = days_in_month[month - 1];
+    if ((month == 2) && (RTC_IsLeapYear(year) != 0U))
+    {
+        days++;
+    }
+    return days;
+}
+
+static uint8_t RTC_GetWeekDay(int year, int month, int day)
+{
+    static const uint8_t month_offset[] = {
+        0U, 3U, 2U, 5U, 0U, 3U,
+        5U, 1U, 4U, 6U, 2U, 4U,
+    };
+    int sunday_based;
+
+    if (month < 3)
+    {
+        year--;
+    }
+    sunday_based = (year + year / 4 - year / 100 + year / 400 +
+                    month_offset[month - 1] + day) % 7;
+    return (sunday_based == 0) ? RTC_WEEKDAY_SUNDAY : (uint8_t)sunday_based;
+}
+
 static uint8_t RTC_SyncFromString(const char *time_str)
 {
     RTC_TimeTypeDef time = {0};
@@ -385,10 +437,17 @@ static uint8_t RTC_SyncFromString(const char *time_str)
     int hour;
     int min;
     int sec;
+    char tail;
 
     if ((time_str == NULL) ||
-        (sscanf(time_str, "%d-%d-%d %d:%d:%d",
-                &year, &month, &day, &hour, &min, &sec) != 6))
+        (sscanf(time_str, "%d-%d-%d %d:%d:%d%c",
+                &year, &month, &day, &hour, &min, &sec, &tail) != 6) ||
+        (year < 2000) || (year > 2099) ||
+        (month < 1) || (month > 12) ||
+        (day < 1) || (day > RTC_GetDaysInMonth(year, month)) ||
+        (hour < 0) || (hour > 23) ||
+        (min < 0) || (min > 59) ||
+        (sec < 0) || (sec > 59))
     {
         return 0U;
     }
@@ -396,12 +455,21 @@ static uint8_t RTC_SyncFromString(const char *time_str)
     date.Year = (uint8_t)(year - 2000);
     date.Month = (uint8_t)month;
     date.Date = (uint8_t)day;
+    date.WeekDay = RTC_GetWeekDay(year, month, day);
     time.Hours = (uint8_t)hour;
     time.Minutes = (uint8_t)min;
     time.Seconds = (uint8_t)sec;
+    time.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    time.StoreOperation = RTC_STOREOPERATION_RESET;
 
-    (void)HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN);
-    (void)HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN);
+    if (HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN) != HAL_OK)
+    {
+        return 0U;
+    }
+    if (HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN) != HAL_OK)
+    {
+        return 0U;
+    }
     return 1U;
 }
 
@@ -522,6 +590,7 @@ void process_protocol_data(uint8_t cmd, char *data)
     case CMD_GET_TIME:
         if (RTC_SyncFromString(data))
         {
+            s_weather_module.time_synced = 1U;
             (void)xEventGroupSetBits(s_weather_events, WEATHER_SYNC_BIT_TIME);
             log_printf("[Weather] time ok");
         }

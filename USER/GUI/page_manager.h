@@ -10,16 +10,18 @@ extern "C" {
 
 #include "core/egui_core.h"
 
-#define UI_PAGE_MANAGER_MAX_PAGES     5U
+#define UI_PAGE_MANAGER_MAX_PAGES     6U
 #define UI_PAGE_SWITCH_ANIM_TIME_MS 200U
 
 typedef struct
 {
     void (*init)(void);
     void (*deinit)(void);
+    void (*enter)(void);
     egui_view_t **page_view;
     bool (*key_consume)(void *key_event);
     void (*service)(void);
+    bool (*nav_available)(void);
     const char *name;
     bool nav_enabled;
     uint8_t initialized;

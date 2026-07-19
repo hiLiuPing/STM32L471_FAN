@@ -23,7 +23,6 @@
 #define UI_WEATHER_LOW_TRACK_BOT   120
 #define UI_WEATHER_TEMP_TEXT_H     14
 
-#define UI_WEATHER_BG_RGB          0x0B1020U
 #define UI_WEATHER_DATE_RGB        0xCBD5E1U
 #define UI_WEATHER_WEEKDAY_RGB     0x94A3B8U
 #define UI_WEATHER_TODAY_RGB       0xF97316U
@@ -32,10 +31,21 @@
 #define UI_WEATHER_STATE_RGB       0x94A3B8U
 #define UI_WEATHER_STALE_ALPHA     160U
 
+typedef enum
+{
+    UI_WEATHER_RENDER_UNKNOWN = 0,
+    UI_WEATHER_RENDER_FORECAST,
+    UI_WEATHER_RENDER_STALE,
+    UI_WEATHER_RENDER_SYNCING,
+    UI_WEATHER_RENDER_NO_DATA,
+} ui_weather_render_mode_t;
+
 typedef struct
 {
     egui_view_t base;
     egui_timer_t timer;
+    ui_weather_render_mode_t render_mode;
+    TickType_t rendered_weather_tick;
 } ui_weather_page_t;
 
 static ui_weather_page_t s_weather_page;
@@ -45,6 +55,24 @@ egui_view_t *ui_WeatherPage = NULL;
 
 static void ui_WeatherPage_on_draw(egui_view_t *self);
 static void ui_WeatherPage_timer_cb(egui_timer_t *timer);
+
+static ui_weather_render_mode_t ui_weather_get_render_mode(const WeatherSnapshot_t *weather)
+{
+    if (weather == NULL)
+    {
+        return UI_WEATHER_RENDER_UNKNOWN;
+    }
+    if (weather->valid != 0U)
+    {
+        return (weather->stale != 0U) ?
+                   UI_WEATHER_RENDER_STALE : UI_WEATHER_RENDER_FORECAST;
+    }
+    if (WeatherApp_IsSyncing() != 0U)
+    {
+        return UI_WEATHER_RENDER_SYNCING;
+    }
+    return UI_WEATHER_RENDER_NO_DATA;
+}
 
 static egui_dim_t ui_weather_column_center(uint8_t index)
 {
@@ -64,6 +92,94 @@ static egui_dim_t ui_weather_column_width(uint8_t index)
                                     UI_WEATHER_DAY_COUNT);
 
     return (egui_dim_t)(right - left);
+}
+
+static void ui_weather_draw_background(egui_canvas_t *canvas, bool show_forecast)
+{
+    egui_gradient_stop_t stops[2];
+    egui_gradient_t gradient;
+
+    stops[0].position = 0U;
+    stops[0].color = ui_color(0x07111F);
+    stops[1].position = 255U;
+    stops[1].color = ui_color(0x0B1F33);
+    gradient.type = EGUI_GRADIENT_TYPE_LINEAR_VERTICAL;
+    gradient.stop_count = 2U;
+    gradient.alpha = EGUI_ALPHA_100;
+    gradient.stops = stops;
+    gradient.center_x = 0;
+    gradient.center_y = 0;
+    gradient.radius = 0;
+    egui_canvas_draw_rectangle_fill_gradient(canvas, 0, 0,
+                                             UI_SCREEN_W, UI_SCREEN_H,
+                                             &gradient);
+
+    for (uint8_t i = 0U; i < 6U; i++)
+    {
+        int16_t x = (int16_t)((int16_t)i * 86 - 34);
+        egui_canvas_draw_line(canvas, x, 0, x + 36, UI_SCREEN_H, 2,
+                              ui_color((i & 1U) ? 0x38BDF8 : 0x2563EB),
+                              EGUI_ALPHA_20);
+    }
+
+    egui_canvas_draw_round_rectangle_fill(canvas, 3, 67,
+                                          UI_SCREEN_W - 6, 72, 8,
+                                          ui_color(0x0D2134), EGUI_ALPHA_60);
+    egui_canvas_draw_round_rectangle(canvas, 3, 67,
+                                     UI_SCREEN_W - 6, 72, 8, 1,
+                                     ui_color(0x1E3A50), EGUI_ALPHA_80);
+
+    if (!show_forecast)
+    {
+        egui_canvas_draw_circle_basic(canvas, 42, 28, 23, 1,
+                                      ui_color(0x38BDF8), EGUI_ALPHA_40);
+        egui_canvas_draw_circle_basic(canvas, UI_SCREEN_W - 38,
+                                      UI_SCREEN_H - 25, 29, 1,
+                                      ui_color(0xF97316), EGUI_ALPHA_30);
+        return;
+    }
+
+    for (uint8_t i = 0U; i < UI_WEATHER_DAY_COUNT; i++)
+    {
+        egui_dim_t column_x = ui_weather_column_left(i);
+        egui_dim_t column_w = ui_weather_column_width(i);
+
+        if (i == 0U)
+        {
+            egui_canvas_draw_round_rectangle_fill(canvas,
+                                                  (egui_dim_t)(column_x + 2), 1,
+                                                  (egui_dim_t)(column_w - 4),
+                                                  UI_SCREEN_H - 2, 7,
+                                                  ui_color(0x7C2D12),
+                                                  EGUI_ALPHA_30);
+            egui_canvas_draw_round_rectangle(canvas,
+                                             (egui_dim_t)(column_x + 2), 1,
+                                             (egui_dim_t)(column_w - 4),
+                                             UI_SCREEN_H - 2, 7, 1,
+                                             ui_color(UI_WEATHER_TODAY_RGB),
+                                             EGUI_ALPHA_80);
+        }
+        else
+        {
+            egui_canvas_draw_round_rectangle_fill(canvas,
+                                                  (egui_dim_t)(column_x + 2), 2,
+                                                  (egui_dim_t)(column_w - 4), 59, 6,
+                                                  ui_color(0x0D2134),
+                                                  EGUI_ALPHA_60);
+            egui_canvas_draw_round_rectangle(canvas,
+                                             (egui_dim_t)(column_x + 2), 2,
+                                             (egui_dim_t)(column_w - 4), 59, 6, 1,
+                                             ui_color(0x1E3A50),
+                                             EGUI_ALPHA_60);
+        }
+
+        if (i > 0U)
+        {
+            egui_canvas_draw_line(canvas, column_x, 70,
+                                  column_x, UI_SCREEN_H - 5, 1,
+                                  ui_color(0x38BDF8), EGUI_ALPHA_20);
+        }
+    }
 }
 
 static uint8_t ui_weather_is_leap_year(int year)
@@ -180,6 +296,8 @@ void ui_WeatherPage_screen_init(void)
 {
     egui_view_t *view = EGUI_VIEW_OF(&s_weather_page.base);
 
+    s_weather_page.render_mode = UI_WEATHER_RENDER_UNKNOWN;
+    s_weather_page.rendered_weather_tick = 0U;
     ui_WeatherPage = view;
     egui_view_init(view, egui_port_get_core());
     egui_view_copy_api(view, &s_weather_api);
@@ -206,7 +324,18 @@ static void ui_WeatherPage_timer_cb(egui_timer_t *timer)
 
     if ((view != NULL) && egui_view_get_visible(view))
     {
-        egui_view_invalidate_full(view);
+        WeatherSnapshot_t weather;
+        ui_weather_render_mode_t mode;
+
+        WeatherApp_GetSnapshot(&weather);
+        mode = ui_weather_get_render_mode(&weather);
+        if ((mode != s_weather_page.render_mode) ||
+            (((mode == UI_WEATHER_RENDER_FORECAST) ||
+              (mode == UI_WEATHER_RENDER_STALE)) &&
+             (weather.last_sync_tick != s_weather_page.rendered_weather_tick)))
+        {
+            egui_view_invalidate_full(view);
+        }
     }
 }
 
@@ -217,24 +346,33 @@ static void ui_WeatherPage_on_draw(egui_view_t *self)
     egui_dim_t point_x[UI_WEATHER_DAY_COUNT];
     egui_dim_t high_y[UI_WEATHER_DAY_COUNT];
     egui_dim_t low_y[UI_WEATHER_DAY_COUNT];
-    egui_alpha_t original_alpha;
     int high_min;
     int high_max;
     int low_min;
     int low_max;
+    ui_weather_render_mode_t mode;
+    egui_alpha_t original_alpha;
 
     WeatherApp_GetSnapshot(&weather);
-    ui_draw_rect(canvas, 0, 0, UI_SCREEN_W, UI_SCREEN_H, UI_WEATHER_BG_RGB);
-
-    if (weather.valid == 0U)
+    mode = ui_weather_get_render_mode(&weather);
+    s_weather_page.render_mode = mode;
+    if ((mode == UI_WEATHER_RENDER_FORECAST) ||
+        (mode == UI_WEATHER_RENDER_STALE))
     {
-        const char *state_text = (WeatherApp_IsSyncing() != 0U) ?
-                                     "天气同步中" :
-                                     "暂无天气数据";
+        s_weather_page.rendered_weather_tick = weather.last_sync_tick;
+    }
+    ui_weather_draw_background(canvas,
+                               (mode == UI_WEATHER_RENDER_FORECAST) ||
+                               (mode == UI_WEATHER_RENDER_STALE));
 
+    if ((mode == UI_WEATHER_RENDER_SYNCING) ||
+        (mode == UI_WEATHER_RENDER_NO_DATA) ||
+        (mode == UI_WEATHER_RENDER_UNKNOWN))
+    {
         ui_draw_text(canvas,
                      ui_heiti_font_get_16(),
-                     state_text,
+                     (mode == UI_WEATHER_RENDER_SYNCING) ?
+                         "天气同步中" : "暂无天气数据",
                      0,
                      0,
                      UI_SCREEN_W,
@@ -245,7 +383,7 @@ static void ui_WeatherPage_on_draw(egui_view_t *self)
     }
 
     original_alpha = egui_canvas_get_alpha(canvas);
-    if (weather.stale != 0U)
+    if (mode == UI_WEATHER_RENDER_STALE)
     {
         egui_canvas_mix_alpha(canvas, UI_WEATHER_STALE_ALPHA);
     }
@@ -370,7 +508,7 @@ static void ui_WeatherPage_on_draw(egui_view_t *self)
         (void)snprintf(temp_text,
                        sizeof(temp_text),
                        "%s%dC",
-                       (weather.stale != 0U) ? "~" : "",
+                       (mode == UI_WEATHER_RENDER_STALE) ? "~" : "",
                        weather.future[i].temp_high);
         ui_draw_text(canvas,
                      EGUI_FONT_OF(&egui_res_font_montserrat_12_4),
@@ -385,7 +523,7 @@ static void ui_WeatherPage_on_draw(egui_view_t *self)
         (void)snprintf(temp_text,
                        sizeof(temp_text),
                        "%s%dC",
-                       (weather.stale != 0U) ? "~" : "",
+                       (mode == UI_WEATHER_RENDER_STALE) ? "~" : "",
                        weather.future[i].temp_low);
         ui_draw_text(canvas,
                      EGUI_FONT_OF(&egui_res_font_montserrat_12_4),

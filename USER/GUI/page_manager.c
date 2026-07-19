@@ -26,6 +26,16 @@ typedef struct
 
 static ui_page_manager_t s_page_manager;
 
+static bool ui_page_manager_is_nav_available(const ui_page_t *page)
+{
+    if ((page == NULL) || !page->nav_enabled)
+    {
+        return false;
+    }
+
+    return (page->nav_available == NULL) || page->nav_available();
+}
+
 static bool ui_page_manager_can_switch(void)
 {
     uint32_t now;
@@ -99,6 +109,11 @@ static void ui_page_manager_load_page(uint8_t index, bool force)
         }
     }
 
+    if (target_page->enter != NULL)
+    {
+        target_page->enter();
+    }
+
     egui_view_set_visible(*target_page->page_view, 1);
     egui_view_invalidate_full(*target_page->page_view);
 
@@ -139,7 +154,7 @@ static bool ui_page_manager_find_nav_page(uint8_t start_index, int8_t direction,
             index = (index == 0U) ? (uint8_t)(s_page_manager.count - 1U) : (uint8_t)(index - 1U);
         }
 
-        if ((s_page_manager.pages[index] != NULL) && s_page_manager.pages[index]->nav_enabled)
+        if (ui_page_manager_is_nav_available(s_page_manager.pages[index]))
         {
             *target_index = index;
             return true;

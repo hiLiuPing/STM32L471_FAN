@@ -164,6 +164,7 @@ virtualFolder:
             - path: USER/GUI/screens/ui_HomePage.c
             - path: USER/GUI/screens/ui_FanPage.c
             - path: USER/GUI/screens/ui_WeatherPage.c
+            - path: USER/GUI/screens/ui_PoetryPage.c
             - path: USER/GUI/screens/ui_SettingPage.c
           folders: []
     - name: ::CMSIS

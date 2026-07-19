@@ -4,12 +4,19 @@
 #include "settings_app.h"
 #include "screens/ui_FanPage.h"
 #include "screens/ui_HomePage.h"
+#include "screens/ui_PoetryPage.h"
 #include "screens/ui_SettingPage.h"
 #include "screens/ui_StartPage.h"
 #include "screens/ui_WeatherPage.h"
 #include "ui_poetry_popup.h"
 #include "ui_shutdown_popup.h"
 #include "ui_system_popup.h"
+#include "weather_app.h"
+
+static bool ui_weather_page_nav_available(void)
+{
+    return WeatherApp_IsTimeSynced() != 0U;
+}
 
 static ui_page_t s_pages[] = {
     {
@@ -48,7 +55,20 @@ static ui_page_t s_pages[] = {
         .page_view = &ui_WeatherPage,
         .key_consume = ui_WeatherPage_key_handler,
         .service = NULL,
+        .nav_available = ui_weather_page_nav_available,
         .name = "WEATHER",
+        .nav_enabled = true,
+        .initialized = 0U,
+    },
+    {
+        .init = ui_PoetryPage_screen_init,
+        .deinit = ui_PoetryPage_screen_destroy,
+        .enter = ui_PoetryPage_on_enter,
+        .page_view = &ui_PoetryPage,
+        .key_consume = ui_PoetryPage_key_handler,
+        .service = NULL,
+        .nav_available = NULL,
+        .name = "POETRY",
         .nav_enabled = true,
         .initialized = 0U,
     },

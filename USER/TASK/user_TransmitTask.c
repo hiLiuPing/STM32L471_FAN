@@ -13,6 +13,23 @@ static uint16_t s_protocol_data_idx = 0U;
 static uint8_t s_protocol_payload[256];
 static uint8_t s_protocol_check_buf[260];
 static uint16_t s_protocol_check_ptr = 0U;
+static volatile uint32_t s_uart2_error_code = HAL_UART_ERROR_NONE;
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    BaseType_t higher_priority_task_woken = pdFALSE;
+
+    if ((huart == NULL) || (huart->Instance != USART2))
+    {
+        return;
+    }
+    s_uart2_error_code |= huart->ErrorCode;
+    if (xTransmitTaskWakeSemaphore != NULL)
+    {
+        (void)xSemaphoreGiveFromISR(xTransmitTaskWakeSemaphore, &higher_priority_task_woken);
+    }
+    portYIELD_FROM_ISR(higher_priority_task_woken);
+}
 
 void TransmitTask_ResetProtocolState(void)
 {
@@ -33,7 +50,28 @@ void TransmitTask(void *argument)
 
     for (;;)
     {
+        HAL_StatusTypeDef recover_status;
+        uint32_t error_code;
+
         (void)xSemaphoreTake(xTransmitTaskWakeSemaphore, portMAX_DELAY);
+
+        taskENTER_CRITICAL();
+        error_code = s_uart2_error_code;
+        s_uart2_error_code = HAL_UART_ERROR_NONE;
+        taskEXIT_CRITICAL();
+
+        if (error_code != HAL_UART_ERROR_NONE)
+        {
+            vTaskDelay(pdMS_TO_TICKS(5U));
+            recover_status = uart_dma_restart_rx(&uart2_admin);
+            TransmitTask_ResetProtocolState();
+            if (recover_status != HAL_OK)
+            {
+                log_printf("[Weather] uart rx recover fail=%u",
+                           (unsigned int)recover_status);
+            }
+            continue;
+        }
 
         while (uart_dma_read(&uart2_admin, &ch, 1U, 0U) > 0)
         {
