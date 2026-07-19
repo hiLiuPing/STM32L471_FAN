@@ -13,10 +13,6 @@ uart_dma_t uart2_admin = {0};
 uint8_t u2_dma_buf[UART_Transmit_DMA_RX_SIZE] = {0};
 uint8_t u2_rb_buf[UART_Transmit_LWRB_SIZE] = {0};
 
-#ifndef WEATHER_DEMO_ENABLE
-#define WEATHER_DEMO_ENABLE 0
-#endif
-
 static volatile WeatherModule_t s_weather_module = {0};
 static WeatherSnapshot_t s_weather_published = {0};
 static WeatherSnapshot_t s_weather_staging = {0};
@@ -43,16 +39,18 @@ typedef struct
 } WeatherDemoData_t;
 
 static const WeatherDemoData_t s_weather_demo_data[] = {
-    /* Dynamic-theme time keyframes and the 07:00/19:00 day-state edges. */
+    /* Dynamic-theme keyframes plus the independent 07:00/19:00 day-state edges. */
     {"night",          "Clear", "Clear", 150, 24, 29, 21, 10,  0U,  0U},
-    {"dawn-start",     "Clear", "Clear", 150, 24, 29, 21, 10,  5U,  0U},
-    {"dawn-blend",     "Clear", "Clear", 150, 24, 29, 21, 10,  5U, 37U},
-    {"dawn-peak",      "Clear", "Clear", 150, 24, 29, 21, 10,  6U, 15U},
+    {"dawn-start",     "Clear", "Clear", 150, 24, 29, 21, 10,  6U,  0U},
+    {"dawn-blend",     "Clear", "Clear", 150, 24, 29, 21, 10,  6U, 37U},
     {"day-edge-before","Clear", "Clear", 150, 24, 29, 21, 10,  6U, 59U},
     {"day-edge",       "Clear", "Clear", 100, 30, 34, 25, 12,  7U,  0U},
-    {"white-clouds",   "Clear", "Clear", 100, 30, 34, 25, 12,  7U, 30U},
-    {"sunset-start",   "Clear", "Clear", 100, 30, 34, 25, 12, 16U, 30U},
-    {"sunset-blend",   "Clear", "Clear", 100, 30, 34, 25, 12, 17U, 15U},
+    {"dawn-peak",      "Clear", "Clear", 100, 30, 34, 25, 12,  7U, 15U},
+    {"dawn-fade",      "Clear", "Clear", 100, 30, 34, 25, 12,  7U, 52U},
+    {"dynamic-day",    "Clear", "Clear", 100, 30, 34, 25, 12,  8U, 30U},
+    {"white-clouds",   "Clear", "Clear", 100, 30, 34, 25, 12,  9U,  0U},
+    {"sunset-start",   "Clear", "Clear", 100, 30, 34, 25, 12, 17U,  0U},
+    {"sunset-blend",   "Clear", "Clear", 100, 30, 34, 25, 12, 17U, 30U},
     {"sunset-peak",    "Clear", "Clear", 100, 30, 34, 25, 12, 18U,  0U},
     {"night-edge-before","Clear","Clear", 100, 30, 34, 25, 12, 18U, 59U},
     {"night-edge",     "Clear", "Clear", 150, 24, 29, 21, 10, 19U,  0U},

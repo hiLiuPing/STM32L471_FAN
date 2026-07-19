@@ -91,7 +91,8 @@ typedef struct
     uint32_t background_rgb;
     uint32_t background_top_rgb;
     uint32_t background_bottom_rgb;
-    uint32_t text_rgb;
+    uint32_t top_text_rgb;
+    uint32_t ground_text_rgb;
     uint32_t tint_rgb;
     uint8_t tint_alpha;
 } ui_home_style_t;
@@ -107,7 +108,8 @@ typedef struct
 {
     uint32_t background_top_rgb;
     uint32_t background_bottom_rgb;
-    uint32_t text_rgb;
+    uint32_t top_text_rgb;
+    uint32_t ground_text_rgb;
     uint32_t tint_rgb;
     uint8_t tint_alpha;
     uint8_t cloud_from_state;
@@ -120,7 +122,6 @@ typedef struct
     uint16_t minute;
     uint32_t background_top_rgb;
     uint32_t background_bottom_rgb;
-    uint32_t text_rgb;
     uint8_t tint_alpha;
     uint8_t cloud_state;
 } ui_home_theme2_keyframe_t;
@@ -172,7 +173,10 @@ static const egui_font_t *s_home_heiti_18 = NULL;
 
 static void ui_HomePage_on_draw(egui_view_t *self);
 static void ui_HomePage_draw_scene(egui_canvas_t *canvas);
-static void ui_HomePage_draw_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status, uint32_t text_rgb);
+static void ui_HomePage_draw_status(egui_canvas_t *canvas,
+                                    const DataApp_HomeStatus_t *status,
+                                    uint32_t top_text_rgb,
+                                    uint32_t ground_text_rgb);
 static void ui_HomePage_timer_cb(egui_timer_t *timer);
 static void ui_HomePage_weather_reset(WeatherScene_t scene, uint8_t is_day, uint32_t now);
 static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_day);
@@ -181,7 +185,9 @@ static uint8_t ui_HomePage_theme2_style_equals(const ui_home_theme2_style_t *a, 
 static void ui_HomePage_prepare_theme2_cloud_blend(void);
 static void ui_HomePage_update_render_snapshot(const DataApp_HomeStatus_t *status);
 static uint8_t ui_HomePage_battery_update(const DataApp_HomeStatus_t *status, uint32_t now, uint8_t restart);
-static void ui_HomePage_draw_battery(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status, uint32_t text_rgb);
+static void ui_HomePage_draw_battery(egui_canvas_t *canvas,
+                                     const DataApp_HomeStatus_t *status,
+                                     uint32_t ground_text_rgb);
 static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
                                               egui_dim_t x,
                                               egui_dim_t y,
@@ -239,7 +245,21 @@ static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value);
 #define HOME_BATTERY_FULL_FILL_MS 350U
 #define HOME_BATTERY_FULL_FLASH_STEP_MS 150U
 #define HOME_BATTERY_FULL_FLASH_STEPS 4U
-#define HOME_BATTERY_ACTIVE_RGB 0x22C55E
+#define HOME_TOP_TEXT_DARK_RGB     0x03131F
+#define HOME_TOP_TEXT_LIGHT_RGB    0xF4FAFF
+#define HOME_GROUND_TEXT_DAY_RGB   0xFFF4D6
+#define HOME_GROUND_TEXT_NIGHT_RGB 0xEAF4FF
+#define HOME_TOP_TEXT_LUMA_SWITCH  140U
+#define HOME_BATTERY_ACTIVE_RGB    0xFFD166
+
+/* Dynamic theme: dawn 06:00-08:30, day 08:30-17:00, dusk 17:00-19:00. */
+#define HOME_THEME2_DAWN_START_MINUTE   (6U * 60U)
+#define HOME_THEME2_DAWN_PEAK_MINUTE    (7U * 60U + 15U)
+#define HOME_THEME2_DAY_START_MINUTE    (8U * 60U + 30U)
+#define HOME_THEME2_DUSK_START_MINUTE   (17U * 60U)
+#define HOME_THEME2_DUSK_PEAK_MINUTE    (18U * 60U)
+#define HOME_THEME2_NIGHT_START_MINUTE  (19U * 60U)
+#define HOME_THEME2_MINUTES_PER_DAY     (24U * 60U)
 
 #define HOME_SCENE_WRAP_W 428
 #define HOME_SCENE_CLOUD_STEP_MS 50U
@@ -1652,7 +1672,8 @@ static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_da
         style.background_rgb = 0x87CEEB;
         style.background_top_rgb = 0x67BCE4;
         style.background_bottom_rgb = 0xA8DEF1;
-        style.text_rgb = 0x174A6E;
+        style.top_text_rgb = HOME_TOP_TEXT_DARK_RGB;
+        style.ground_text_rgb = HOME_GROUND_TEXT_DAY_RGB;
         style.tint_rgb = 0x000000;
         style.tint_alpha = 0U;
 
@@ -1662,13 +1683,15 @@ static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_da
             style.background_rgb = 0x8AA0AD;
             style.background_top_rgb = 0x718894;
             style.background_bottom_rgb = 0xA3B4BC;
+            style.top_text_rgb = HOME_TOP_TEXT_DARK_RGB;
             style.tint_alpha = 28U;
             break;
         case WEATHER_SCENE_LIGHT_RAIN:
             style.background_rgb = 0x6F8FA3;
             style.background_top_rgb = 0x536F82;
             style.background_bottom_rgb = 0x8BAFC4;
-            style.text_rgb = 0xE6F4FF;
+            style.top_text_rgb = HOME_TOP_TEXT_LIGHT_RGB;
+            style.ground_text_rgb = HOME_GROUND_TEXT_NIGHT_RGB;
             style.tint_rgb = 0x183244;
             style.tint_alpha = 42U;
             break;
@@ -1676,7 +1699,8 @@ static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_da
             style.background_rgb = 0x536F82;
             style.background_top_rgb = 0x3D5565;
             style.background_bottom_rgb = 0x69899F;
-            style.text_rgb = 0xEFF8FF;
+            style.top_text_rgb = HOME_TOP_TEXT_LIGHT_RGB;
+            style.ground_text_rgb = HOME_GROUND_TEXT_NIGHT_RGB;
             style.tint_rgb = 0x102536;
             style.tint_alpha = 58U;
             break;
@@ -1684,7 +1708,8 @@ static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_da
             style.background_rgb = 0x364B5C;
             style.background_top_rgb = 0x273844;
             style.background_bottom_rgb = 0x456272;
-            style.text_rgb = 0xF4FAFF;
+            style.top_text_rgb = HOME_TOP_TEXT_LIGHT_RGB;
+            style.ground_text_rgb = HOME_GROUND_TEXT_NIGHT_RGB;
             style.tint_rgb = 0x081724;
             style.tint_alpha = 78U;
             break;
@@ -1692,7 +1717,7 @@ static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_da
             style.background_rgb = 0xB7D0DA;
             style.background_top_rgb = 0x9EBBC8;
             style.background_bottom_rgb = 0xD0E5EC;
-            style.text_rgb = 0x24485A;
+            style.top_text_rgb = HOME_TOP_TEXT_DARK_RGB;
             style.tint_rgb = 0xEAF7FF;
             style.tint_alpha = 30U;
             break;
@@ -1707,7 +1732,8 @@ static ui_home_style_t ui_HomePage_get_style(WeatherScene_t scene, uint8_t is_da
         style.background_rgb = 0x07162F;
         style.background_top_rgb = 0x041024;
         style.background_bottom_rgb = 0x0A1C3A;
-        style.text_rgb = 0xD8ECFF;
+        style.top_text_rgb = HOME_TOP_TEXT_LIGHT_RGB;
+        style.ground_text_rgb = HOME_GROUND_TEXT_NIGHT_RGB;
         style.tint_rgb = 0x020817;
         style.tint_alpha = 88U;
 
@@ -1773,27 +1799,49 @@ static uint8_t ui_HomePage_mix_u8(uint8_t from_value, uint8_t to_value, uint8_t 
                       ((uint32_t)to_value * amount) + 127U) / 255U);
 }
 
+static uint8_t ui_HomePage_rgb_luma(uint32_t rgb)
+{
+    uint32_t red = (rgb >> 16) & 0xFFU;
+    uint32_t green = (rgb >> 8) & 0xFFU;
+    uint32_t blue = rgb & 0xFFU;
+
+    return (uint8_t)(((red * 77U) + (green * 150U) + (blue * 29U) + 128U) >> 8);
+}
+
+static uint32_t ui_HomePage_get_contrast_top_text_rgb(uint32_t background_top_rgb,
+                                                       uint32_t tint_rgb,
+                                                       uint8_t tint_alpha)
+{
+    uint32_t effective_background = ui_HomePage_mix_rgb(background_top_rgb,
+                                                         tint_rgb,
+                                                         tint_alpha);
+
+    return (ui_HomePage_rgb_luma(effective_background) >= HOME_TOP_TEXT_LUMA_SWITCH) ?
+               HOME_TOP_TEXT_DARK_RGB :
+               HOME_TOP_TEXT_LIGHT_RGB;
+}
+
 static ui_home_theme2_style_t ui_HomePage_get_theme2_style(WeatherScene_t scene,
                                                            uint8_t is_day,
                                                            uint16_t minute_of_day)
 {
     static const ui_home_theme2_keyframe_t keyframes[] =
     {
-        {0U,    0x06142C, 0x142E51, 0xD8ECFF, 76U, HOME_THEME2_CLOUD_DAY},
-        {300U,  0x06142C, 0x142E51, 0xD8ECFF, 76U, HOME_THEME2_CLOUD_DAY},
-        {375U,  0x765A88, 0xF4A985, 0xFFF4E8, 18U, HOME_THEME2_CLOUD_DAWN},
-        {450U,  0x61B6E5, 0xBDE9F5, 0x174A6E, 0U,  HOME_THEME2_CLOUD_DAY},
-        {990U,  0x61B6E5, 0xBDE9F5, 0x174A6E, 0U,  HOME_THEME2_CLOUD_DAY},
-        {1080U, 0x5C75B6, 0xF6A06E, 0xFFF5E8, 16U, HOME_THEME2_CLOUD_SUNSET},
-        {1170U, 0x06142C, 0x142E51, 0xD8ECFF, 76U, HOME_THEME2_CLOUD_DAY},
-        {1440U, 0x06142C, 0x142E51, 0xD8ECFF, 76U, HOME_THEME2_CLOUD_DAY},
+        {0U,    0x06142C, 0x142E51, 76U, HOME_THEME2_CLOUD_DAY},
+        {HOME_THEME2_DAWN_START_MINUTE,  0x06142C, 0x142E51, 76U, HOME_THEME2_CLOUD_DAY},
+        {HOME_THEME2_DAWN_PEAK_MINUTE,   0x765A88, 0xF4A985, 18U, HOME_THEME2_CLOUD_DAWN},
+        {HOME_THEME2_DAY_START_MINUTE,   0x61B6E5, 0xBDE9F5, 0U,  HOME_THEME2_CLOUD_DAY},
+        {HOME_THEME2_DUSK_START_MINUTE,  0x61B6E5, 0xBDE9F5, 0U,  HOME_THEME2_CLOUD_DAY},
+        {HOME_THEME2_DUSK_PEAK_MINUTE,   0x5C75B6, 0xF6A06E, 16U, HOME_THEME2_CLOUD_SUNSET},
+        {HOME_THEME2_NIGHT_START_MINUTE, 0x06142C, 0x142E51, 76U, HOME_THEME2_CLOUD_DAY},
+        {HOME_THEME2_MINUTES_PER_DAY,    0x06142C, 0x142E51, 76U, HOME_THEME2_CLOUD_DAY},
     };
     ui_home_theme2_style_t style;
     ui_home_style_t weather_style;
     uint16_t minute = minute_of_day;
     uint8_t weather_amount = 0U;
 
-    if (minute >= 1440U)
+    if (minute >= HOME_THEME2_MINUTES_PER_DAY)
     {
         minute = (is_day != 0U) ? 720U : 0U;
     }
@@ -1813,7 +1861,6 @@ static ui_home_theme2_style_t ui_HomePage_get_theme2_style(WeatherScene_t scene,
 
             style.background_top_rgb = ui_HomePage_mix_rgb(from->background_top_rgb, to->background_top_rgb, amount);
             style.background_bottom_rgb = ui_HomePage_mix_rgb(from->background_bottom_rgb, to->background_bottom_rgb, amount);
-            style.text_rgb = ui_HomePage_mix_rgb(from->text_rgb, to->text_rgb, amount);
             style.tint_rgb = 0x000000;
             style.tint_alpha = ui_HomePage_mix_u8(from->tint_alpha, to->tint_alpha, amount);
             style.cloud_from_state = from->cloud_state;
@@ -1861,15 +1908,17 @@ static ui_home_theme2_style_t ui_HomePage_get_theme2_style(WeatherScene_t scene,
         style.background_bottom_rgb = ui_HomePage_mix_rgb(style.background_bottom_rgb,
                                                           weather_style.background_rgb,
                                                           weather_amount);
-        style.text_rgb = ui_HomePage_mix_rgb(style.text_rgb,
-                                             weather_style.text_rgb,
-                                             weather_amount);
         style.tint_rgb = weather_style.tint_rgb;
         if (style.tint_alpha < weather_style.tint_alpha)
         {
             style.tint_alpha = weather_style.tint_alpha;
         }
     }
+
+    style.top_text_rgb = ui_HomePage_get_contrast_top_text_rgb(style.background_top_rgb,
+                                                                style.tint_rgb,
+                                                                style.tint_alpha);
+    style.ground_text_rgb = weather_style.ground_text_rgb;
 
     return style;
 }
@@ -1879,7 +1928,8 @@ static uint8_t ui_HomePage_theme2_style_equals(const ui_home_theme2_style_t *a,
 {
     return (uint8_t)((a->background_top_rgb == b->background_top_rgb) &&
                      (a->background_bottom_rgb == b->background_bottom_rgb) &&
-                     (a->text_rgb == b->text_rgb) &&
+                     (a->top_text_rgb == b->top_text_rgb) &&
+                     (a->ground_text_rgb == b->ground_text_rgb) &&
                      (a->tint_rgb == b->tint_rgb) &&
                      (a->tint_alpha == b->tint_alpha) &&
                      (a->cloud_from_state == b->cloud_from_state) &&
@@ -2205,7 +2255,7 @@ static uint8_t ui_HomePage_canvas_intersects(egui_canvas_t *canvas,
 
 static void ui_HomePage_draw_battery(egui_canvas_t *canvas,
                                      const DataApp_HomeStatus_t *status,
-                                     uint32_t text_rgb)
+                                     uint32_t ground_text_rgb)
 {
     const egui_font_t *font = EGUI_FONT_OF(&egui_res_font_montserrat_12_4);
     uint32_t color_rgb;
@@ -2229,9 +2279,9 @@ static void ui_HomePage_draw_battery(egui_canvas_t *canvas,
         return;
     }
 
-    color_rgb = ((status->battery_valid == 0U) || (status->battery_stale != 0U) ||
-                 (status->charger_stale != 0U)) ?
-                    0x64748B : ((status->charging || status->charge_full) ? HOME_BATTERY_ACTIVE_RGB : text_rgb);
+    color_rgb = (status->charging || status->charge_full) ?
+                    HOME_BATTERY_ACTIVE_RGB :
+                    ground_text_rgb;
     display_percent = s_home_battery_state.display_percent;
     if (display_percent > 100U)
     {
@@ -2298,7 +2348,7 @@ static void ui_HomePage_draw_battery(egui_canvas_t *canvas,
 
 static void ui_HomePage_draw_top_status(egui_canvas_t *canvas,
                                         const DataApp_HomeStatus_t *status,
-                                        uint32_t text_rgb)
+                                        uint32_t top_text_rgb)
 {
     const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font_16;
@@ -2324,11 +2374,10 @@ static void ui_HomePage_draw_top_status(egui_canvas_t *canvas,
     heiti_font_16 = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
     heiti_font_18 = (s_home_heiti_18 != NULL) ? s_home_heiti_18 : EGUI_FONT_OF(&egui_res_font_montserrat_18_4);
 
-    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_30_4), status->time_text, 10, 1, 86, 32, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, text_rgb);
-    ui_HomePage_draw_date_text(canvas, small_font, heiti_font_18, status->date_text, 104, 10, text_rgb);
-    ui_HomePage_draw_raw_text(canvas, heiti_font_18, status->week_text, 180, 10, text_rgb);
-    ui_HomePage_draw_raw_text(canvas, heiti_font_18, status->temp_range_text, 300, 10,
-                              ((status->weather_valid == 0U) || (status->weather_stale != 0U)) ? 0x64748B : text_rgb);
+    ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_30_4), status->time_text, 10, 1, 86, 32, EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, top_text_rgb);
+    ui_HomePage_draw_date_text(canvas, small_font, heiti_font_18, status->date_text, 104, 10, top_text_rgb);
+    ui_HomePage_draw_raw_text(canvas, heiti_font_18, status->week_text, 180, 10, top_text_rgb);
+    ui_HomePage_draw_raw_text(canvas, heiti_font_18, status->temp_range_text, 300, 10, top_text_rgb);
 
 #if EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565
     weather_icon = ui_weather_icon_get(status->weather_icon_id);
@@ -2341,7 +2390,7 @@ static void ui_HomePage_draw_top_status(egui_canvas_t *canvas,
 
 static void ui_HomePage_draw_pm25_status(egui_canvas_t *canvas,
                                          const DataApp_HomeStatus_t *status,
-                                         uint32_t text_rgb)
+                                         uint32_t ground_text_rgb)
 {
     const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
@@ -2366,12 +2415,12 @@ static void ui_HomePage_draw_pm25_status(egui_canvas_t *canvas,
                  HOME_STATUS_PM25_W,
                  HOME_STATUS_PM25_H,
                  EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER,
-                 ((status->weather_valid == 0U) || (status->weather_stale != 0U)) ? 0x64748B : text_rgb);
+                 ground_text_rgb);
 }
 
 static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
                                         const DataApp_HomeStatus_t *status,
-                                        uint32_t text_rgb)
+                                        uint32_t ground_text_rgb)
 {
     const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
@@ -2396,20 +2445,23 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
                  HOME_STATUS_ENV_TEXT_W,
                  HOME_STATUS_ENV_TEXT_H,
                  EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER,
-                 ((status->environment_valid == 0U) || (status->environment_stale != 0U)) ? 0x64748B : text_rgb);
-    ui_HomePage_draw_battery(canvas, status, text_rgb);
+                 ground_text_rgb);
+    ui_HomePage_draw_battery(canvas, status, ground_text_rgb);
 }
 
-static void ui_HomePage_draw_status(egui_canvas_t *canvas, const DataApp_HomeStatus_t *status, uint32_t text_rgb)
+static void ui_HomePage_draw_status(egui_canvas_t *canvas,
+                                    const DataApp_HomeStatus_t *status,
+                                    uint32_t top_text_rgb,
+                                    uint32_t ground_text_rgb)
 {
     if (status == NULL)
     {
         return;
     }
 
-    ui_HomePage_draw_top_status(canvas, status, text_rgb);
-    ui_HomePage_draw_pm25_status(canvas, status, text_rgb);
-    ui_HomePage_draw_env_status(canvas, status, text_rgb);
+    ui_HomePage_draw_top_status(canvas, status, top_text_rgb);
+    ui_HomePage_draw_pm25_status(canvas, status, ground_text_rgb);
+    ui_HomePage_draw_env_status(canvas, status, ground_text_rgb);
 }
 
 static void ui_HomePage_draw_sky_gradient(egui_canvas_t *canvas,
@@ -2438,7 +2490,8 @@ static void ui_HomePage_draw_sky_gradient(egui_canvas_t *canvas,
 static void ui_HomePage_on_draw(egui_view_t *self)
 {
     egui_canvas_t *canvas = egui_view_get_canvas(self);
-    uint32_t text_rgb;
+    uint32_t top_text_rgb;
+    uint32_t ground_text_rgb;
     uint32_t tint_rgb;
     uint8_t tint_alpha;
 
@@ -2447,7 +2500,8 @@ static void ui_HomePage_on_draw(egui_view_t *self)
         ui_HomePage_draw_sky_gradient(canvas,
                                       s_home_theme2_style.background_top_rgb,
                                       s_home_theme2_style.background_bottom_rgb);
-        text_rgb = s_home_theme2_style.text_rgb;
+        top_text_rgb = s_home_theme2_style.top_text_rgb;
+        ground_text_rgb = s_home_theme2_style.ground_text_rgb;
         tint_rgb = s_home_theme2_style.tint_rgb;
         tint_alpha = s_home_theme2_style.tint_alpha;
     }
@@ -2456,7 +2510,8 @@ static void ui_HomePage_on_draw(egui_view_t *self)
         ui_HomePage_draw_sky_gradient(canvas,
                                       s_home_render_style.background_top_rgb,
                                       s_home_render_style.background_bottom_rgb);
-        text_rgb = s_home_render_style.text_rgb;
+        top_text_rgb = s_home_render_style.top_text_rgb;
+        ground_text_rgb = s_home_render_style.ground_text_rgb;
         tint_rgb = s_home_render_style.tint_rgb;
         tint_alpha = s_home_render_style.tint_alpha;
     }
@@ -2468,5 +2523,8 @@ static void ui_HomePage_on_draw(egui_view_t *self)
     }
     ui_HomePage_draw_weather_particles(canvas);
     ui_HomePage_draw_lightning(canvas, s_home_scene_tick);
-    ui_HomePage_draw_status(canvas, &s_home_render_status, text_rgb);
+    ui_HomePage_draw_status(canvas,
+                            &s_home_render_status,
+                            top_text_rgb,
+                            ground_text_rgb);
 }
