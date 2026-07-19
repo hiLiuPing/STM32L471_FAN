@@ -30,6 +30,14 @@ extern "C" {
 
 #define SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT           1U
 
+#define SETTINGS_APP_HOME_THEME_DEFAULT                SETTINGS_APP_HOME_THEME_1
+
+typedef enum
+{
+    SETTINGS_APP_HOME_THEME_1 = 1,
+    SETTINGS_APP_HOME_THEME_2 = 2
+} SettingsApp_HomeTheme_t;
+
 #define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DISABLED  0U
 #define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DEFAULT   5U
 #define SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_MIN       1U
@@ -49,16 +57,19 @@ typedef struct
     uint8_t rgb_pwr_enabled;
     uint16_t screen_idle_timeout_min;
     uint16_t system_auto_off_min;
+    uint8_t home_theme;
 } AppSettings_t;
 
 void SettingsApp_Init(void);
 void SettingsApp_Get(AppSettings_t *out);
 bool SettingsApp_Update(const AppSettings_t *next);
 void SettingsApp_PersistPending(TickType_t now);
+bool SettingsApp_PersistNow(void);
 void SettingsApp_Apply(void);
 uint16_t SettingsApp_GetWeatherTimeSyncIntervalMin(void);
 uint16_t SettingsApp_GetScreenIdleTimeoutMin(void);
 uint16_t SettingsApp_GetSystemAutoOffMin(void);
+uint8_t SettingsApp_GetHomeTheme(void);
 uint8_t SettingsApp_GetActiveBrightnessPercent(void);
 void SettingsApp_ApplyActiveBrightness(void);
 

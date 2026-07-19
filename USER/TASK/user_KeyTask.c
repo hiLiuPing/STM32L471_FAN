@@ -58,6 +58,7 @@ static void KeyTask_ProcessMotion(KeyTask_State_t *state, TickType_t now)
 {
     TiltKey_t tilt_event;
     TiltKey_t fall_event;
+    sensors_snapshot_t sensors;
 
     if ((TickType_t)(now - state->motion_last_tick) <
         pdMS_TO_TICKS(KEY_TASK_MOTION_PERIOD_MS))
@@ -66,10 +67,15 @@ static void KeyTask_ProcessMotion(KeyTask_State_t *state, TickType_t now)
     }
     state->motion_last_tick = now;
 
-    Update_Motion(&g_sensors_motion);
-    Motion_SwapBuffer(&g_sensors_motion);
-    tilt_event = TiltKey_Update(&g_sensors_motion);
-    fall_event = FallDetect_Check(&g_sensors_motion);
+    (void)SensorsApp_UpdateMotion();
+    SensorsApp_GetSnapshot(&sensors);
+    if ((sensors.motion.health.valid == 0U) ||
+        (sensors.motion.health.stale != 0U))
+    {
+        return;
+    }
+    tilt_event = TiltKey_Update(&sensors.motion.value);
+    fall_event = FallDetect_Check(&sensors.motion.value);
 
     if (tilt_event != MSG_TILT_NONE)
     {

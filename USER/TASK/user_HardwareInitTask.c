@@ -4,7 +4,6 @@
 #include "fan_app.h"
 #include "key.h"
 #include "led_app.h"
-#include "lptim.h"
 #include "lfs_port.h"
 #include "log.h"
 #include "main.h"
@@ -21,9 +20,11 @@
 
 void HardwareInitTask(void *argument)
 {
+    uint32_t sensor_init_mask;
     (void)argument;
 
     log_init(&huart1);
+    WeatherApp_Init();
     Weather_PowerOn();
     log_printf("start app");
     log_printf("step1: init leds...");
@@ -40,7 +41,18 @@ void HardwareInitTask(void *argument)
     {
         log_printf("storage init OK");
     }
-    (void)APP_Sensors_Init();
+    sensor_init_mask = APP_Sensors_Init();
+    if (sensor_init_mask != SENSORS_INIT_ALL_OK)
+    {
+        log_printf("[Sensors] init mask=0x%02lX missing=0x%02lX",
+                   (unsigned long)sensor_init_mask,
+                   (unsigned long)(SENSORS_INIT_ALL_OK & ~sensor_init_mask));
+        if ((sensor_init_mask & SENSORS_INIT_MOTION_OK) == 0U) log_printf("[Sensors] LIS3DH init fail");
+        if ((sensor_init_mask & SENSORS_INIT_ENV_OK) == 0U) log_printf("[Sensors] SHT40 init fail");
+        if ((sensor_init_mask & SENSORS_INIT_BATTERY_OK) == 0U) log_printf("[Sensors] MAX17048 init fail");
+        if ((sensor_init_mask & SENSORS_INIT_CHARGER_OK) == 0U) log_printf("[Sensors] BQ24295 init fail");
+        if ((sensor_init_mask & SENSORS_INIT_INA226_OK) == 0U) log_printf("[Sensors] INA226 init fail");
+    }
     log_printf("step3.1: init fan...");
     FanApp_Init();
     DataApp_Init();
@@ -70,10 +82,6 @@ void HardwareInitTask(void *argument)
 
     log_printf("step4: egui init...");
     egui_port_start();
-    if (LPTIM1_Start1sTick() != HAL_OK)
-    {
-        log_printf("lptim1 1s tick start FAIL");
-    }
     uart_dma_init(&uart2_admin,
                   &huart2,
                   u2_dma_buf,
@@ -81,7 +89,6 @@ void HardwareInitTask(void *argument)
                   u2_rb_buf,
                   UART_Transmit_LWRB_SIZE);
     log_printf("step5: hw ready");
-    //  g_weather_module.first_sync_done = 0U;
     User_Tasks_SetHardwareReady();
     log_printf("step6: delete self");
     // Weather_FillDemoData();

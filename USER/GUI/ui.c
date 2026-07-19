@@ -6,6 +6,7 @@
 #include "screens/ui_HomePage.h"
 #include "screens/ui_SettingPage.h"
 #include "screens/ui_StartPage.h"
+#include "screens/ui_WeatherPage.h"
 #include "ui_poetry_popup.h"
 #include "ui_shutdown_popup.h"
 #include "ui_system_popup.h"
@@ -38,6 +39,16 @@ static ui_page_t s_pages[] = {
         .key_consume = ui_FanPage_key_handler,
         .service = NULL,
         .name = "FAN",
+        .nav_enabled = true,
+        .initialized = 0U,
+    },
+    {
+        .init = ui_WeatherPage_screen_init,
+        .deinit = ui_WeatherPage_screen_destroy,
+        .page_view = &ui_WeatherPage,
+        .key_consume = ui_WeatherPage_key_handler,
+        .service = NULL,
+        .name = "WEATHER",
         .nav_enabled = true,
         .initialized = 0U,
     },

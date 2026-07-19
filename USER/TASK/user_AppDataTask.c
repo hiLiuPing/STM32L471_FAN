@@ -11,7 +11,6 @@
 #include "user_TasksInit.h"
 #include "weather_app.h"
 
-#define APP_DATA_WEATHER_DEMO_INTERVAL_MS 15000U
 #define APP_DATA_NOTIFY_STABLE_SAMPLES    3U
 #define APP_DATA_LOW_BATTERY_PERCENT      30
 #define APP_DATA_LOW_BATTERY_REARM        35
@@ -57,9 +56,18 @@ static int16_t AppDataNotify_ClampPercent(float value)
     return (int16_t)value;
 }
 
-static void AppDataNotify_UpdatePower(AppDataNotifyState_t *state)
+static void AppDataNotify_UpdatePower(AppDataNotifyState_t *state,
+                                      const sensors_snapshot_t *sensors)
 {
-    uint8_t present = g_sensors_charger.input_present ? 1U : 0U;
+    uint8_t present;
+
+    if ((sensors->charger.health.valid == 0U) ||
+        (sensors->charger.health.stale != 0U))
+    {
+        state->power_candidate_count = 0U;
+        return;
+    }
+    present = sensors->charger.value.input_present;
 
     if (state->power_initialized == 0U)
     {
@@ -97,11 +105,19 @@ static void AppDataNotify_UpdatePower(AppDataNotifyState_t *state)
     }
 }
 
-static void AppDataNotify_UpdateCharge(AppDataNotifyState_t *state)
+static void AppDataNotify_UpdateCharge(AppDataNotifyState_t *state,
+                                       const sensors_snapshot_t *sensors)
 {
-    bq24295_state_t charge_state = g_sensors_charger.state;
+    bq24295_state_t charge_state;
 
-    if (!g_sensors_charger.input_present)
+    if ((sensors->charger.health.valid == 0U) ||
+        (sensors->charger.health.stale != 0U))
+    {
+        state->charge_done_count = 0U;
+        return;
+    }
+    charge_state = sensors->charger.value.state;
+    if (sensors->charger.value.input_present == 0U)
     {
         state->charging_seen = 0U;
         state->charge_done_count = 0U;
@@ -137,16 +153,20 @@ static void AppDataNotify_UpdateCharge(AppDataNotifyState_t *state)
     }
 }
 
-static void AppDataNotify_UpdateBattery(AppDataNotifyState_t *state)
+static void AppDataNotify_UpdateBattery(AppDataNotifyState_t *state,
+                                        const sensors_snapshot_t *sensors)
 {
     int16_t percent;
 
-    if (g_sensors_battery.voltage <= 0.0f)
+    if ((sensors->battery.health.valid == 0U) ||
+        (sensors->battery.health.stale != 0U) ||
+        (sensors->battery.value.voltage <= 0.0f))
     {
+        state->low_battery_count = 0U;
         return;
     }
 
-    percent = AppDataNotify_ClampPercent(g_sensors_battery.soc);
+    percent = AppDataNotify_ClampPercent(sensors->battery.value.soc);
     if (state->low_battery_latched != 0U)
     {
         if (percent >= APP_DATA_LOW_BATTERY_REARM)
@@ -175,15 +195,26 @@ static void AppDataNotify_UpdateBattery(AppDataNotifyState_t *state)
     }
 }
 
-static void AppDataNotify_UpdateEnvironment(AppDataNotifyState_t *state)
+static void AppDataNotify_UpdateEnvironment(AppDataNotifyState_t *state,
+                                            const sensors_snapshot_t *sensors)
 {
     fan_state_t fan_state;
-    int16_t temp_x10 = AppDataNotify_RoundX10(g_sensors_environment.temp);
-    int16_t hum_percent = AppDataNotify_ClampPercent(g_sensors_environment.hum);
+    int16_t temp_x10;
+    int16_t hum_percent;
     int16_t hum_threshold;
     uint8_t is_high;
     uint8_t is_clear;
 
+    if ((sensors->environment.health.valid == 0U) ||
+        (sensors->environment.health.stale != 0U))
+    {
+        state->environment_high_count = 0U;
+        state->environment_clear_count = 0U;
+        return;
+    }
+
+    temp_x10 = AppDataNotify_RoundX10(sensors->environment.value.temp);
+    hum_percent = AppDataNotify_ClampPercent(sensors->environment.value.hum);
     FanApp_GetState(&fan_state);
     hum_threshold = (int16_t)fan_state.smart_hum_threshold_percent;
     is_high = (uint8_t)((temp_x10 >= (int16_t)fan_state.smart_temp_threshold_x10) ||
@@ -232,12 +263,13 @@ static void AppDataNotify_UpdateEnvironment(AppDataNotifyState_t *state)
     }
 }
 
-static void AppDataNotify_Update(AppDataNotifyState_t *state)
+static void AppDataNotify_Update(AppDataNotifyState_t *state,
+                                 const sensors_snapshot_t *sensors)
 {
-    AppDataNotify_UpdatePower(state);
-    AppDataNotify_UpdateCharge(state);
-    AppDataNotify_UpdateBattery(state);
-    AppDataNotify_UpdateEnvironment(state);
+    AppDataNotify_UpdatePower(state, sensors);
+    AppDataNotify_UpdateCharge(state, sensors);
+    AppDataNotify_UpdateBattery(state, sensors);
+    AppDataNotify_UpdateEnvironment(state, sensors);
 }
 
 void AppDataTask(void *argument)
@@ -245,7 +277,6 @@ void AppDataTask(void *argument)
     TickType_t last_wake_time;
     TickType_t last_sensor_tick;
     TickType_t last_rpm_tick;
-    TickType_t last_weather_demo_tick;
     AppDataNotifyState_t notify_state = {0};
 
     (void)argument;
@@ -254,20 +285,12 @@ void AppDataTask(void *argument)
     last_wake_time = xTaskGetTickCount();
     last_sensor_tick = last_wake_time;
     last_rpm_tick = last_wake_time;
-    last_weather_demo_tick = last_wake_time;
 
     for (;;)
     {
         TickType_t now = xTaskGetTickCount();
-        DataApp_QuoteServiceUpdate(now);
         UserMonitor_Service();
         SettingsApp_PersistPending(now);
-
-        // if ((TickType_t)(now - last_weather_demo_tick) >= pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS))
-        // {
-        //     last_weather_demo_tick += pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS);
-        //     Weather_FillDemoData();
-        // }
 
         if ((TickType_t)(now - last_rpm_tick) >= pdMS_TO_TICKS(APP_DATA_RPM_PERIOD_MS))
         {
@@ -281,12 +304,15 @@ void AppDataTask(void *argument)
             Time_BlinkUpdate();
             RTC_ReadToBuffer();
             Buffer_Swap();
-            Update_Env(&g_sensors_environment);
-            Update_Battery(&g_sensors_battery);
-            Update_Charger(&g_sensors_charger);
-            Update_INA226(&g_sensors_ina226);
+            sensors_snapshot_t sensors;
+
+            (void)SensorsApp_UpdateEnvironment();
+            (void)SensorsApp_UpdateBattery();
+            (void)SensorsApp_UpdateCharger();
+            (void)SensorsApp_UpdateINA226();
+            SensorsApp_GetSnapshot(&sensors);
             DataApp_HomeStatus_Update();
-            AppDataNotify_Update(&notify_state);
+            AppDataNotify_Update(&notify_state, &sensors);
         }
 
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(30U));

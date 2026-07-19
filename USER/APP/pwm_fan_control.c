@@ -8,6 +8,7 @@
 #include "pwm_fan_control.h"
 #include <stdlib.h>
 #include <math.h>
+#include "time_utils.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
@@ -61,7 +62,8 @@ void PwmFan_Init(PwmFanController_t *fan) {
     fan->active_base = 50.0f;
     fan->current_duty = 0.0f;
     
-    fan->weather_timer = 0.0f;
+    fan->weather_phase_1 = 0.0f;
+    fan->weather_phase_2 = 0.0f;
     fan->turb_raw_state = 0.0f;
     fan->turb_filtered = 0.0f;
     fan->turb_hold_counter = 0;
@@ -117,9 +119,14 @@ float PwmFan_ProcessTick100ms(PwmFanController_t *fan, float ambient_temp) {
      * ========================================================================= */
 
     /* 引擎子层 A: 气象趋势引擎 (Weather Engine) - 依靠长周期波形模拟宏观大风趋势 */
-    fan->weather_timer += 0.1f; 
-    float weather_offset = (fan->config.weather_amp_1 * sinf(fan->config.weather_freq_1 * fan->weather_timer)) +
-                           (fan->config.weather_amp_2 * cosf(fan->config.weather_freq_2 * fan->weather_timer));
+    fan->weather_phase_1 = Phase_AdvanceBounded(fan->weather_phase_1,
+                                                fan->config.weather_freq_1 * 0.1f,
+                                                2.0f * (float)M_PI);
+    fan->weather_phase_2 = Phase_AdvanceBounded(fan->weather_phase_2,
+                                                fan->config.weather_freq_2 * 0.1f,
+                                                2.0f * (float)M_PI);
+    float weather_offset = (fan->config.weather_amp_1 * sinf(fan->weather_phase_1)) +
+                           (fan->config.weather_amp_2 * cosf(fan->weather_phase_2));
 
     /* 引擎子层 B: 湍流引擎 (Turbulence Engine) - 采用一阶低通滞后滤波逼近 1/f 粉红噪声 */
     if (fan->turb_hold_counter == 0) {

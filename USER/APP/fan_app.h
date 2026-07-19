@@ -35,7 +35,6 @@ typedef enum {
     FAN_CMD_SET_NATURAL_AMPLITUDE,
     FAN_CMD_SET_AUTO_OFF_MIN,
     FAN_CMD_RESET_DEFAULTS,
-    FAN_CMD_AUTO_OFF_EXPIRED,
 } fan_cmd_type_t;
 
 #define FAN_CMD_FLAG_SUPPRESS_POWER_NOTIFY 0x01U
@@ -63,6 +62,8 @@ typedef struct {
     uint32_t auto_off_remaining_s;
     int16_t current_temp_x10;
     uint8_t current_hum_percent;
+    uint8_t environment_valid;
+    uint8_t environment_stale;
     uint16_t pwm_compare;
 } fan_state_t;
 
@@ -92,6 +93,7 @@ uint8_t FanApp_ModeToIndex(fan_mode_t mode);
 void FanApp_HandleCommand(const fan_cmd_t *cmd);
 void FanApp_Service(TickType_t now);
 void FanApp_PersistPending(TickType_t now);
+bool FanApp_PersistNow(void);
 
 #ifdef __cplusplus
 }

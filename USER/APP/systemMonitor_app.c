@@ -7,27 +7,56 @@
 #include "log.h"
 #include "settings_app.h"
 #include "system_power.h"
+#include "system_notify.h"
 #include "task.h"
+#include "time_utils.h"
 #include "timers.h"
 #include "user_EGUITask.h"
 #include "user_TasksInit.h"
 #include "weather_app.h"
 
-#define USER_MONITOR_FAN_RETRY_MS 100U
+#define USER_MONITOR_RETRY_MS 100U
+#define USER_MONITOR_RETRY_SCREEN_APPLY   (1U << 0)
+#define USER_MONITOR_RETRY_SCREEN_RESTART (1U << 1)
+#define USER_MONITOR_RETRY_WEATHER_APPLY  (1U << 2)
+#define USER_MONITOR_RETRY_WEATHER_STOP   (1U << 3)
+#define USER_MONITOR_RETRY_SYSTEM_APPLY   (1U << 4)
+#define USER_MONITOR_RETRY_SYSTEM_RESTART (1U << 5)
+#define USER_MONITOR_RETRY_SCREEN_STOP    (1U << 6)
+#define USER_MONITOR_RETRY_WEATHER_MANUAL (1U << 7)
 
 _Static_assert(MON_APP_MAX <= MONITOR_MAX_NUM, "App monitor IDs exceed monitor storage");
 
-static volatile uint8_t s_weather_monitor_armed = 0U;
-static volatile uint8_t s_sensor_log_pending = 0U;
-static volatile uint8_t s_fan_auto_off_retry_pending = 0U;
 static volatile uint8_t s_system_auto_off_pending = 0U;
+static volatile uint8_t s_retry_mask = 0U;
+static TickType_t s_retry_after_tick = 0U;
 static uint16_t s_applied_screen_timeout_min = 0U;
 static uint16_t s_applied_weather_interval_min = 0U;
 static uint16_t s_applied_system_auto_off_min = 0U;
+static UBaseType_t s_queue_peak_key_power = 0U;
+static UBaseType_t s_queue_peak_egui_key = 0U;
+static UBaseType_t s_queue_peak_display = 0U;
+static UBaseType_t s_queue_peak_fan = 0U;
+
+static UBaseType_t UserMonitor_TrackQueuePeak(QueueHandle_t queue, UBaseType_t *peak)
+{
+    UBaseType_t current = (queue != NULL) ? uxQueueMessagesWaiting(queue) : 0U;
+
+    if ((peak != NULL) && (current > *peak)) *peak = current;
+    return current;
+}
 
 static uint32_t UserMonitor_MinutesToMs(uint16_t minutes)
 {
     return (uint32_t)minutes * 60U * 1000U;
+}
+
+static void UserMonitor_ScheduleRetry(uint8_t retry_bit)
+{
+    taskENTER_CRITICAL();
+    s_retry_mask |= retry_bit;
+    s_retry_after_tick = xTaskGetTickCount() + pdMS_TO_TICKS(USER_MONITOR_RETRY_MS);
+    taskEXIT_CRITICAL();
 }
 
 static void ScreenIdleTimeout(TimerHandle_t timer)
@@ -42,7 +71,6 @@ static void ScreenIdleTimeout(TimerHandle_t timer)
 static void WeatherSyncTimeout(TimerHandle_t timer)
 {
     (void)timer;
-    s_weather_monitor_armed = 0U;
     if (SettingsApp_GetWeatherTimeSyncIntervalMin() ==
         SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DISABLED)
     {
@@ -51,20 +79,6 @@ static void WeatherSyncTimeout(TimerHandle_t timer)
     if (xWeatherSyncTaskWakeSemaphore != NULL)
     {
         (void)xSemaphoreGive(xWeatherSyncTaskWakeSemaphore);
-    }
-}
-
-static void FanAutoOffTimeout(TimerHandle_t timer)
-{
-    fan_cmd_t cmd = { FAN_CMD_AUTO_OFF_EXPIRED, 0U, 0U };
-
-    (void)timer;
-    if (!FanApp_SendCommand(&cmd, 0U))
-    {
-        if (Monitor_ChangeTimeout(MON_FAN_AUTO_OFF, USER_MONITOR_FAN_RETRY_MS) != pdPASS)
-        {
-            s_fan_auto_off_retry_pending = 1U;
-        }
     }
 }
 
@@ -78,12 +92,6 @@ static void SystemAutoOffTimeout(TimerHandle_t timer)
     taskENTER_CRITICAL();
     s_system_auto_off_pending = 1U;
     taskEXIT_CRITICAL();
-}
-
-static void SensorLogTimeout(TimerHandle_t timer)
-{
-    (void)timer;
-    s_sensor_log_pending = 1U;
 }
 
 static void MemDiag_LogTaskStack(const char *task_name, TaskHandle_t task_handle)
@@ -109,10 +117,8 @@ void UserMonitor_Init(void)
     uint32_t system_auto_off_ms;
     uint8_t system_auto_off_auto_start;
 
-    s_weather_monitor_armed = 0U;
-    s_sensor_log_pending = 0U;
-    s_fan_auto_off_retry_pending = 0U;
     s_system_auto_off_pending = 0U;
+    s_retry_mask = 0U;
     s_applied_screen_timeout_min = SettingsApp_GetScreenIdleTimeoutMin();
     s_applied_weather_interval_min = SettingsApp_GetWeatherTimeSyncIntervalMin();
     s_applied_system_auto_off_min = SettingsApp_GetSystemAutoOffMin();
@@ -136,38 +142,30 @@ void UserMonitor_Init(void)
     {
         log_printf("[Monitor] weather create fail");
     }
-    if (Monitor_CreateEx(MON_FAN_AUTO_OFF, "FAN_AUTO_OFF",
-                         UserMonitor_MinutesToMs(FAN_AUTO_OFF_MINUTES_DEFAULT),
-                         0U, FanAutoOffTimeout) == MONITOR_INVALID_ID)
-    {
-        log_printf("[Monitor] fan create fail");
-    }
     if (Monitor_CreateEx(MON_SYSTEM_AUTO_OFF, "SYSTEM_AUTO_OFF",
                          system_auto_off_ms, system_auto_off_auto_start,
                          SystemAutoOffTimeout) == MONITOR_INVALID_ID)
     {
         log_printf("[Monitor] system off create fail");
     }
-    if (Monitor_CreateEx(MON_SENSOR_LOG, "SENSOR_LOG", 30000U, 1U, SensorLogTimeout) == MONITOR_INVALID_ID)
-    {
-        log_printf("[Monitor] sensor create fail");
-    }
 }
 
 void UserMonitor_Service(void)
 {
-    fan_cmd_t fan_cmd = { FAN_CMD_AUTO_OFF_EXPIRED, 0U, 0U };
-    uint8_t retry_fan = 0U;
-    uint8_t log_sensor = 0U;
+    uint8_t retry_mask = 0U;
     uint8_t system_auto_off = 0U;
 
+    (void)UserMonitor_TrackQueuePeak(Key_Power_queue, &s_queue_peak_key_power);
+    (void)UserMonitor_TrackQueuePeak(EGUI_Key_queue, &s_queue_peak_egui_key);
+    (void)UserMonitor_TrackQueuePeak(EGUI_DisplayState_queue, &s_queue_peak_display);
+    (void)UserMonitor_TrackQueuePeak(Fan_Command_queue, &s_queue_peak_fan);
+
     taskENTER_CRITICAL();
-    if (s_sensor_log_pending != 0U)
+    if ((s_retry_mask != 0U) && Time32_Reached(xTaskGetTickCount(), s_retry_after_tick))
     {
-        s_sensor_log_pending = 0U;
-        log_sensor = 1U;
+        retry_mask = s_retry_mask;
+        s_retry_mask = 0U;
     }
-    retry_fan = s_fan_auto_off_retry_pending;
     if (s_system_auto_off_pending != 0U)
     {
         s_system_auto_off_pending = 0U;
@@ -182,16 +180,34 @@ void UserMonitor_Service(void)
         return;
     }
 
-    if ((retry_fan != 0U) && FanApp_SendCommand(&fan_cmd, 0U))
+    if ((retry_mask & (USER_MONITOR_RETRY_SCREEN_APPLY |
+                       USER_MONITOR_RETRY_SYSTEM_APPLY)) != 0U)
     {
-        taskENTER_CRITICAL();
-        s_fan_auto_off_retry_pending = 0U;
-        taskEXIT_CRITICAL();
+        UserMonitor_ApplySettings();
     }
-
-    if (log_sensor != 0U)
+    if ((retry_mask & USER_MONITOR_RETRY_SCREEN_RESTART) != 0U)
     {
-        log_printf("[Monitor] sensor timer");
+        UserMonitor_OnDisplayWake();
+    }
+    if ((retry_mask & USER_MONITOR_RETRY_WEATHER_STOP) != 0U)
+    {
+        UserMonitor_StopWeatherSync();
+    }
+    if ((retry_mask & USER_MONITOR_RETRY_WEATHER_APPLY) != 0U)
+    {
+        UserMonitor_RestartWeatherSync();
+    }
+    if ((retry_mask & USER_MONITOR_RETRY_SCREEN_STOP) != 0U)
+    {
+        UserMonitor_OnDisplaySleep();
+    }
+    if ((retry_mask & USER_MONITOR_RETRY_WEATHER_MANUAL) != 0U)
+    {
+        UserMonitor_RequestWeatherSync();
+    }
+    if ((retry_mask & USER_MONITOR_RETRY_SYSTEM_RESTART) != 0U)
+    {
+        UserMonitor_OnKeyActivity();
     }
 }
 
@@ -222,6 +238,7 @@ void UserMonitor_ApplySettings(void)
         else
         {
             log_printf("[Monitor] screen apply fail");
+            UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_SCREEN_APPLY);
         }
     }
 
@@ -231,28 +248,28 @@ void UserMonitor_ApplySettings(void)
         {
             if (Monitor_Stop(MON_WEATHER_SYNC) == pdPASS)
             {
-                s_weather_monitor_armed = 0U;
                 s_applied_weather_interval_min = weather_interval_min;
             }
             else
             {
                 log_printf("[Monitor] weather stop fail");
+                UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_WEATHER_APPLY);
             }
         }
-        else if ((g_weather_module.first_sync_done == 0U) ||
-                 (g_weather_module.syncing != 0U))
+        else if ((WeatherApp_IsFirstSyncDone() == 0U) ||
+                 (WeatherApp_IsSyncing() != 0U))
         {
             s_applied_weather_interval_min = weather_interval_min;
         }
         else if (Monitor_ChangeTimeout(MON_WEATHER_SYNC,
                                        UserMonitor_MinutesToMs(weather_interval_min)) == pdPASS)
         {
-            s_weather_monitor_armed = 1U;
             s_applied_weather_interval_min = weather_interval_min;
         }
         else
         {
             log_printf("[Monitor] weather apply fail");
+            UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_WEATHER_APPLY);
         }
     }
 
@@ -281,6 +298,7 @@ void UserMonitor_ApplySettings(void)
         else
         {
             log_printf("[Monitor] system off apply fail");
+            UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_SYSTEM_APPLY);
         }
     }
 }
@@ -294,29 +312,33 @@ void UserMonitor_OnDisplayWake(void)
     if (Monitor_Restart(MON_SCREEN_IDLE) != pdPASS)
     {
         log_printf("[Monitor] screen restart fail");
+        UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_SCREEN_RESTART);
     }
 }
 
 void UserMonitor_OnDisplaySleep(void)
 {
     EGUIHandlerTask_ClearDisplayState();
-    (void)Monitor_Stop(MON_SCREEN_IDLE);
+    if (Monitor_Stop(MON_SCREEN_IDLE) != pdPASS)
+    {
+        UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_SCREEN_STOP);
+    }
 }
 
 void UserMonitor_RequestWeatherSync(void)
 {
-    if ((g_weather_module.first_sync_done == 0U) || (g_weather_module.syncing != 0U))
+    if ((WeatherApp_IsFirstSyncDone() == 0U) || (WeatherApp_IsSyncing() != 0U))
     {
         return;
     }
 
     if (Monitor_Stop(MON_WEATHER_SYNC) == pdPASS)
     {
-        s_weather_monitor_armed = 0U;
     }
     else
     {
         log_printf("[Monitor] weather manual stop fail");
+        UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_WEATHER_MANUAL);
         return;
     }
     if (xWeatherSyncTaskWakeSemaphore != NULL)
@@ -329,7 +351,6 @@ void UserMonitor_RestartWeatherSync(void)
 {
     uint16_t interval_min = SettingsApp_GetWeatherTimeSyncIntervalMin();
 
-    s_applied_weather_interval_min = interval_min;
     if (interval_min == SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DISABLED)
     {
         UserMonitor_StopWeatherSync();
@@ -338,52 +359,29 @@ void UserMonitor_RestartWeatherSync(void)
     if (Monitor_ChangeTimeout(MON_WEATHER_SYNC,
                               UserMonitor_MinutesToMs(interval_min)) == pdPASS)
     {
-        s_weather_monitor_armed = 1U;
+        s_applied_weather_interval_min = interval_min;
     }
     else
     {
         log_printf("[Monitor] weather restart fail");
+        UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_WEATHER_APPLY);
     }
 }
 
 void UserMonitor_StopWeatherSync(void)
 {
-    if (Monitor_Stop(MON_WEATHER_SYNC) == pdPASS)
+    if (Monitor_Stop(MON_WEATHER_SYNC) != pdPASS)
     {
-        s_weather_monitor_armed = 0U;
+        UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_WEATHER_STOP);
     }
-}
-
-void UserMonitor_RestartFanAutoOff(uint16_t minutes)
-{
-    if (minutes == FAN_AUTO_OFF_MINUTES_DISABLED)
-    {
-        UserMonitor_StopFanAutoOff();
-        return;
-    }
-
-    s_fan_auto_off_retry_pending = 0U;
-    if (Monitor_ChangeTimeout(MON_FAN_AUTO_OFF, UserMonitor_MinutesToMs(minutes)) != pdPASS)
-    {
-        log_printf("[Monitor] fan restart fail");
-    }
-}
-
-void UserMonitor_StopFanAutoOff(void)
-{
-    s_fan_auto_off_retry_pending = 0U;
-    (void)Monitor_Stop(MON_FAN_AUTO_OFF);
 }
 
 void UserMonitor_StopAll(void)
 {
     (void)Monitor_Stop(MON_SCREEN_IDLE);
     (void)Monitor_Stop(MON_WEATHER_SYNC);
-    (void)Monitor_Stop(MON_FAN_AUTO_OFF);
     (void)Monitor_Stop(MON_SYSTEM_AUTO_OFF);
-    (void)Monitor_Stop(MON_SENSOR_LOG);
-    s_weather_monitor_armed = 0U;
-    s_fan_auto_off_retry_pending = 0U;
+    s_retry_mask = 0U;
     s_system_auto_off_pending = 0U;
 }
 
@@ -399,6 +397,7 @@ void UserMonitor_OnKeyActivity(void)
     if (Monitor_Restart(MON_SYSTEM_AUTO_OFF) != pdPASS)
     {
         log_printf("[Monitor] system off restart fail");
+        UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_SYSTEM_RESTART);
     }
 }
 
@@ -411,9 +410,16 @@ void Key_Event(void)
 
 void MemDiag_LogSnapshot(const char *tag)
 {
-    log_printf("[Mem] %s heap=%lu",
+    UBaseType_t key_current;
+    UBaseType_t egui_current;
+    UBaseType_t display_current;
+    UBaseType_t fan_current;
+    UBaseType_t notify_current;
+    UBaseType_t notify_peak;
+    log_printf("[Mem] %s heap=%lu min=%lu",
                (tag != NULL) ? tag : "snapshot",
-               (unsigned long)xPortGetFreeHeapSize());
+               (unsigned long)xPortGetFreeHeapSize(),
+               (unsigned long)xPortGetMinimumEverFreeHeapSize());
 
     if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
     {
@@ -429,4 +435,17 @@ void MemDiag_LogSnapshot(const char *tag)
     MemDiag_LogTaskStack("TX", TransmitTaskHandle);
     MemDiag_LogTaskStack("AppData", AppDataTaskHandle);
     MemDiag_LogTaskStack("Weather", WeatherSyncTaskHandle);
+    MemDiag_LogTaskStack("Timer", xTimerGetTimerDaemonTaskHandle());
+
+    key_current = UserMonitor_TrackQueuePeak(Key_Power_queue, &s_queue_peak_key_power);
+    egui_current = UserMonitor_TrackQueuePeak(EGUI_Key_queue, &s_queue_peak_egui_key);
+    display_current = UserMonitor_TrackQueuePeak(EGUI_DisplayState_queue, &s_queue_peak_display);
+    fan_current = UserMonitor_TrackQueuePeak(Fan_Command_queue, &s_queue_peak_fan);
+    SystemNotify_GetQueueUsage(&notify_current, &notify_peak);
+    log_printf("[Queue] Key=%lu/%lu EGUI=%lu/%lu Display=%lu/%lu Fan=%lu/%lu Notify=%lu/%lu",
+               (unsigned long)key_current, (unsigned long)s_queue_peak_key_power,
+               (unsigned long)egui_current, (unsigned long)s_queue_peak_egui_key,
+               (unsigned long)display_current, (unsigned long)s_queue_peak_display,
+               (unsigned long)fan_current, (unsigned long)s_queue_peak_fan,
+               (unsigned long)notify_current, (unsigned long)notify_peak);
 }

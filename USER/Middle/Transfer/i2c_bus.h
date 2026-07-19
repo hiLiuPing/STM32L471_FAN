@@ -30,15 +30,11 @@ typedef struct {
 void I2C_Bus_Init(I2C_Bus_t *bus);
 void I2C_Bus_Lock(I2C_Bus_t *bus);
 void I2C_Bus_Unlock(I2C_Bus_t *bus);
-void I2C_Bus_UnlockFromISR(I2C_Bus_t *bus);
 uint8_t I2C_Bus_IsLocked(const I2C_Bus_t *bus);
 I2C_HandleTypeDef *I2C_Bus_GetHandle(I2C_Bus_t *bus);
 
 HAL_StatusTypeDef I2C_IsDeviceReady(I2C_Bus_t *bus, uint8_t dev_addr,
                                     uint32_t trials, uint32_t timeout);
-
-HAL_StatusTypeDef I2C_Write_DMA_Start(I2C_Bus_t *bus, uint8_t dev_addr,
-                                      uint8_t *data, uint16_t len);
 
 HAL_StatusTypeDef I2C_Write(I2C_Bus_t *bus, uint8_t dev_addr,
                             const uint8_t *data, uint16_t len);

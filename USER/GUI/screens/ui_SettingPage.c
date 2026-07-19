@@ -11,7 +11,7 @@
 #include "ui_common.h"
 #include "widget/egui_view.h"
 
-#define UI_SETTING_ITEM_COUNT       7U
+#define UI_SETTING_ITEM_COUNT       8U
 #define UI_SETTING_FRAME_MS         50U
 #define UI_SETTING_ROW_X            132
 #define UI_SETTING_ROW_W            288
@@ -19,7 +19,6 @@
 #define UI_SETTING_ROW_H            20
 #define UI_SETTING_ROW_GAP          2
 #define UI_SETTING_ROW_STEP         (UI_SETTING_ROW_H + UI_SETTING_ROW_GAP)
-#define UI_SETTING_SCROLL_UP_Y      (-UI_SETTING_ROW_STEP)
 #define UI_SETTING_SCROLL_DURATION_MS 200U
 #define UI_SETTING_VALUE_STEP       1U
 #define UI_SETTING_FAST_STEP        5U
@@ -34,7 +33,8 @@
 
 typedef enum
 {
-    UI_SETTING_ITEM_POETRY_ENABLE = 0,
+    UI_SETTING_ITEM_HOME_THEME = 0,
+    UI_SETTING_ITEM_POETRY_ENABLE,
     UI_SETTING_ITEM_POETRY_INTERVAL,
     UI_SETTING_ITEM_POETRY_DURATION,
     UI_SETTING_ITEM_WEATHER_INTERVAL,
@@ -65,6 +65,7 @@ typedef struct
 } ui_setting_page_t;
 
 static const char *const s_setting_labels[UI_SETTING_ITEM_COUNT] = {
+    "Home theme",
     "Poetry popup",
     "Poetry gap",
     "Poetry stay",
@@ -92,6 +93,7 @@ static void ui_SettingPage_scroll_update(uint32_t now);
 static void ui_SettingPage_scroll_to(int16_t target_y, uint32_t now);
 static void ui_SettingPage_update_scroll_for_selection(uint8_t selected_index);
 static bool ui_SettingPage_is_toggle_item(uint8_t index);
+static bool ui_SettingPage_is_cycle_item(uint8_t index);
 static bool ui_SettingPage_commit_edit(void);
 
 static uint32_t ui_setting_hsv_to_rgb(uint16_t hue, uint8_t saturation, uint8_t value)
@@ -241,14 +243,16 @@ static void ui_SettingPage_scroll_to(int16_t target_y, uint32_t now)
 
 static void ui_SettingPage_update_scroll_for_selection(uint8_t selected_index)
 {
-    if (selected_index == 0U)
+    int16_t row_bottom = (int16_t)(UI_SETTING_ROW_Y +
+                                   ((int16_t)selected_index * UI_SETTING_ROW_STEP) +
+                                   UI_SETTING_ROW_H);
+    int16_t target_y = 0;
+
+    if (row_bottom > (int16_t)UI_SCREEN_H)
     {
-        ui_SettingPage_scroll_to(0, egui_timer_get_current_time());
+        target_y = (int16_t)((int16_t)UI_SCREEN_H - row_bottom);
     }
-    else if (selected_index == (UI_SETTING_ITEM_COUNT - 1U))
-    {
-        ui_SettingPage_scroll_to(UI_SETTING_SCROLL_UP_Y, egui_timer_get_current_time());
-    }
+    ui_SettingPage_scroll_to(target_y, egui_timer_get_current_time());
 }
 
 void ui_SettingPage_screen_init(void)
@@ -352,6 +356,11 @@ bool ui_SettingPage_key_handler(void *key_event)
     }
     if ((event->id == KEY_ID_OK) && (event->type == KEY_EVT_CLICK))
     {
+        if (ui_SettingPage_is_cycle_item(s_setting_page.selected_index))
+        {
+            ui_SettingPage_adjust_selected(1, 0U);
+            return ui_SettingPage_commit_edit();
+        }
         if (ui_SettingPage_is_toggle_item(s_setting_page.selected_index))
         {
             ui_SettingPage_adjust_selected(1, 0U);
@@ -418,6 +427,10 @@ static void ui_setting_draw_background(egui_canvas_t *canvas)
     {
         key_hint = "OK SETTINGS";
     }
+    else if (ui_SettingPage_is_cycle_item(s_setting_page.selected_index))
+    {
+        key_hint = "PWR BACK  OK NEXT";
+    }
     else if (ui_SettingPage_is_toggle_item(s_setting_page.selected_index))
     {
         key_hint = "PWR BACK  OK TOGGLE";
@@ -468,6 +481,11 @@ static void ui_setting_format_value(uint8_t index, char *buf, uint16_t size)
 {
     switch ((ui_setting_item_t)index)
     {
+    case UI_SETTING_ITEM_HOME_THEME:
+        (void)snprintf(buf, size, "%s",
+                       (s_setting_page.settings.home_theme == SETTINGS_APP_HOME_THEME_2) ?
+                           "Dynamic" : "Classic");
+        break;
     case UI_SETTING_ITEM_POETRY_INTERVAL:
         (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.poetry_popup_interval_min);
         break;
@@ -582,7 +600,7 @@ static void ui_setting_draw_rows(egui_canvas_t *canvas)
         }
     }
 
-    if (s_setting_page.confirm_until > s_setting_page.frame_tick)
+    if (Time32_Before(s_setting_page.frame_tick, s_setting_page.confirm_until))
     {
         egui_alpha_t alpha = (egui_alpha_t)(((s_setting_page.confirm_until - s_setting_page.frame_tick) * 178U) / UI_SETTING_CONFIRM_MS);
         egui_canvas_draw_rectangle_fill(canvas, UI_SETTING_ROW_X, 0, UI_SETTING_ROW_W + 8, UI_SCREEN_H,
@@ -622,6 +640,15 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
 
     switch ((ui_setting_item_t)s_setting_page.selected_index)
     {
+    case UI_SETTING_ITEM_HOME_THEME:
+        if (delta != 0)
+        {
+            s_setting_page.settings.home_theme =
+                (s_setting_page.settings.home_theme == SETTINGS_APP_HOME_THEME_2) ?
+                    SETTINGS_APP_HOME_THEME_1 :
+                    SETTINGS_APP_HOME_THEME_2;
+        }
+        break;
     case UI_SETTING_ITEM_POETRY_ENABLE:
         if (delta != 0)
         {
@@ -680,6 +707,11 @@ static bool ui_SettingPage_is_toggle_item(uint8_t index)
 {
     return ((index == (uint8_t)UI_SETTING_ITEM_POETRY_ENABLE) ||
             (index == (uint8_t)UI_SETTING_ITEM_RGB_PWR_ENABLE));
+}
+
+static bool ui_SettingPage_is_cycle_item(uint8_t index)
+{
+    return (index == (uint8_t)UI_SETTING_ITEM_HOME_THEME);
 }
 
 static bool ui_SettingPage_commit_edit(void)

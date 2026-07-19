@@ -3,6 +3,7 @@
 
 #include "canvas/egui_canvas.h"
 #include "resource/egui_resource.h"
+#include "time_utils.h"
 
 #define UI_SCREEN_W 428
 #define UI_SCREEN_H 142

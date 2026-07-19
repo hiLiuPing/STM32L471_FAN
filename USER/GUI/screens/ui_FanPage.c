@@ -60,6 +60,7 @@ typedef struct
     uint8_t editing;
     uint8_t focus_index;
     uint8_t animation_active;
+    uint8_t power_stale;
     char power_text[16];
     char speed_text[16];
     char rpm_text[16];
@@ -229,14 +230,25 @@ static void ui_FanPage_init_label(egui_view_label_t *label,
 
 static void ui_FanPage_update_power_text(void)
 {
-    float power_mw = g_sensors_ina226.power;
+    sensors_snapshot_t sensors;
+    float power_mw;
     uint32_t power_x10 = 0U;
 
+    SensorsApp_GetSnapshot(&sensors);
+    s_fan_page.power_stale = (uint8_t)((sensors.ina226.health.valid == 0U) ||
+                                       (sensors.ina226.health.stale != 0U));
+    if (sensors.ina226.health.valid == 0U)
+    {
+        (void)snprintf(s_fan_page.power_text, sizeof(s_fan_page.power_text), "--");
+        return;
+    }
+    power_mw = sensors.ina226.value.power;
     if (power_mw > 0.0f)
     {
         power_x10 = (power_mw >= 999900.0f) ? 9999U : (uint32_t)((power_mw + 50.0f) / 100.0f);
     }
-    (void)snprintf(s_fan_page.power_text, sizeof(s_fan_page.power_text), "%lu.%luW",
+    (void)snprintf(s_fan_page.power_text, sizeof(s_fan_page.power_text), "%s%lu.%luW",
+                   (sensors.ina226.health.stale != 0U) ? "~" : "",
                    (unsigned long)(power_x10 / 10U), (unsigned long)(power_x10 % 10U));
 }
 
@@ -395,10 +407,6 @@ static void ui_FanPage_adjust_current(int8_t direction, uint8_t fast)
 
     switch (s_fan_page.focus_index)
     {
-    case FAN_SETTING_MODE:
-        s_fan_page.edit_state.mode = ui_FanPage_next_mode(ui_FanPage_visible_mode(&s_fan_page.edit_state), direction);
-        s_fan_page.edit_state.last_mode = s_fan_page.edit_state.mode;
-        break;
     case FAN_SETTING_SPEED:
         s_fan_page.edit_state.base_speed_percent =
             ui_fan_clamp_percent(s_fan_page.edit_state.base_speed_percent, direction, percent_step);
@@ -421,12 +429,6 @@ static bool ui_FanPage_commit_edit(void)
 {
     switch (s_fan_page.focus_index)
     {
-    case FAN_SETTING_MODE:
-        if (s_fan_page.edit_state.mode != s_fan_page.edit_backup.mode)
-        {
-            (void)FanApp_SetMode(s_fan_page.edit_state.mode, 0U);
-        }
-        break;
     case FAN_SETTING_SPEED:
         if (s_fan_page.edit_state.base_speed_percent != s_fan_page.edit_backup.base_speed_percent)
         {
@@ -461,6 +463,28 @@ static void ui_FanPage_toggle_power(void)
     s_fan_page.confirm_until = egui_timer_get_current_time() + FAN_CONFIRM_MS;
     ui_FanPage_sync_from_state();
     egui_view_invalidate_full(ui_FanPage);
+}
+
+static bool ui_FanPage_cycle_mode(void)
+{
+    fan_mode_t next_mode = ui_FanPage_next_mode(ui_FanPage_visible_mode(&s_fan_page.state), 1);
+
+    if (!FanApp_SetMode(next_mode, 0U))
+    {
+        return false;
+    }
+
+    s_fan_page.state.power_on = 1U;
+    s_fan_page.state.mode = next_mode;
+    s_fan_page.state.last_mode = next_mode;
+    s_fan_page.edit_state = s_fan_page.state;
+    (void)snprintf(s_fan_page.mode_text, sizeof(s_fan_page.mode_text), "%s",
+                   FanApp_GetModeName(next_mode));
+    egui_view_label_set_text(EGUI_VIEW_OF(&s_fan_page.mode_label), s_fan_page.mode_text);
+    ui_FanPage_sync_anim(next_mode);
+    s_fan_page.confirm_until = egui_timer_get_current_time() + FAN_CONFIRM_MS;
+    egui_view_invalidate_full(ui_FanPage);
+    return true;
 }
 
 bool ui_FanPage_key_handler(void *key_event)
@@ -532,6 +556,10 @@ bool ui_FanPage_key_handler(void *key_event)
         if (s_fan_page.focus_index == FAN_SETTING_POWER)
         {
             ui_FanPage_toggle_power();
+        }
+        else if (s_fan_page.focus_index == FAN_SETTING_MODE)
+        {
+            (void)ui_FanPage_cycle_mode();
         }
         else
         {
@@ -608,7 +636,8 @@ static void ui_FanPage_draw_background(egui_canvas_t *canvas)
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4), "FAN", 48, 8, 32, 15,
                  EGUI_ALIGN_CENTER, 0xF8FAFC);
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4), s_fan_page.power_text, 8, 8, 38, 15,
-                 EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, accent);
+                 EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER,
+                 (s_fan_page.power_stale != 0U) ? 0x64748B : accent);
     ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4),
                  (s_fan_page.setting_active != 0U) ? "SET" : "LIVE", 82, 8, 39, 15,
                  EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER, accent);
@@ -740,13 +769,24 @@ static void ui_FanPage_draw_rows(egui_canvas_t *canvas)
         }
         else
         {
-            hint = (s_fan_page.focus_index == FAN_SETTING_POWER) ? "PWR BACK  OK TOGGLE" : "PWR BACK  OK EDIT";
+            if (s_fan_page.focus_index == FAN_SETTING_POWER)
+            {
+                hint = "PWR BACK  OK TOGGLE";
+            }
+            else if (s_fan_page.focus_index == FAN_SETTING_MODE)
+            {
+                hint = "PWR BACK  OK NEXT";
+            }
+            else
+            {
+                hint = "PWR BACK  OK EDIT";
+            }
         }
         ui_draw_text(canvas, EGUI_FONT_OF(&egui_res_font_montserrat_10_4), hint, 7, 128, 114, 12,
                      EGUI_ALIGN_CENTER, 0x94A3B8);
     }
 
-    if (s_fan_page.confirm_until > s_fan_page.frame_tick)
+    if (Time32_Before(s_fan_page.frame_tick, s_fan_page.confirm_until))
     {
         egui_alpha_t alpha = (egui_alpha_t)(((s_fan_page.confirm_until - s_fan_page.frame_tick) * 178U) / FAN_CONFIRM_MS);
         egui_canvas_draw_rectangle_fill(canvas, FAN_SETTING_ROW_X, 0, FAN_SETTING_ROW_W, UI_SCREEN_H,

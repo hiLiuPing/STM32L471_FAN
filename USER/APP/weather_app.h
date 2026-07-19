@@ -11,6 +11,7 @@ extern "C" {
 #include "main.h"
 #include "queue.h"
 #include "task.h"
+#include "event_groups.h"
 #include "uart_dma.h"
 
 #define FRAME_HEAD 0xAAU
@@ -104,24 +105,48 @@ typedef struct
     uint8_t abort_requested;
 } WeatherModule_t;
 
-extern WeatherData_t g_now_weather;
-extern AirQuality_t g_air_detail;
-extern WeatherDay_t g_future_weather[7];
+typedef struct
+{
+    WeatherData_t now;
+    AirQuality_t air;
+    WeatherDay_t future[7];
+    TickType_t last_sync_tick;
+    uint8_t valid;
+    uint8_t stale;
+} WeatherSnapshot_t;
+
+#define WEATHER_SYNC_BIT_TIME   (1U << 0)
+#define WEATHER_SYNC_BIT_NOW    (1U << 1)
+#define WEATHER_SYNC_BIT_AIR    (1U << 2)
+#define WEATHER_SYNC_BIT_FUTURE (1U << 3)
+#define WEATHER_SYNC_BITS_ALL   (WEATHER_SYNC_BIT_NOW | WEATHER_SYNC_BIT_AIR | \
+                                 WEATHER_SYNC_BIT_FUTURE)
+
 extern uart_dma_t uart2_admin;
 extern uint8_t u2_dma_buf[UART_Transmit_DMA_RX_SIZE];
 extern uint8_t u2_rb_buf[UART_Transmit_LWRB_SIZE];
-extern volatile WeatherModule_t g_weather_module;
-extern volatile uint8_t g_weather_persist_dirty;
 
 void process_protocol_data(uint8_t cmd, char *data);
 uint8_t stm32_calc_crc8(uint8_t *ptr, uint16_t len);
 
+void WeatherApp_Init(void);
+void WeatherApp_GetSnapshot(WeatherSnapshot_t *out);
+uint8_t WeatherApp_IsFirstSyncDone(void);
+void WeatherApp_SetFirstSyncDone(uint8_t done);
+uint8_t WeatherApp_IsSyncing(void);
+void WeatherApp_SetSyncing(uint8_t syncing);
+uint8_t WeatherApp_IsAbortRequested(void);
+EventBits_t WeatherApp_WaitSyncBits(TickType_t timeout);
+void WeatherApp_CommitSync(void);
+void WeatherApp_MarkSyncFailed(void);
 void Weather_PowerOn(void);
 void Weather_PowerOff(void);
 void Weather_RequestAbortForSleep(void);
 uint8_t Weather_CanEnterStop(void);
 void Weather_SendCommand(Weather_cmd_t cmd);
+#if defined(WEATHER_DEMO_ENABLE) && WEATHER_DEMO_ENABLE
 void Weather_FillDemoData(void);
+#endif
 void Weather_BeginSyncCycle(void);
 uint8_t Weather_HasCompletedSync(void);
 WeatherScene_t Weather_GetScene(void);

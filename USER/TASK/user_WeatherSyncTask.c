@@ -65,7 +65,7 @@ static void Weather_WaitForSyncWindow(void)
 
 static void Weather_RunSingleSyncRound(void)
 {
-    if (g_weather_module.abort_requested != 0U)
+    if (WeatherApp_IsAbortRequested() != 0U)
     {
         return;
     }
@@ -85,7 +85,7 @@ static void Weather_DelayAbortable(uint32_t delay_ms)
 {
     uint32_t elapsed = 0U;
 
-    while ((elapsed < delay_ms) && (g_weather_module.abort_requested == 0U))
+    while ((elapsed < delay_ms) && (WeatherApp_IsAbortRequested() == 0U))
     {
         uint32_t step = ((delay_ms - elapsed) > 100U) ? 100U : (delay_ms - elapsed);
 
@@ -98,7 +98,7 @@ static uint8_t Weather_RunSyncWithRetry(const char *tag)
 {
     for (uint8_t retry = 0U; retry < 30U; retry++)
     {
-        if (g_weather_module.abort_requested != 0U)
+        if (WeatherApp_IsAbortRequested() != 0U)
         {
             break;
         }
@@ -106,6 +106,7 @@ static uint8_t Weather_RunSyncWithRetry(const char *tag)
         Weather_RunSingleSyncRound();
         if (Weather_HasCompletedSync())
         {
+            WeatherApp_CommitSync();
             log_printf("[Weather] %s ok %u", tag, retry + 1U);
             return 1U;
         }
@@ -141,18 +142,14 @@ void WeatherSyncTask(void *argument)
 
     for (;;)
     {
-        if (g_weather_module.first_sync_done == 0U)
+        if (WeatherApp_IsFirstSyncDone() == 0U)
         {
             uint8_t sync_ok;
 
-            /*
-             * The first sync establishes the RTC, so it must not depend on
-             * the possibly stale RTC value used by the weather sync window.
-             * Keep the 06:00-21:00 restriction for later periodic syncs.
-             */
+            WeatherApp_SetSyncing(1U);
             Weather_PowerOn();
             (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
-            Weather_DelayAbortable(6000U);
+            Weather_DelayAbortable(10000U);
             sync_ok = Weather_RunSyncWithRetry("first");
             
             if (sync_ok != 0U)
@@ -161,8 +158,13 @@ void WeatherSyncTask(void *argument)
                 (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
                 MemDiag_LogSnapshot("weather-first");
             }
+            else
+            {
+                WeatherApp_MarkSyncFailed();
+            }
             Weather_PowerOff();
-            g_weather_module.first_sync_done = 1U;
+            WeatherApp_SetSyncing(0U);
+            WeatherApp_SetFirstSyncDone(1U);
             Weather_RestartPeriodicMonitor();
             continue;
         }
@@ -175,17 +177,17 @@ void WeatherSyncTask(void *argument)
 
         Weather_WaitForSyncWindow();
 
-        if (g_weather_module.syncing != 0U)
+        if (WeatherApp_IsSyncing() != 0U)
         {
             Weather_RestartPeriodicMonitor();
             continue;
         }
 
-        g_weather_module.syncing = 1U;
+        WeatherApp_SetSyncing(1U);
         Weather_PowerOn();
         (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
         Weather_DelayAbortable(6000U);
-        if (g_weather_module.abort_requested == 0U)
+        if (WeatherApp_IsAbortRequested() == 0U)
         {
             if (Weather_RunSyncWithRetry("sync") != 0U)
             {
@@ -193,9 +195,13 @@ void WeatherSyncTask(void *argument)
                 (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
                 MemDiag_LogSnapshot("weather-sync");
             }
+            else
+            {
+                WeatherApp_MarkSyncFailed();
+            }
         }
         Weather_PowerOff();
-        g_weather_module.syncing = 0U;
+        WeatherApp_SetSyncing(0U);
         Weather_RestartPeriodicMonitor();
     }
 }

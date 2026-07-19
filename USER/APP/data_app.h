@@ -18,8 +18,6 @@ extern "C" {
 #define FALL_THRESHOLD  0.2f
 #define FALL_TRIG_CNT   5U
 
-#define DATA_APP_QUOTE_DEFAULT_PERIOD_MS 50000U
-#define DATA_APP_QUOTE_TEXT_LEN          96U
 #define DATA_APP_HOME_TEXT_LEN           24U
 
 typedef struct
@@ -46,6 +44,14 @@ typedef struct
     uint8_t battery_percent;
     uint8_t charging;
     uint8_t charge_full;
+    uint8_t environment_valid;
+    uint8_t environment_stale;
+    uint8_t battery_valid;
+    uint8_t battery_stale;
+    uint8_t charger_valid;
+    uint8_t charger_stale;
+    uint8_t weather_valid;
+    uint8_t weather_stale;
     uint32_t version;
 } DataApp_HomeStatus_t;
 
@@ -69,18 +75,6 @@ typedef enum
     MSG_TILT_SHAKE_HORIZONTAL,
 } TiltKey_t;
 
-typedef struct
-{
-    char text[DATA_APP_QUOTE_TEXT_LEN];
-    uint32_t duration_ms;
-} DataApp_QuotePopupRequest_t;
-
-typedef struct
-{
-    char text[DATA_APP_QUOTE_TEXT_LEN];
-    uint8_t valid;
-} DataApp_QuotePopupFrame_t;
-
 extern TiltKey_t current_raw_direction;
 
 void DataApp_Init(void);
@@ -91,19 +85,11 @@ uint8_t Time_IsDaytime(void);
 void Time_BlinkUpdate(void);
 void RTC_ReadToBuffer(void);
 void Buffer_Swap(void);
-void Time_Format(char *out);
 void DataApp_HomeStatus_Update(void);
 void DataApp_HomeStatus_Get(DataApp_HomeStatus_t *out);
 
-void DataApp_QuoteInvalidate(void);
-void DataApp_QuoteServiceUpdate(TickType_t now);
-uint8_t DataApp_QuoteShowNext(DataApp_QuotePopupRequest_t *out);
-uint8_t DataApp_QuotePopup_CopyFrame(DataApp_QuotePopupFrame_t *out);
-uint8_t DataApp_QuotePopup_PeekPending(DataApp_QuotePopupRequest_t *out);
-void DataApp_QuotePopup_CommitPending(TickType_t now);
-
-TiltKey_t TiltKey_Update(motion_module_t *motion);
-TiltKey_t FallDetect_Check(motion_module_t *motion);
+TiltKey_t TiltKey_Update(const motion_sample_t *motion);
+TiltKey_t FallDetect_Check(const motion_sample_t *motion);
 
 #ifdef __cplusplus
 }

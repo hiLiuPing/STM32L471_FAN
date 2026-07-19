@@ -36,6 +36,7 @@ typedef struct
 void SystemNotify_AttachQueue(QueueHandle_t queue);
 bool SystemNotify_Post(SystemNotifyType_t type, int16_t value0, int16_t value1);
 bool SystemNotify_TryReceive(SystemNotifyMessage_t *out);
+void SystemNotify_GetQueueUsage(UBaseType_t *current, UBaseType_t *peak);
 
 #ifdef __cplusplus
 }

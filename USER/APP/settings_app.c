@@ -10,10 +10,12 @@
 #include "log.h"
 #include "systemMonitor_app.h"
 #include "task.h"
+#include "time_utils.h"
 #include "ui_poetry_popup.h"
 #include "weather_app.h"
 
-#define SETTINGS_APP_STORAGE_VERSION     5U
+#define SETTINGS_APP_STORAGE_VERSION     6U
+#define SETTINGS_APP_STORAGE_VERSION_V5  5U
 #define SETTINGS_APP_STORAGE_VERSION_V4  4U
 #define SETTINGS_APP_STORAGE_VERSION_V3  3U
 #define SETTINGS_APP_STORAGE_VERSION_V2  2U
@@ -33,7 +35,8 @@ typedef struct
     uint16_t screen_idle_timeout_min;
     uint16_t poetry_popup_duration_s;
     uint16_t system_auto_off_min;
-    uint8_t reserved[236];
+    uint8_t home_theme;
+    uint8_t reserved[235];
     uint16_t crc;
 } SettingsApp_Storage_t;
 #pragma pack(pop)
@@ -44,6 +47,8 @@ _Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_duration_s) == 14U,
                "New settings must not move legacy storage fields");
 _Static_assert(offsetof(SettingsApp_Storage_t, system_auto_off_min) == 16U,
                "System auto-off storage offset changed");
+_Static_assert(offsetof(SettingsApp_Storage_t, home_theme) == 18U,
+               "Home theme storage offset changed");
 _Static_assert(offsetof(SettingsApp_Storage_t, crc) == (EE_BLOCK_SIZE - sizeof(uint16_t)),
                "Settings CRC must remain at the end of the EEPROM block");
 
@@ -91,6 +96,7 @@ static void SettingsApp_LoadDefaults(AppSettings_t *settings)
     settings->rgb_pwr_enabled = SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
     settings->screen_idle_timeout_min = SETTINGS_APP_SCREEN_IDLE_TIMEOUT_MIN_DEFAULT;
     settings->system_auto_off_min = SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DEFAULT;
+    settings->home_theme = SETTINGS_APP_HOME_THEME_DEFAULT;
 }
 
 static void SettingsApp_Normalize(AppSettings_t *settings)
@@ -123,6 +129,9 @@ static void SettingsApp_Normalize(AppSettings_t *settings)
                                      SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DISABLED,
                                      SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_MIN,
                                      SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_MAX);
+    settings->home_theme = (settings->home_theme == SETTINGS_APP_HOME_THEME_2) ?
+                               SETTINGS_APP_HOME_THEME_2 :
+                               SETTINGS_APP_HOME_THEME_1;
 }
 
 static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSettings_t *settings)
@@ -142,9 +151,12 @@ static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSet
                                     storage->rgb_pwr_enabled :
                                     SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
     settings->screen_idle_timeout_min = storage->screen_idle_timeout_min;
-    settings->system_auto_off_min = (storage->version == SETTINGS_APP_STORAGE_VERSION) ?
+    settings->system_auto_off_min = (storage->version >= SETTINGS_APP_STORAGE_VERSION_V5) ?
                                         storage->system_auto_off_min :
                                         SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DEFAULT;
+    settings->home_theme = (storage->version >= SETTINGS_APP_STORAGE_VERSION) ?
+                               storage->home_theme :
+                               SETTINGS_APP_HOME_THEME_DEFAULT;
     SettingsApp_Normalize(settings);
 }
 
@@ -164,6 +176,7 @@ static void SettingsApp_ToStorage(const AppSettings_t *settings, SettingsApp_Sto
     storage->rgb_pwr_enabled = settings->rgb_pwr_enabled;
     storage->screen_idle_timeout_min = settings->screen_idle_timeout_min;
     storage->system_auto_off_min = settings->system_auto_off_min;
+    storage->home_theme = settings->home_theme;
 }
 
 static void SettingsApp_MarkDirty(TickType_t now)
@@ -215,6 +228,7 @@ void SettingsApp_Init(void)
 
     if (AppConfig_Load(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage)) &&
         ((storage.version == SETTINGS_APP_STORAGE_VERSION) ||
+         (storage.version == SETTINGS_APP_STORAGE_VERSION_V5) ||
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V4) ||
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V3) ||
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V2) ||
@@ -298,7 +312,7 @@ void SettingsApp_PersistPending(TickType_t now)
 
     taskENTER_CRITICAL();
     if ((s_save_dirty != 0U) &&
-        ((int32_t)(now - s_save_deadline_tick) >= 0))
+        Time32_Reached((uint32_t)now, (uint32_t)s_save_deadline_tick))
     {
         SettingsApp_EnsureInitializedUnlocked();
         snapshot = s_settings;
@@ -330,6 +344,35 @@ void SettingsApp_PersistPending(TickType_t now)
         taskEXIT_CRITICAL();
         log_printf("[Settings] save retry");
     }
+}
+
+bool SettingsApp_PersistNow(void)
+{
+    AppSettings_t snapshot;
+    uint8_t dirty;
+
+    taskENTER_CRITICAL();
+    SettingsApp_EnsureInitializedUnlocked();
+    dirty = s_save_dirty;
+    snapshot = s_settings;
+    taskEXIT_CRITICAL();
+
+    if (dirty == 0U)
+    {
+        return true;
+    }
+    if (!SettingsApp_SaveSnapshot(&snapshot))
+    {
+        return false;
+    }
+
+    taskENTER_CRITICAL();
+    if (memcmp(&s_settings, &snapshot, sizeof(snapshot)) == 0)
+    {
+        s_save_dirty = 0U;
+    }
+    taskEXIT_CRITICAL();
+    return true;
 }
 
 uint8_t SettingsApp_GetActiveBrightnessPercent(void)
@@ -421,4 +464,12 @@ uint16_t SettingsApp_GetSystemAutoOffMin(void)
 
     SettingsApp_CopySnapshot(&snapshot);
     return snapshot.system_auto_off_min;
+}
+
+uint8_t SettingsApp_GetHomeTheme(void)
+{
+    AppSettings_t snapshot;
+
+    SettingsApp_CopySnapshot(&snapshot);
+    return snapshot.home_theme;
 }

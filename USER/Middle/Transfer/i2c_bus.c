@@ -48,26 +48,6 @@ void I2C_Bus_Unlock(I2C_Bus_t *bus)
     bus->locked = 0U;
 }
 
-void I2C_Bus_UnlockFromISR(I2C_Bus_t *bus)
-{
-    if (bus == NULL || bus->locked == 0U)
-        return;
-
-#ifdef USE_FREERTOS
-    if (bus->mutex)
-    {
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        /* A woken task may take the semaphore immediately after the give. */
-        bus->locked = 0U;
-        xSemaphoreGiveFromISR(bus->mutex, &xHigherPriorityTaskWoken);
-        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-        return;
-    }
-#endif
-
-    bus->locked = 0U;
-}
-
 uint8_t I2C_Bus_IsLocked(const I2C_Bus_t *bus)
 {
     if (bus == NULL)
@@ -93,9 +73,7 @@ void I2C_Bus_Init(I2C_Bus_t *bus)
 #ifdef USE_FREERTOS
     if (bus->mutex == NULL)
     {
-        bus->mutex = xSemaphoreCreateBinary();
-        if (bus->mutex != NULL)
-            xSemaphoreGive(bus->mutex);
+        bus->mutex = xSemaphoreCreateMutex();
     }
 #endif
     bus->locked = 0U;
@@ -112,22 +90,6 @@ HAL_StatusTypeDef I2C_IsDeviceReady(I2C_Bus_t *bus, uint8_t dev_addr,
     I2C_Bus_Lock(bus);
     ret = HAL_I2C_IsDeviceReady(bus->hi2c, I2C_ADDR(dev_addr), trials, timeout);
     I2C_Bus_Unlock(bus);
-    return ret;
-}
-
-HAL_StatusTypeDef I2C_Write_DMA_Start(I2C_Bus_t *bus, uint8_t dev_addr,
-                                      uint8_t *data, uint16_t len)
-{
-    HAL_StatusTypeDef ret;
-
-    if (bus == NULL || bus->hi2c == NULL)
-        return HAL_ERROR;
-
-    I2C_Bus_Lock(bus);
-    ret = HAL_I2C_Master_Transmit_DMA(bus->hi2c, I2C_ADDR(dev_addr), data, len);
-    if (ret != HAL_OK)
-        I2C_Bus_Unlock(bus);
-
     return ret;
 }
 

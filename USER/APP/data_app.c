@@ -78,7 +78,9 @@ static uint8_t DataApp_BatteryPercent(float soc)
     return (uint8_t)(soc + 0.5f);
 }
 
-static void DataApp_FormatEnv(char *buf, uint32_t buf_size)
+static void DataApp_FormatEnv(char *buf,
+                              uint32_t buf_size,
+                              const sensors_snapshot_t *sensors)
 {
     int temp_x10;
     int temp_abs;
@@ -88,12 +90,19 @@ static void DataApp_FormatEnv(char *buf, uint32_t buf_size)
         return;
     }
 
-    temp_x10 = DataApp_FloatToX10(g_sensors_environment.temp);
+    if ((sensors == NULL) || (sensors->environment.health.valid == 0U))
+    {
+        (void)snprintf(buf, buf_size, "--");
+        return;
+    }
+
+    temp_x10 = DataApp_FloatToX10(sensors->environment.value.temp);
     temp_abs = (temp_x10 < 0) ? -temp_x10 : temp_x10;
     (void)snprintf(buf,
                    buf_size,
-                   "%d%% %s%d.%dC",
-                   DataApp_HumidityToInt(g_sensors_environment.hum),
+                   "%d%% %s%s%d.%dC",
+                   DataApp_HumidityToInt(sensors->environment.value.hum),
+                   (sensors->environment.health.stale != 0U) ? "~" : "",
                    (temp_x10 < 0) ? "-" : "",
                    temp_abs / 10,
                    temp_abs % 10);
@@ -111,7 +120,15 @@ static uint8_t DataApp_HomeStatusEquals(const DataApp_HomeStatus_t *a, const Dat
                      (a->is_day == b->is_day) &&
                      (a->battery_percent == b->battery_percent) &&
                      (a->charging == b->charging) &&
-                     (a->charge_full == b->charge_full) &&
+                      (a->charge_full == b->charge_full) &&
+                      (a->environment_valid == b->environment_valid) &&
+                      (a->environment_stale == b->environment_stale) &&
+                      (a->battery_valid == b->battery_valid) &&
+                      (a->battery_stale == b->battery_stale) &&
+                      (a->charger_valid == b->charger_valid) &&
+                      (a->charger_stale == b->charger_stale) &&
+                      (a->weather_valid == b->weather_valid) &&
+                      (a->weather_stale == b->weather_stale) &&
                      (strcmp(a->time_text, b->time_text) == 0) &&
                      (strcmp(a->date_text, b->date_text) == 0) &&
                      (strcmp(a->week_text, b->week_text) == 0) &&
@@ -185,26 +202,6 @@ uint8_t Time_IsDaytime(void)
                      (now.hour < DATA_APP_NIGHT_START_HOUR));
 }
 
-void Time_Format(char *out)
-{
-    app_time_t t;
-
-    if (out == NULL)
-    {
-        return;
-    }
-
-    Time_Get(&t);
-    if (Time_GetColon() != 0U)
-    {
-        (void)sprintf(out, "%02u:%02u", t.hour, t.min);
-    }
-    else
-    {
-        (void)sprintf(out, "%02u %02u", t.hour, t.min);
-    }
-}
-
 void DataApp_HomeStatus_Update(void)
 {
     static const char *const week_text[] = {
@@ -218,31 +215,62 @@ void DataApp_HomeStatus_Update(void)
     };
     DataApp_HomeStatus_t next;
     const DataApp_HomeStatus_t *current = &s_home_status_buf[s_home_status_read_idx];
-    const WeatherDay_t *today = &g_future_weather[0];
+    const WeatherDay_t *today;
     app_time_t t;
     uint8_t weekday;
     uint8_t write_idx;
+    sensors_snapshot_t sensors;
+    WeatherSnapshot_t weather;
 
     memset(&next, 0, sizeof(next));
     Time_Get(&t);
+    SensorsApp_GetSnapshot(&sensors);
+    WeatherApp_GetSnapshot(&weather);
+    today = &weather.future[0];
     weekday = DataApp_Weekday(t.year, t.month, t.date);
 
     (void)snprintf(next.time_text, sizeof(next.time_text), "%02u:%02u", t.hour, t.min);
     (void)snprintf(next.date_text, sizeof(next.date_text), "%u\346\234\210%u\346\227\245", t.month, t.date);
     (void)snprintf(next.week_text, sizeof(next.week_text), "%s", week_text[weekday]);
-    (void)snprintf(next.temp_range_text, sizeof(next.temp_range_text), "%d/%d\302\260C", today->temp_low, today->temp_high);
-    (void)snprintf(next.pm25_text, sizeof(next.pm25_text), "PM2.5 %d", g_air_detail.pm25);
-    DataApp_FormatEnv(next.env_text, sizeof(next.env_text));
+    if (weather.valid != 0U)
+    {
+        (void)snprintf(next.temp_range_text, sizeof(next.temp_range_text), "%s%d/%d\302\260C",
+                       (weather.stale != 0U) ? "~" : "", today->temp_low, today->temp_high);
+        (void)snprintf(next.pm25_text, sizeof(next.pm25_text), "%sPM2.5 %d",
+                       (weather.stale != 0U) ? "~" : "", weather.air.pm25);
+    }
+    else
+    {
+        (void)snprintf(next.temp_range_text, sizeof(next.temp_range_text), "--");
+        (void)snprintf(next.pm25_text, sizeof(next.pm25_text), "PM2.5 --");
+    }
+    DataApp_FormatEnv(next.env_text, sizeof(next.env_text), &sensors);
     next.weather_icon_id = Weather_GetDisplayIcon();
     next.weather_scene = (uint8_t)Weather_GetScene();
     next.is_day = Time_IsDaytime();
-    next.battery_percent = DataApp_BatteryPercent(g_sensors_battery.soc);
-    next.charge_full = (uint8_t)((g_sensors_charger.state == BQ_CHG_DONE) ||
-                                 (g_sensors_charger.power_good && (next.battery_percent >= 99U)));
-    next.charging = (uint8_t)(!next.charge_full &&
+    next.environment_valid = sensors.environment.health.valid;
+    next.environment_stale = sensors.environment.health.stale;
+    next.battery_valid = sensors.battery.health.valid;
+    next.battery_stale = sensors.battery.health.stale;
+    next.charger_valid = sensors.charger.health.valid;
+    next.charger_stale = sensors.charger.health.stale;
+    next.weather_valid = weather.valid;
+    next.weather_stale = weather.stale;
+    next.battery_percent = DataApp_BatteryPercent(sensors.battery.value.soc);
+    next.charge_full = (uint8_t)((next.battery_valid != 0U) &&
+                                 (next.battery_stale == 0U) &&
+                                 (next.charger_valid != 0U) &&
+                                 (next.charger_stale == 0U) &&
+                                 ((sensors.charger.value.state == BQ_CHG_DONE) ||
+                                  (sensors.charger.value.power_good && (next.battery_percent >= 99U))));
+    next.charging = (uint8_t)((next.battery_valid != 0U) &&
+                              (next.battery_stale == 0U) &&
+                              (next.charger_valid != 0U) &&
+                              (next.charger_stale == 0U) &&
+                              !next.charge_full &&
                               (next.battery_percent < 99U) &&
-                              ((g_sensors_charger.state == BQ_CHG_PRECHARGE) ||
-                               (g_sensors_charger.state == BQ_CHG_FAST_CHARGE)));
+                              ((sensors.charger.value.state == BQ_CHG_PRECHARGE) ||
+                               (sensors.charger.value.state == BQ_CHG_FAST_CHARGE)));
     if (next.charge_full != 0U)
     {
         next.battery_percent = 100U;
@@ -278,42 +306,7 @@ void DataApp_Init(void)
     DataApp_HomeStatus_Update();
 }
 
-void DataApp_QuoteInvalidate(void)
-{
-}
-
-void DataApp_QuoteServiceUpdate(TickType_t now)
-{
-    (void)now;
-}
-
-uint8_t DataApp_QuoteShowNext(DataApp_QuotePopupRequest_t *out)
-{
-    (void)out;
-    return 0U;
-}
-
-uint8_t DataApp_QuotePopup_CopyFrame(DataApp_QuotePopupFrame_t *out)
-{
-    if (out != NULL)
-    {
-        memset(out, 0, sizeof(*out));
-    }
-    return 0U;
-}
-
-uint8_t DataApp_QuotePopup_PeekPending(DataApp_QuotePopupRequest_t *out)
-{
-    (void)out;
-    return 0U;
-}
-
-void DataApp_QuotePopup_CommitPending(TickType_t now)
-{
-    (void)now;
-}
-
-TiltKey_t TiltKey_Update(motion_module_t *motion)
+TiltKey_t TiltKey_Update(const motion_sample_t *motion)
 {
     enum
     {
@@ -325,7 +318,6 @@ TiltKey_t TiltKey_Update(motion_module_t *motion)
     const TickType_t shake_window_ticks = pdMS_TO_TICKS(2000U);
     const TickType_t shake_lock_ticks = pdMS_TO_TICKS(600U);
     const TickType_t single_tilt_delay_ticks = pdMS_TO_TICKS(400U);
-    uint8_t buf;
     int16_t raw_x;
     int16_t raw_y;
     int16_t raw_z;
@@ -356,10 +348,9 @@ TiltKey_t TiltKey_Update(motion_module_t *motion)
         return MSG_TILT_NONE;
     }
 
-    buf = motion->buf_idx;
-    raw_x = motion->x[buf];
-    raw_y = motion->y[buf];
-    raw_z = motion->z[buf];
+    raw_x = motion->x;
+    raw_y = motion->y;
+    raw_z = motion->z;
 
     ax = raw_x * 0.001f;
     ay = raw_y * 0.001f;
@@ -532,9 +523,8 @@ TiltKey_t TiltKey_Update(motion_module_t *motion)
     return MSG_TILT_NONE;
 }
 
-TiltKey_t FallDetect_Check(motion_module_t *motion)
+TiltKey_t FallDetect_Check(const motion_sample_t *motion)
 {
-    uint8_t buf;
     float ax;
     float ay;
     float az;
@@ -551,10 +541,9 @@ TiltKey_t FallDetect_Check(motion_module_t *motion)
         return MSG_TILT_NONE;
     }
 
-    buf = motion->buf_idx;
-    ax = motion->x[buf] * 0.001f;
-    ay = motion->y[buf] * 0.001f;
-    az = motion->z[buf] * 0.001f;
+    ax = motion->x * 0.001f;
+    ay = motion->y * 0.001f;
+    az = motion->z * 0.001f;
 
     fx = (fx * 0.7f) + (ax * 0.3f);
     fy = (fy * 0.7f) + (ay * 0.3f);

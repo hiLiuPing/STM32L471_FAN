@@ -370,11 +370,6 @@ void SystemClock_Config(void)
  * ========================= */
 // void Print_AllSensors(void)
 // {
-//     Print_Env(&g_sensors_environment);
-//     Print_Motion(&g_sensors_motion);
-//     Print_Battery(&g_sensors_battery);
-//     Print_INA226(&g_sensors_ina226);
-//     Print_Charger(&g_sensors_charger);
 
 //     log_printf("\r\n----------------------\r\n");
 // }

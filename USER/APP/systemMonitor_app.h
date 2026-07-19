@@ -13,9 +13,7 @@ typedef enum
 {
     MON_SCREEN_IDLE = 0,
     MON_WEATHER_SYNC,
-    MON_FAN_AUTO_OFF,
     MON_SYSTEM_AUTO_OFF,
-    MON_SENSOR_LOG,
     MON_APP_MAX
 } AppMonitorID_t;
 
@@ -28,8 +26,6 @@ void UserMonitor_OnDisplaySleep(void);
 void UserMonitor_RequestWeatherSync(void);
 void UserMonitor_RestartWeatherSync(void);
 void UserMonitor_StopWeatherSync(void);
-void UserMonitor_RestartFanAutoOff(uint16_t minutes);
-void UserMonitor_StopFanAutoOff(void);
 void UserMonitor_StopAll(void);
 void Key_Event(void);
 void MemDiag_LogSnapshot(const char *tag);

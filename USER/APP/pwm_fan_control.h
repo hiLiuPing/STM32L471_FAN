@@ -81,7 +81,8 @@ typedef struct {
     float active_base;      ///< 当前计算生效的基础风速 (考虑了温控映射后)
     float current_duty;     ///< 当前实际输出的 PWM 占空比 (0.0 到 100.0)
     
-    float weather_timer;    ///< 气象引擎的时间轴累加器
+    float weather_phase_1;  ///< 主气象波相位，始终限制在 [0, 2π)
+    float weather_phase_2;  ///< 次气象波相位，始终限制在 [0, 2π)
     float turb_raw_state;   ///< 湍流引擎上一次生成的随机数原始状态
     float turb_filtered;    ///< 湍流一阶滤波后的当前结果值
     uint16_t turb_hold_counter; ///< 湍流更新频率计数器 (降低其调变频率增强质感)

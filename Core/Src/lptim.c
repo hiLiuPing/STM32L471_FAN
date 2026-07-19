@@ -107,39 +107,4 @@ void HAL_LPTIM_MspDeInit(LPTIM_HandleTypeDef* lptimHandle)
 }
 
 /* USER CODE BEGIN 1 */
-#define LPTIM1_TICK_1S_ARR 255U
-
-static volatile uint32_t s_lptim1_second_ticks = 0U;
-
-HAL_StatusTypeDef LPTIM1_Start1sTick(void)
-{
-  s_lptim1_second_ticks = 0U;
-  return HAL_LPTIM_Counter_Start_IT(&hlptim1, LPTIM1_TICK_1S_ARR);
-}
-
-uint32_t LPTIM1_ConsumeSecondTicks(void)
-{
-  uint32_t ticks;
-  uint32_t primask = __get_PRIMASK();
-
-  __disable_irq();
-  ticks = s_lptim1_second_ticks;
-  s_lptim1_second_ticks = 0U;
-
-  if (primask == 0U)
-  {
-    __enable_irq();
-  }
-
-  return ticks;
-}
-
-void HAL_LPTIM_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim)
-{
-  if ((hlptim != NULL) && (hlptim->Instance == LPTIM1))
-  {
-    s_lptim1_second_ticks++;
-  }
-}
-
 /* USER CODE END 1 */

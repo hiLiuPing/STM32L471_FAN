@@ -29,7 +29,6 @@ void uart_dma_init(uart_dma_t* ctrl, UART_HandleTypeDef* huart, uint8_t* dma_buf
 void uart_dma_rx_check(uart_dma_t* ctrl)
 {
     uint32_t pos;
-
     /* 获取当前 DMA 写入位置 */
     pos = ctrl->dma_rx_size - __HAL_DMA_GET_COUNTER(ctrl->huart->hdmarx);
 

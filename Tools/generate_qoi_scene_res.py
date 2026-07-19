@@ -17,6 +17,7 @@ from PIL import Image, ImageFilter
 
 
 CLOUD_TARGET_SIZE = (229, 112)
+CLOUD_SMALL_TARGET_SIZE = (156, 76)
 SPECIAL_CLOUDS = {"cloud3", "cloud4", "cloud5"}
 
 
@@ -154,19 +155,81 @@ def fit_to_canvas(rgba: Image.Image, size: tuple[int, int]) -> Image.Image:
     return canvas
 
 
+def decontaminate_alpha_edges(rgba: Image.Image) -> Image.Image:
+    """Replace dark matte RGB under translucent pixels with nearby cloud RGB."""
+    image = rgba.convert("RGBA")
+    width, height = image.size
+    pixels = list(image.get_flattened_data())
+    nearest: list[tuple[int, int, int] | None] = [None] * len(pixels)
+    queue: deque[int] = deque()
+
+    for index, (r, g, b, a) in enumerate(pixels):
+        if a >= 224:
+            nearest[index] = (r, g, b)
+            queue.append(index)
+
+    while queue:
+        index = queue.popleft()
+        x = index % width
+        y = index // width
+        color = nearest[index]
+
+        for neighbor in (
+            index - 1 if x > 0 else -1,
+            index + 1 if x + 1 < width else -1,
+            index - width if y > 0 else -1,
+            index + width if y + 1 < height else -1,
+        ):
+            if neighbor >= 0 and nearest[neighbor] is None:
+                nearest[neighbor] = color
+                queue.append(neighbor)
+
+    cleaned = []
+    for index, (r, g, b, a) in enumerate(pixels):
+        if a == 0:
+            r, g, b = 0, 0, 0
+        elif a < 224 and nearest[index] is not None:
+            r, g, b = nearest[index]
+        cleaned.append((r, g, b, a))
+
+    image.putdata(cleaned)
+    return image
+
+
+def cloud_target_size(path: Path) -> tuple[int, int]:
+    if re.fullmatch(r"cloud_b_[123]", path.stem, re.IGNORECASE):
+        return CLOUD_SMALL_TARGET_SIZE
+    return CLOUD_TARGET_SIZE
+
+
+def is_generated_cloud(path: Path) -> bool:
+    return path.stem in SPECIAL_CLOUDS or re.fullmatch(
+        r"cloud_[abc]_[123]", path.stem, re.IGNORECASE
+    ) is not None
+
+
 def process_cloud(path: Path, preview_dir: Path | None) -> Image.Image:
     source = Image.open(path).convert("RGB")
+    cloud_match = re.fullmatch(r"cloud_([abc])_[123]", path.stem, re.IGNORECASE)
+    mask_source = source
+
+    if cloud_match is not None:
+        mask_path = path.with_name(f"cloud_{cloud_match.group(1).lower()}_1{path.suffix}")
+        if mask_path != path and mask_path.exists():
+            mask_source = Image.open(mask_path).convert("RGB")
+            if mask_source.size != source.size:
+                mask_source = mask_source.resize(source.size, Image.Resampling.LANCZOS)
+
     work_size = (max(1, source.width // 4), max(1, source.height // 4))
-    work = source.resize(work_size, Image.Resampling.LANCZOS)
+    work = mask_source.resize(work_size, Image.Resampling.LANCZOS)
     lum = work.convert("L")
 
     mask = lum.point(lambda value: 255 if value >= 82 else 0)
     mask = remove_watermark_regions(mask)
     mask = mask.filter(ImageFilter.MaxFilter(9))
-    mask = mask.filter(ImageFilter.MinFilter(5))
+    mask = mask.filter(ImageFilter.MinFilter(9))
     mask = largest_component(mask)
-    mask = mask.filter(ImageFilter.MaxFilter(7))
-    mask = mask.filter(ImageFilter.GaussianBlur(2.0))
+    mask = mask.filter(ImageFilter.GaussianBlur(1.5))
 
     scale_x = source.width / work_size[0]
     scale_y = source.height / work_size[1]
@@ -185,10 +248,12 @@ def process_cloud(path: Path, preview_dir: Path | None) -> Image.Image:
 
     full_mask = mask.resize(source.size, Image.Resampling.LANCZOS)
     cropped_rgb = source.crop(box)
-    cropped_alpha = full_mask.crop(box).point(lambda value: 0 if value < 18 else min(255, value + 24))
+    cropped_alpha = full_mask.crop(box).point(
+        lambda value: 0 if value < 12 else (255 if value > 242 else value)
+    )
     cropped = cropped_rgb.convert("RGBA")
     cropped.putalpha(cropped_alpha)
-    result = fit_to_canvas(cropped, CLOUD_TARGET_SIZE)
+    result = decontaminate_alpha_edges(fit_to_canvas(cropped, cloud_target_size(path)))
 
     if preview_dir is not None:
         preview_dir.mkdir(parents=True, exist_ok=True)
@@ -198,7 +263,7 @@ def process_cloud(path: Path, preview_dir: Path | None) -> Image.Image:
 
 
 def load_image(path: Path, preview_dir: Path | None) -> Image.Image:
-    if path.stem in SPECIAL_CLOUDS:
+    if is_generated_cloud(path):
         return process_cloud(path, preview_dir)
     return Image.open(path).convert("RGBA")
 
@@ -211,10 +276,10 @@ def format_c_array(data: bytes) -> str:
     return "\n".join(lines)
 
 
-def generate_header(images: list[GeneratedImage]) -> str:
+def generate_header(images: list[GeneratedImage], header_guard: str) -> str:
     externs = "\n".join(f"extern const egui_image_qoi_t qoi_scene_{image.name};" for image in images)
-    return f"""#ifndef __QOI_SCENE_RES_H__
-#define __QOI_SCENE_RES_H__
+    return f"""#ifndef {header_guard}
+#define {header_guard}
 
 #ifdef __cplusplus
 extern "C" {{
@@ -232,13 +297,13 @@ extern "C" {{
 }}
 #endif
 
-#endif /* __QOI_SCENE_RES_H__ */
+#endif /* {header_guard} */
 """
 
 
-def generate_source(images: list[GeneratedImage]) -> str:
+def generate_source(images: list[GeneratedImage], header_name: str) -> str:
     body = [
-        '#include "qoi_scene_res.h"',
+        f'#include "{header_name}"',
         "",
         "#if EGUI_CONFIG_FUNCTION_IMAGE_CODEC_QOI",
         "",
@@ -285,13 +350,17 @@ def build_resources(input_dir: Path, output_c: Path, output_h: Path, preview_dir
     images: list[GeneratedImage] = []
     for path in pngs:
         rgba = load_image(path, preview_dir)
+        if preview_dir is not None and is_generated_cloud(path):
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            rgba.save(preview_dir / path.name)
         alpha = rgba.getchannel("A")
         has_alpha = alpha.getextrema() != (255, 255)
         stream = qoi_encode_headerless_rgba(rgba)
         images.append(GeneratedImage(c_identifier(path.stem), rgba.width, rgba.height, has_alpha, stream))
 
-    output_h.write_text(generate_header(images), encoding="utf-8", newline="\n")
-    output_c.write_text(generate_source(images), encoding="utf-8", newline="\n")
+    header_guard = "__" + re.sub(r"[^0-9A-Za-z]", "_", output_h.name).upper() + "__"
+    output_h.write_text(generate_header(images, header_guard), encoding="utf-8", newline="\n")
+    output_c.write_text(generate_source(images, output_h.name), encoding="utf-8", newline="\n")
     return images
 
 

@@ -1400,6 +1400,11 @@
               <FilePath>../USER/APP/home_scene_res.c</FilePath>
             </File>
             <File>
+              <FileName>home_theme2_cloud_res.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/APP/home_theme2_cloud_res.c</FilePath>
+            </File>
+            <File>
               <FileName>home_camp_res.c</FileName>
               <FileType>1</FileType>
               <FilePath>../USER/APP/home_camp_res.c</FilePath>
