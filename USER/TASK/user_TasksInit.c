@@ -127,14 +127,14 @@ void User_Tasks_Init(void)
 
     User_Tasks_RequireStatus(xTaskCreate(FanTask,
                                          "FanTask",
-                                         128U * 2U,
+                                         256U * 2U,
                                          NULL,
                                          tskIDLE_PRIORITY + 2U,
                                          &FanTaskHandle));
 
     User_Tasks_RequireStatus(xTaskCreate(EGUIHandlerTask,
                                          "EGUIHandler",
-                                         128U * 12U,
+                                         128U * 10U,
                                          NULL,
                                          tskIDLE_PRIORITY + 2U,
                                          &EGUIHandlerTaskHandle));
