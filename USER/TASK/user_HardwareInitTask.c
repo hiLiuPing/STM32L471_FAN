@@ -7,6 +7,8 @@
 #include "lfs_port.h"
 #include "log.h"
 #include "main.h"
+#include "home_theme2_cloud_cache.h"
+#include "psram_app.h"
 #include "sensors_app.h"
 #include "settings_app.h"
 #include "spi_flash.h"
@@ -60,6 +62,19 @@ void HardwareInitTask(void *argument)
     SettingsApp_Init();
     UserMonitor_Init();
 
+    log_printf("step3.4: init psram/home cloud cache...");
+    if (PSRAM_App_Init() != 0)
+    {
+        log_printf("psram init FAIL, dynamic cloud QOI fallback");
+    }
+    else if (!HomeTheme2CloudCache_Init())
+    {
+        log_printf("home cloud cache FAIL, dynamic cloud QOI fallback");
+    }
+    else
+    {
+        log_printf("home cloud cache OK");
+    }
 
     log_printf("step3.5: spi flash init...");
     if (spi_flash_init(&g_spi_flash, &hspi2, SPI2_CS_GPIO_Port, SPI2_CS_Pin) != 0)

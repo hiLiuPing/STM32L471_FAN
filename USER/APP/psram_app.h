@@ -9,7 +9,7 @@ extern qspi_psram_t g_psram;
  * ========================= */
 #define PSRAM_BASE              0x000000
 #define PSRAM_UI_CACHE_BASE     (PSRAM_BASE)
-#define PSRAM_UI_CACHE_SIZE     (1024U * 1024U)
+#define PSRAM_UI_CACHE_SIZE     (8U * 1024U * 1024U)
 
 
 

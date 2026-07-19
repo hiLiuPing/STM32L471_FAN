@@ -100,6 +100,7 @@ virtualFolder:
             - path: USER/APP/icons.c
             - path: USER/APP/home_scene_res.c
             - path: USER/APP/home_theme2_cloud_res.c
+            - path: USER/APP/home_theme2_cloud_cache.c
             - path: USER/APP/home_camp_res.c
             - path: USER/APP/psram_app.c
             - path: USER/APP/systemMonitor_app.c
@@ -128,6 +129,7 @@ virtualFolder:
             - path: USER/BSP/rgb_led.c
             - path: USER/BSP/sht40_reg.c
             - path: USER/BSP/spi_flash.c
+            - path: USER/BSP/qspi_psram.c
             - path: USER/BSP/systemMonitor.c
           folders: []
         - name: Middle

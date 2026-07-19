@@ -11,11 +11,11 @@
 
 /* Two PFB buffers let SPI DMA flush one tile while the next tile renders. */
 #define EGUI_CONFIG_PFB_WIDTH        EGUI_CONFIG_SCREEN_WIDTH
-#define EGUI_CONFIG_PFB_HEIGHT       14
+#define EGUI_CONFIG_PFB_HEIGHT       16
 #define EGUI_CONFIG_PFB_BUFFER_COUNT 2
 
 #define EGUI_CONFIG_MAX_FPS          30
-#define EGUI_CONFIG_DIRTY_AREA_COUNT 12
+#define EGUI_CONFIG_DIRTY_AREA_COUNT 20
 
 /* Enable 8-bit alpha channel pixel accessor for egui_image_std */
 #define EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565_8 1
@@ -34,7 +34,7 @@
 #define EGUI_CONFIG_FUNCTION_SUPPORT_SCROLLBAR 0
 #define EGUI_CONFIG_FUNCTION_IMAGE_RUNTIME_SVG 0
 #define EGUI_CONFIG_FUNCTION_IMAGE_CODEC_QOI   1
-/* Row cache: ~12.5KB fixed, eliminates cross-tile re-decode within a frame */
+/* Frame-local row cache follows the 16-row PFB and avoids cross-tile re-decode. */
 #define EGUI_CONFIG_FUNCTION_IMAGE_CODEC_FAST_DRAW 1
 /* Persistent cache: 16KB heap, enough for bike image (12KB decoded) */
 #define EGUI_CONFIG_IMAGE_CODEC_PERSISTENT_CACHE_MAX_BYTES 16384
