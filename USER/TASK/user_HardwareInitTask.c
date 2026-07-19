@@ -92,11 +92,9 @@ void HardwareInitTask(void *argument)
     log_printf("step5: hw ready");
     User_Tasks_SetHardwareReady();
     log_printf("step6: delete self");
-    // Weather_FillDemoData();
-    
+
     SettingsApp_ApplyActiveBrightness();
     MemDiag_LogSnapshot("hw-ready");
-    log_printf("fill demo weather data");
     HardwareInitTaskHandle = NULL;
     vTaskDelete(NULL);
 }

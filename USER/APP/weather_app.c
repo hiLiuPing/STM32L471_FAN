@@ -30,6 +30,7 @@ static uint8_t s_weather_demo_index = 0U;
 
 typedef struct
 {
+    const char *name;
     const char *text;
     const char *forecast_text;
     int icon;
@@ -38,21 +39,38 @@ typedef struct
     int temp_low;
     int pm25;
     uint8_t hour;
+    uint8_t minute;
 } WeatherDemoData_t;
 
 static const WeatherDemoData_t s_weather_demo_data[] = {
-    {"Clear",     "Clear",     100, 30, 34, 25, 12, 10U},
-    {"Clear",     "Clear",     150, 24, 29, 21, 10, 22U},
-    {"Cloudy",    "Cloudy",    101, 27, 31, 23, 18, 10U},
-    {"Cloudy",    "Cloudy",    151, 22, 27, 19, 20, 22U},
-    {"LightRain", "LightRain", 305, 25, 28, 22, 24, 10U},
-    {"LightRain", "LightRain", 309, 21, 25, 18, 26, 22U},
-    {"MidRain",   "MidRain",   306, 24, 27, 20, 30, 10U},
-    {"MidRain",   "MidRain",   314, 20, 24, 17, 32, 22U},
-    {"HeavyRain", "HeavyRain", 307, 22, 25, 19, 38, 10U},
-    {"HeavyRain", "HeavyRain", 310, 19, 23, 16, 42, 22U},
-    {"Snow",      "Snow",      400, -2,  1, -6, 15, 10U},
-    {"Snow",      "Snow",      401, -5, -1, -9, 16, 22U},
+    /* Dynamic-theme time keyframes and the 07:00/19:00 day-state edges. */
+    {"night",          "Clear", "Clear", 150, 24, 29, 21, 10,  0U,  0U},
+    {"dawn-start",     "Clear", "Clear", 150, 24, 29, 21, 10,  5U,  0U},
+    {"dawn-blend",     "Clear", "Clear", 150, 24, 29, 21, 10,  5U, 37U},
+    {"dawn-peak",      "Clear", "Clear", 150, 24, 29, 21, 10,  6U, 15U},
+    {"day-edge-before","Clear", "Clear", 150, 24, 29, 21, 10,  6U, 59U},
+    {"day-edge",       "Clear", "Clear", 100, 30, 34, 25, 12,  7U,  0U},
+    {"white-clouds",   "Clear", "Clear", 100, 30, 34, 25, 12,  7U, 30U},
+    {"sunset-start",   "Clear", "Clear", 100, 30, 34, 25, 12, 16U, 30U},
+    {"sunset-blend",   "Clear", "Clear", 100, 30, 34, 25, 12, 17U, 15U},
+    {"sunset-peak",    "Clear", "Clear", 100, 30, 34, 25, 12, 18U,  0U},
+    {"night-edge-before","Clear","Clear", 100, 30, 34, 25, 12, 18U, 59U},
+    {"night-edge",     "Clear", "Clear", 150, 24, 29, 21, 10, 19U,  0U},
+    {"night-stable",   "Clear", "Clear", 150, 24, 29, 21, 10, 19U, 30U},
+
+    /* Every supported weather scene in both daytime and nighttime. */
+    {"clear-day",      "Clear",     "Clear",     100, 30, 34, 25, 12, 10U, 0U},
+    {"clear-night",    "Clear",     "Clear",     150, 24, 29, 21, 10, 22U, 0U},
+    {"cloudy-day",     "Cloudy",    "Cloudy",    101, 27, 31, 23, 18, 10U, 0U},
+    {"cloudy-night",   "Cloudy",    "Cloudy",    151, 22, 27, 19, 20, 22U, 0U},
+    {"light-rain-day", "LightRain", "LightRain", 305, 25, 28, 22, 24, 10U, 0U},
+    {"light-rain-night","LightRain", "LightRain", 309, 21, 25, 18, 26, 22U, 0U},
+    {"mid-rain-day",   "MidRain",   "MidRain",   306, 24, 27, 20, 30, 10U, 0U},
+    {"mid-rain-night", "MidRain",   "MidRain",   314, 20, 24, 17, 32, 22U, 0U},
+    {"heavy-rain-day", "HeavyRain", "HeavyRain", 307, 22, 25, 19, 38, 10U, 0U},
+    {"heavy-rain-night","HeavyRain", "HeavyRain", 310, 19, 23, 16, 42, 22U, 0U},
+    {"snow-day",       "Snow",      "Snow",      400, -2,  1, -6, 15, 10U, 0U},
+    {"snow-night",     "Snow",      "Snow",      401, -5, -1, -9, 16, 22U, 0U},
 };
 #endif
 
@@ -353,7 +371,7 @@ void Weather_FillDemoData(void)
     date.Date = 15U;
     date.WeekDay = RTC_WEEKDAY_WEDNESDAY;
     time.Hours = demo->hour;
-    time.Minutes = 0U;
+    time.Minutes = demo->minute;
     time.Seconds = 0U;
     time.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
     time.StoreOperation = RTC_STOREOPERATION_RESET;
@@ -363,12 +381,14 @@ void Weather_FillDemoData(void)
         s_weather_module.time_synced = 1U;
     }
 
-    log_printf("[WeatherDemo] %u/%u %s icon=%d %02u:00",
+    log_printf("[WeatherDemo] %u/%u %s scene=%s icon=%d %02u:%02u",
                (unsigned int)(s_weather_demo_index + 1U),
                (unsigned int)(sizeof(s_weather_demo_data) / sizeof(s_weather_demo_data[0])),
+               demo->name,
                demo->text,
                demo->icon,
-               (unsigned int)demo->hour);
+               (unsigned int)demo->hour,
+               (unsigned int)demo->minute);
 
     s_weather_demo_index++;
     if (s_weather_demo_index >= (sizeof(s_weather_demo_data) / sizeof(s_weather_demo_data[0])))

@@ -50,7 +50,7 @@
 #define EGUI_CONFIG_DEBUG_LOG_LEVEL 0
 
 /* Debug monitors: FPS/render time (bottom-right) and memory (bottom-left) */
-#define EGUI_CONFIG_DEBUG_PERF_MONITOR_SHOW 0
+#define EGUI_CONFIG_DEBUG_PERF_MONITOR_SHOW 1
 #define EGUI_CONFIG_DEBUG_MEM_MONITOR_SHOW  0
 
 #endif /* __APP_EGUI_CONFIG_H__ */

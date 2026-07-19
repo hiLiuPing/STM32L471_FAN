@@ -154,6 +154,16 @@ void WeatherSyncTask(void *argument)
     (void)argument;
 
     User_Tasks_WaitForHardwareReady();
+#if defined(WEATHER_DEMO_ENABLE) && WEATHER_DEMO_ENABLE
+    UserMonitor_StopWeatherSync();
+    /* WeatherApp_Init() clears the cached power state after the early board
+     * power-on, so drive the pin through a known on/off sequence here. */
+    Weather_PowerOn();
+    Weather_PowerOff();
+    log_printf("[WeatherDemo] normal sync suspended");
+    vTaskSuspend(NULL);
+    return;
+#endif
     vTaskDelay(pdMS_TO_TICKS(10000U));
 
     for (;;)

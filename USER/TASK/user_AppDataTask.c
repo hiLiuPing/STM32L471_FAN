@@ -18,6 +18,9 @@
 #define APP_DATA_ENV_HUM_HYST             5
 #define APP_DATA_SENSOR_PERIOD_MS         1000U
 #define APP_DATA_RPM_PERIOD_MS            100U
+#if defined(WEATHER_DEMO_ENABLE) && WEATHER_DEMO_ENABLE
+#define APP_DATA_WEATHER_DEMO_INTERVAL_MS 10000U
+#endif
 
 typedef struct
 {
@@ -277,6 +280,9 @@ void AppDataTask(void *argument)
     TickType_t last_wake_time;
     TickType_t last_sensor_tick;
     TickType_t last_rpm_tick;
+#if defined(WEATHER_DEMO_ENABLE) && WEATHER_DEMO_ENABLE
+    TickType_t last_weather_demo_tick;
+#endif
     AppDataNotifyState_t notify_state = {0};
 
     (void)argument;
@@ -285,12 +291,25 @@ void AppDataTask(void *argument)
     last_wake_time = xTaskGetTickCount();
     last_sensor_tick = last_wake_time;
     last_rpm_tick = last_wake_time;
+#if defined(WEATHER_DEMO_ENABLE) && WEATHER_DEMO_ENABLE
+    last_weather_demo_tick = last_wake_time;
+    Weather_FillDemoData();
+#endif
 
     for (;;)
     {
         TickType_t now = xTaskGetTickCount();
         UserMonitor_Service();
         SettingsApp_PersistPending(now);
+
+#if defined(WEATHER_DEMO_ENABLE) && WEATHER_DEMO_ENABLE
+        if ((TickType_t)(now - last_weather_demo_tick) >=
+            pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS))
+        {
+            last_weather_demo_tick += pdMS_TO_TICKS(APP_DATA_WEATHER_DEMO_INTERVAL_MS);
+            Weather_FillDemoData();
+        }
+#endif
 
         if ((TickType_t)(now - last_rpm_tick) >= pdMS_TO_TICKS(APP_DATA_RPM_PERIOD_MS))
         {

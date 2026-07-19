@@ -16,12 +16,35 @@
 #include "systemMonitor_app.h"
 #include "ui.h"
 
+#define EGUI_PORT_BRIGHTNESS_CHECK_MS        1000U
+#define EGUI_PORT_BRIGHTNESS_PERCENT_INVALID 0xFFU
+
 static egui_core_t s_egui_core;
 EGUI_CONFIG_PFB_BUFFER_DECLARE(s_egui_pfb);
 
 static bool s_egui_started = false;
 static bool s_egui_display_on = true;
 static uint32_t s_egui_brightness_check_ms = 0U;
+static uint8_t s_egui_applied_brightness_percent = EGUI_PORT_BRIGHTNESS_PERCENT_INVALID;
+
+static void egui_port_apply_active_brightness(void)
+{
+    uint8_t target_percent;
+
+    if (!s_egui_display_on)
+    {
+        return;
+    }
+
+    target_percent = SettingsApp_GetActiveBrightnessPercent();
+    if (target_percent == s_egui_applied_brightness_percent)
+    {
+        return;
+    }
+
+    LCD_SetBacklightPercent(target_percent);
+    s_egui_applied_brightness_percent = target_percent;
+}
 
 static void egui_port_assert_handler(const char *file, int line)
 {
@@ -143,11 +166,13 @@ static void egui_lcd_set_power(egui_core_t *core, uint8_t on)
     s_egui_display_on = (on != 0U);
     if (on != 0U)
     {
-        LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
+        s_egui_applied_brightness_percent = EGUI_PORT_BRIGHTNESS_PERCENT_INVALID;
+        egui_port_apply_active_brightness();
     }
     else
     {
         LCD_SetBacklightPercent(0U);
+        s_egui_applied_brightness_percent = EGUI_PORT_BRIGHTNESS_PERCENT_INVALID;
     }
 }
 
@@ -159,6 +184,7 @@ static void egui_lcd_set_brightness(egui_core_t *core, uint8_t level)
     {
         uint8_t percent = (uint8_t)(((uint16_t)level * 100U + 127U) / 255U);
         LCD_SetBacklightPercent(percent);
+        s_egui_applied_brightness_percent = percent;
     }
 }
 
@@ -239,10 +265,11 @@ void egui_port_poll(void)
 
     now = egui_timer_get_current_time();
     ui_page_manager_service();
-    if (s_egui_display_on && ((uint32_t)(now - s_egui_brightness_check_ms) >= 60000U))
+    if (s_egui_display_on &&
+        ((uint32_t)(now - s_egui_brightness_check_ms) >= EGUI_PORT_BRIGHTNESS_CHECK_MS))
     {
         s_egui_brightness_check_ms = now;
-        LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
+        egui_port_apply_active_brightness();
     }
 
     egui_polling_work(&s_egui_core);
@@ -275,15 +302,17 @@ void egui_port_set_display_power(bool on)
 {
     if (!s_egui_started)
     {
+        s_egui_display_on = on;
         if (on)
         {
-            LCD_SetBacklightPercent(SettingsApp_GetActiveBrightnessPercent());
+            s_egui_applied_brightness_percent = EGUI_PORT_BRIGHTNESS_PERCENT_INVALID;
+            egui_port_apply_active_brightness();
         }
         else
         {
             LCD_SetBacklightPercent(0U);
+            s_egui_applied_brightness_percent = EGUI_PORT_BRIGHTNESS_PERCENT_INVALID;
         }
-        s_egui_display_on = on;
         if (on)
         {
             UserMonitor_OnDisplayWake();
