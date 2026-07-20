@@ -8,8 +8,10 @@
 #include "key.h"
 #include "log.h"
 #include "sensors_app.h"
+#include "shake_detector.h"
 #include "systemMonitor_app.h"
 #include "user_TasksInit.h"
+#include "user_WeatherSyncTask.h"
 
 #define KEY_TASK_SCAN_PERIOD_MS   10U
 #define KEY_TASK_MOTION_PERIOD_MS 30U
@@ -18,6 +20,7 @@ typedef struct
 {
     TickType_t motion_last_tick;
     uint32_t last_pressed_mask;
+    ShakeDetector_t shake_detector;
 } KeyTask_State_t;
 
 static void KeyTask_SendEvent(const key_event_t *event)
@@ -48,8 +51,6 @@ static const char *KeyTask_TiltName(TiltKey_t event)
     case MSG_TILT_LEFT: return "LEFT";
     case MSG_TILT_RIGHT: return "RIGHT";
     case MSG_FALL_DOWN: return "FALL";
-    case MSG_TILT_SHAKE_VERTICAL: return "SHAKE_V";
-    case MSG_TILT_SHAKE_HORIZONTAL: return "SHAKE_H";
     default: return "NONE";
     }
 }
@@ -58,6 +59,7 @@ static void KeyTask_ProcessMotion(KeyTask_State_t *state, TickType_t now)
 {
     TiltKey_t tilt_event;
     TiltKey_t fall_event;
+    ShakeDetectorSample_t shake_sample;
     sensors_snapshot_t sensors;
 
     if ((TickType_t)(now - state->motion_last_tick) <
@@ -74,17 +76,22 @@ static void KeyTask_ProcessMotion(KeyTask_State_t *state, TickType_t now)
     {
         return;
     }
+    shake_sample.x = sensors.motion.value.x;
+    shake_sample.y = sensors.motion.value.y;
+    shake_sample.z = sensors.motion.value.z;
+    if (ShakeDetector_Update(&state->shake_detector,
+                             &shake_sample,
+                             (uint32_t)now))
+    {
+        log_printf("[Motion] SHAKE");
+        (void)WeatherSyncTask_RequestManual();
+    }
     tilt_event = TiltKey_Update(&sensors.motion.value);
     fall_event = FallDetect_Check(&sensors.motion.value);
 
     if (tilt_event != MSG_TILT_NONE)
     {
         log_printf("[Motion] %s", KeyTask_TiltName(tilt_event));
-        if ((tilt_event == MSG_TILT_SHAKE_HORIZONTAL) ||
-            (tilt_event == MSG_TILT_SHAKE_VERTICAL))
-        {
-            UserMonitor_RequestWeatherSync();
-        }
     }
 
     if (fall_event == MSG_FALL_DOWN)
@@ -105,6 +112,7 @@ void KeyTask(void *argument)
     last_wake_time = xTaskGetTickCount();
     state.motion_last_tick = last_wake_time;
     state.last_pressed_mask = Key_GetPressedMask();
+    ShakeDetector_Init(&state.shake_detector);
 
     for (;;)
     {

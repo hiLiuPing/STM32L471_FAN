@@ -126,6 +126,7 @@ typedef struct
 #define WEATHER_SYNC_BIT_FUTURE (1U << 3)
 #define WEATHER_SYNC_BITS_ALL   (WEATHER_SYNC_BIT_NOW | WEATHER_SYNC_BIT_AIR | \
                                  WEATHER_SYNC_BIT_FUTURE)
+#define WEATHER_SYNC_BITS_REQUIRED (WEATHER_SYNC_BIT_TIME | WEATHER_SYNC_BITS_ALL)
 
 extern uart_dma_t uart2_admin;
 extern uint8_t u2_dma_buf[UART_Transmit_DMA_RX_SIZE];
@@ -142,7 +143,8 @@ uint8_t WeatherApp_IsSyncing(void);
 void WeatherApp_SetSyncing(uint8_t syncing);
 uint8_t WeatherApp_IsTimeSynced(void);
 uint8_t WeatherApp_IsAbortRequested(void);
-EventBits_t WeatherApp_WaitSyncBits(TickType_t timeout);
+EventBits_t WeatherApp_GetSyncBits(void);
+EventBits_t WeatherApp_WaitSyncBits(EventBits_t required_bits, TickType_t timeout);
 void WeatherApp_CommitSync(void);
 void WeatherApp_MarkSyncFailed(void);
 void WeatherApp_SetProvisioningEnabled(uint8_t enabled);

@@ -200,14 +200,19 @@ uint8_t WeatherApp_IsAbortRequested(void)
     return s_weather_module.abort_requested;
 }
 
-EventBits_t WeatherApp_WaitSyncBits(TickType_t timeout)
+EventBits_t WeatherApp_GetSyncBits(void)
 {
-    if (s_weather_events == NULL)
+    return (s_weather_events != NULL) ? xEventGroupGetBits(s_weather_events) : 0U;
+}
+
+EventBits_t WeatherApp_WaitSyncBits(EventBits_t required_bits, TickType_t timeout)
+{
+    if ((s_weather_events == NULL) || (required_bits == 0U))
     {
-        return 0U;
+        return WeatherApp_GetSyncBits();
     }
     return xEventGroupWaitBits(s_weather_events,
-                               WEATHER_SYNC_BITS_ALL,
+                               required_bits,
                                pdFALSE,
                                pdTRUE,
                                timeout);
@@ -256,9 +261,9 @@ void Weather_BeginSyncCycle(void)
 
 uint8_t Weather_HasCompletedSync(void)
 {
-    EventBits_t bits = (s_weather_events != NULL) ?
-                           xEventGroupGetBits(s_weather_events) : 0U;
-    return (uint8_t)((bits & WEATHER_SYNC_BITS_ALL) == WEATHER_SYNC_BITS_ALL);
+    EventBits_t bits = WeatherApp_GetSyncBits();
+    return (uint8_t)((bits & WEATHER_SYNC_BITS_REQUIRED) ==
+                     WEATHER_SYNC_BITS_REQUIRED);
 }
 
 uint16_t Weather_GetDisplayIcon(void)
@@ -653,8 +658,23 @@ void process_protocol_data(uint8_t cmd, char *data)
         }
         else if (strcmp(data, "LIST_END") == 0)
         {
-            (void)xEventGroupSetBits(s_weather_events, WEATHER_SYNC_BIT_FUTURE);
-            log_printf("[Weather] list done");
+            uint8_t future_mask;
+            uint8_t list_complete;
+
+            taskENTER_CRITICAL();
+            future_mask = s_weather_future_mask;
+            list_complete = (uint8_t)((s_weather_future_list_started != 0U) &&
+                                      (future_mask == 0x7FU));
+            taskEXIT_CRITICAL();
+            if (list_complete != 0U)
+            {
+                (void)xEventGroupSetBits(s_weather_events, WEATHER_SYNC_BIT_FUTURE);
+                log_printf("[Weather] list done");
+            }
+            else
+            {
+                log_printf("[Weather] list incomplete mask=%02X", future_mask);
+            }
         }
         else
         {

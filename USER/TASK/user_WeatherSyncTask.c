@@ -13,6 +13,68 @@
 
 #define WEATHER_SYNC_START_HOUR 6U
 #define WEATHER_SYNC_END_HOUR   21U
+#define WEATHER_SYNC_COMMAND_GAP_MS 200U
+#define WEATHER_SYNC_ROUND_WAIT_MS  800U
+#define WEATHER_SYNC_TIMEOUT_MS     30000U
+#define WEATHER_FIRST_AUTO_DELAY_MS 5000U
+
+static volatile uint8_t s_manual_request_pending = 0U;
+static volatile uint8_t s_request_busy = 0U;
+
+bool WeatherSyncTask_RequestManual(void)
+{
+    taskENTER_CRITICAL();
+    if ((s_request_busy != 0U) || (s_manual_request_pending != 0U))
+    {
+        taskEXIT_CRITICAL();
+        return false;
+    }
+    s_manual_request_pending = 1U;
+    taskEXIT_CRITICAL();
+
+    if (xWeatherSyncTaskWakeSemaphore == NULL)
+    {
+        taskENTER_CRITICAL();
+        s_manual_request_pending = 0U;
+        taskEXIT_CRITICAL();
+        return false;
+    }
+    (void)xSemaphoreGive(xWeatherSyncTaskWakeSemaphore);
+    return true;
+}
+
+static uint8_t WeatherSyncTask_TakeManual(void)
+{
+    uint8_t pending;
+
+    taskENTER_CRITICAL();
+    pending = s_manual_request_pending;
+    s_manual_request_pending = 0U;
+    taskEXIT_CRITICAL();
+    return pending;
+}
+
+static uint8_t WeatherSyncTask_BeginSync(uint8_t manual_request)
+{
+    taskENTER_CRITICAL();
+    s_request_busy = 1U;
+    if (s_manual_request_pending != 0U)
+    {
+        manual_request = 1U;
+        s_manual_request_pending = 0U;
+    }
+    taskEXIT_CRITICAL();
+    WeatherApp_SetSyncing(1U);
+    return manual_request;
+}
+
+static void WeatherSyncTask_EndSync(void)
+{
+    WeatherApp_SetSyncing(0U);
+    taskENTER_CRITICAL();
+    s_request_busy = 0U;
+    taskEXIT_CRITICAL();
+}
 
 static uint8_t Weather_PrepareUartRx(const char *tag)
 {
@@ -69,32 +131,21 @@ static TickType_t Weather_GetSyncWindowDelayTicks(void)
     return (TickType_t)delay_seconds * pdMS_TO_TICKS(1000U);
 }
 
-static void Weather_WaitForSyncWindow(void)
+static uint8_t Weather_WaitForSyncWindow(void)
 {
     TickType_t delay_ticks;
 
     while ((delay_ticks = Weather_GetSyncWindowDelayTicks()) != 0U)
     {
-        (void)xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, delay_ticks);
+        if (xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, delay_ticks) == pdPASS)
+        {
+            if (WeatherSyncTask_TakeManual() != 0U)
+            {
+                return 1U;
+            }
+        }
     }
-}
-
-static void Weather_RunSingleSyncRound(void)
-{
-    if (WeatherApp_IsAbortRequested() != 0U)
-    {
-        return;
-    }
-
-    Weather_BeginSyncCycle();
-    Weather_SendCommand(CMD_GET_TIME);
-    vTaskDelay(pdMS_TO_TICKS(200U));
-    Weather_SendCommand(CMD_GET_NOW_DETAIL);
-    vTaskDelay(pdMS_TO_TICKS(200U));
-    Weather_SendCommand(CMD_GET_AIR_DETAIL);
-    vTaskDelay(pdMS_TO_TICKS(200U));
-    Weather_SendCommand(CMD_GET_FUTURE_7DAY);
-    vTaskDelay(pdMS_TO_TICKS(200U));
+    return 0U;
 }
 
 static void Weather_DelayAbortable(uint32_t delay_ms)
@@ -110,26 +161,96 @@ static void Weather_DelayAbortable(uint32_t delay_ms)
     }
 }
 
+static void Weather_SendMissingCommand(EventBits_t bits,
+                                       EventBits_t bit,
+                                       Weather_cmd_t command)
+{
+    if (((bits & bit) == 0U) && (WeatherApp_IsAbortRequested() == 0U))
+    {
+        Weather_SendCommand(command);
+        Weather_DelayAbortable(WEATHER_SYNC_COMMAND_GAP_MS);
+    }
+}
+
+static void Weather_RunSingleSyncRound(EventBits_t bits)
+{
+    Weather_SendMissingCommand(bits, WEATHER_SYNC_BIT_TIME, CMD_GET_TIME);
+    Weather_SendMissingCommand(bits, WEATHER_SYNC_BIT_NOW, CMD_GET_NOW_DETAIL);
+    Weather_SendMissingCommand(bits, WEATHER_SYNC_BIT_AIR, CMD_GET_AIR_DETAIL);
+    Weather_SendMissingCommand(bits, WEATHER_SYNC_BIT_FUTURE, CMD_GET_FUTURE_7DAY);
+}
+
 static uint8_t Weather_RunSyncWithRetry(const char *tag)
 {
-    for (uint8_t retry = 0U; retry < 30U; retry++)
+    const TickType_t timeout_ticks = pdMS_TO_TICKS(WEATHER_SYNC_TIMEOUT_MS);
+    TickType_t started = xTaskGetTickCount();
+    uint16_t round = 0U;
+
+    Weather_BeginSyncCycle();
+    while ((TickType_t)(xTaskGetTickCount() - started) < timeout_ticks)
     {
+        EventBits_t bits;
+
         if (WeatherApp_IsAbortRequested() != 0U)
         {
             break;
         }
 
-        Weather_RunSingleSyncRound();
-        if (Weather_HasCompletedSync())
+        bits = WeatherApp_GetSyncBits();
+        if ((bits & WEATHER_SYNC_BITS_REQUIRED) == WEATHER_SYNC_BITS_REQUIRED)
         {
             WeatherApp_CommitSync();
-            log_printf("[Weather] %s ok %u", tag, retry + 1U);
+            log_printf("[Weather] %s ok %u", tag, (unsigned int)round);
+            return 1U;
+        }
+
+        round++;
+        Weather_RunSingleSyncRound(bits);
+        bits = WeatherApp_WaitSyncBits(WEATHER_SYNC_BITS_REQUIRED,
+                                       pdMS_TO_TICKS(WEATHER_SYNC_ROUND_WAIT_MS));
+        if ((bits & WEATHER_SYNC_BITS_REQUIRED) == WEATHER_SYNC_BITS_REQUIRED)
+        {
+            WeatherApp_CommitSync();
+            log_printf("[Weather] %s ok %u", tag, (unsigned int)round);
             return 1U;
         }
     }
 
-    log_printf("[Weather] %s timeout", tag);
+    log_printf("[Weather] %s timeout bits=%02X",
+               tag,
+               (unsigned int)WeatherApp_GetSyncBits());
     return 0U;
+}
+
+static void Weather_PerformSync(const char *tag,
+                                const char *mem_tag,
+                                uint8_t manual_request)
+{
+    uint8_t sync_ok;
+
+    manual_request = WeatherSyncTask_BeginSync(manual_request);
+    Weather_PowerOn();
+    (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
+    sync_ok = (uint8_t)((WeatherApp_IsAbortRequested() == 0U) &&
+                        (Weather_PrepareUartRx(tag) != 0U) &&
+                        (Weather_RunSyncWithRetry(tag) != 0U));
+
+    if (sync_ok != 0U)
+    {
+        SettingsApp_ApplyActiveBrightness();
+        (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
+        MemDiag_LogSnapshot(mem_tag);
+    }
+    else if (WeatherApp_IsAbortRequested() == 0U)
+    {
+        WeatherApp_MarkSyncFailed();
+        if (manual_request != 0U)
+        {
+            (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_FAILED, 0, 0);
+        }
+    }
+
+    Weather_PowerOffUnlessProvisioning();
 }
 
 static void Weather_RestartPeriodicMonitor(void)
@@ -164,73 +285,44 @@ void WeatherSyncTask(void *argument)
     vTaskSuspend(NULL);
     return;
 #endif
-    vTaskDelay(pdMS_TO_TICKS(5000U));
+    (void)xSemaphoreTake(xWeatherSyncTaskWakeSemaphore,
+                         pdMS_TO_TICKS(WEATHER_FIRST_AUTO_DELAY_MS));
 
     for (;;)
     {
         if (WeatherApp_IsFirstSyncDone() == 0U)
         {
-            uint8_t sync_ok;
+            uint8_t manual_request = WeatherSyncTask_TakeManual();
 
-            WeatherApp_SetSyncing(1U);
-            Weather_PowerOn();
-            (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
-            Weather_DelayAbortable(10000U);
-            sync_ok = (uint8_t)((WeatherApp_IsAbortRequested() == 0U) &&
-                                (Weather_PrepareUartRx("first") != 0U) &&
-                                (Weather_RunSyncWithRetry("first") != 0U));
-            
-            if (sync_ok != 0U)
+            while (xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, 0U) == pdPASS)
             {
-                SettingsApp_ApplyActiveBrightness();
-                (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
-                MemDiag_LogSnapshot("weather-first");
             }
-            else
-            {
-                WeatherApp_MarkSyncFailed();
-            }
-            Weather_PowerOffUnlessProvisioning();
-            WeatherApp_SetSyncing(0U);
+            Weather_PerformSync("first", "weather-first", manual_request);
             WeatherApp_SetFirstSyncDone(1U);
             Weather_RestartPeriodicMonitor();
+            WeatherSyncTask_EndSync();
             continue;
         }
 
         (void)xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, portMAX_DELAY);
-        UserMonitor_StopWeatherSync();
-        while (xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, 0U) == pdPASS)
         {
-        }
+            uint8_t manual_request = WeatherSyncTask_TakeManual();
 
-        Weather_WaitForSyncWindow();
+            UserMonitor_StopWeatherSync();
+            while (xSemaphoreTake(xWeatherSyncTaskWakeSemaphore, 0U) == pdPASS)
+            {
+            }
 
-        if (WeatherApp_IsSyncing() != 0U)
-        {
+            if (manual_request == 0U)
+            {
+                manual_request = Weather_WaitForSyncWindow();
+            }
+
+            Weather_PerformSync(manual_request != 0U ? "manual" : "sync",
+                                manual_request != 0U ? "weather-manual" : "weather-sync",
+                                manual_request);
             Weather_RestartPeriodicMonitor();
-            continue;
+            WeatherSyncTask_EndSync();
         }
-
-        WeatherApp_SetSyncing(1U);
-        Weather_PowerOn();
-        (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_START, 0, 0);
-        Weather_DelayAbortable(6000U);
-        if (WeatherApp_IsAbortRequested() == 0U)
-        {
-            if ((Weather_PrepareUartRx("sync") != 0U) &&
-                (Weather_RunSyncWithRetry("sync") != 0U))
-            {
-                SettingsApp_ApplyActiveBrightness();
-                (void)SystemNotify_Post(SYSTEM_NOTIFY_WEATHER_SYNC_COMPLETE, 0, 0);
-                MemDiag_LogSnapshot("weather-sync");
-            }
-            else
-            {
-                WeatherApp_MarkSyncFailed();
-            }
-        }
-        Weather_PowerOffUnlessProvisioning();
-        WeatherApp_SetSyncing(0U);
-        Weather_RestartPeriodicMonitor();
     }
 }

@@ -32,6 +32,7 @@ static ui_page_t s_pages[] = {
     {
         .init = ui_HomePage_screen_init,
         .deinit = ui_HomePage_screen_destroy,
+        .enter = ui_HomePage_screen_enter,
         .page_view = &ui_HomePage,
         .key_consume = ui_HomePage_key_handler,
         .service = NULL,

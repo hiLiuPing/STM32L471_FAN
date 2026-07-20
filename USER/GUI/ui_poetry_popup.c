@@ -166,6 +166,7 @@ void ui_poetry_popup_set_enabled(bool enabled)
     }
     else
     {
+        s_popup.text_ready = 0U;
         egui_view_set_visible(EGUI_VIEW_OF(&s_popup.base), 0);
     }
 }
@@ -572,6 +573,7 @@ static void ui_poetry_popup_show(void)
         return;
     }
 
+    s_popup.text_ready = 0U;
     if (!ui_poetry_popup_prepare_text())
     {
         s_popup.phase = UI_POETRY_POPUP_PHASE_WAITING;
@@ -613,6 +615,7 @@ static void ui_poetry_popup_hide(void)
     s_popup.next_show_ms = egui_timer_get_current_time() + (uint32_t)s_popup.interval_s * 1000U;
     s_popup.shown_at_ms = 0U;
     s_popup.panel_y = s_popup.target_panel_y;
+    s_popup.text_ready = 0U;
 #if UI_POETRY_POPUP_PAUSE_HOME_ANIM
     if (s_popup.home_anim_was_enabled != 0U)
     {

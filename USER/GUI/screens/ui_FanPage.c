@@ -248,7 +248,7 @@ static void ui_FanPage_update_power_text(void)
         power_x10 = (power_mw >= 999900.0f) ? 9999U : (uint32_t)((power_mw + 50.0f) / 100.0f);
     }
     (void)snprintf(s_fan_page.power_text, sizeof(s_fan_page.power_text), "%s%lu.%luW",
-                   (sensors.ina226.health.stale != 0U) ? "~" : "",
+                   (sensors.ina226.health.stale != 0U) ? "*" : "",
                    (unsigned long)(power_x10 / 10U), (unsigned long)(power_x10 % 10U));
 }
 

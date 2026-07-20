@@ -309,6 +309,13 @@ static void ui_system_popup_get_content(char *detail,
         content->accent = 0x2DD4BF;
         break;
 
+    case SYSTEM_NOTIFY_WEATHER_SYNC_FAILED:
+        content->title = "WEATHER SYNC FAILED";
+        content->subtitle = "Check connection and try again";
+        content->icon = EGUI_ICON_MS_WARNING;
+        content->accent = 0xF87171;
+        break;
+
     case SYSTEM_NOTIFY_ENVIRONMENT_ALERT:
         {
             int16_t temperature = s_popup.message.value0;

@@ -102,7 +102,7 @@ static void DataApp_FormatEnv(char *buf,
                    buf_size,
                    "%d%% %s%s%d.%dC",
                    DataApp_HumidityToInt(sensors->environment.value.hum),
-                   (sensors->environment.health.stale != 0U) ? "~" : "",
+                   (sensors->environment.health.stale != 0U) ? "*" : "",
                    (temp_x10 < 0) ? "-" : "",
                    temp_abs / 10,
                    temp_abs % 10);
@@ -235,9 +235,9 @@ void DataApp_HomeStatus_Update(void)
     if (weather.valid != 0U)
     {
         (void)snprintf(next.temp_range_text, sizeof(next.temp_range_text), "%s%d/%d\302\260C",
-                       (weather.stale != 0U) ? "~" : "", today->temp_low, today->temp_high);
+                       (weather.stale != 0U) ? "*" : "", today->temp_low, today->temp_high);
         (void)snprintf(next.pm25_text, sizeof(next.pm25_text), "%sPM2.5 %d",
-                       (weather.stale != 0U) ? "~" : "", weather.air.pm25);
+                       (weather.stale != 0U) ? "*" : "", weather.air.pm25);
     }
     else
     {
@@ -308,15 +308,6 @@ void DataApp_Init(void)
 
 TiltKey_t TiltKey_Update(const motion_sample_t *motion)
 {
-    enum
-    {
-        TILT_SHAKE_AXIS_NONE = 0,
-        TILT_SHAKE_AXIS_HORIZONTAL,
-        TILT_SHAKE_AXIS_VERTICAL
-    };
-
-    const TickType_t shake_window_ticks = pdMS_TO_TICKS(2000U);
-    const TickType_t shake_lock_ticks = pdMS_TO_TICKS(600U);
     const TickType_t single_tilt_delay_ticks = pdMS_TO_TICKS(400U);
     int16_t raw_x;
     int16_t raw_y;
@@ -332,14 +323,6 @@ TiltKey_t TiltKey_Update(const motion_sample_t *motion)
     static TiltKey_t last_stable_key = MSG_TILT_NONE;
     static uint8_t stable_cnt = 0U;
     static TiltKey_t output_locked_key = MSG_TILT_NONE;
-    static TiltKey_t last_shake_horizontal_key = MSG_TILT_NONE;
-    static TiltKey_t last_shake_vertical_key = MSG_TILT_NONE;
-    static uint8_t horizontal_shake_cnt = 0U;
-    static uint8_t vertical_shake_cnt = 0U;
-    static TickType_t horizontal_shake_start = 0U;
-    static TickType_t vertical_shake_start = 0U;
-    static TickType_t horizontal_shake_locked_until = 0U;
-    static TickType_t vertical_shake_locked_until = 0U;
     static TiltKey_t pending_output_key = MSG_TILT_NONE;
     static TickType_t pending_output_start = 0U;
 
@@ -397,99 +380,6 @@ TiltKey_t TiltKey_Update(const motion_sample_t *motion)
     if ((stable_cnt >= HOLD_COUNT) && (current_raw_direction != MSG_TILT_NONE))
     {
         TickType_t now = xTaskGetTickCount();
-        uint8_t axis = TILT_SHAKE_AXIS_NONE;
-        TiltKey_t shake_event = MSG_TILT_NONE;
-
-        if ((current_raw_direction == MSG_TILT_LEFT) || (current_raw_direction == MSG_TILT_RIGHT))
-        {
-            axis = TILT_SHAKE_AXIS_HORIZONTAL;
-        }
-        else if ((current_raw_direction == MSG_TILT_UP) || (current_raw_direction == MSG_TILT_DOWN))
-        {
-            axis = TILT_SHAKE_AXIS_VERTICAL;
-        }
-
-        if (axis == TILT_SHAKE_AXIS_HORIZONTAL)
-        {
-            if ((horizontal_shake_locked_until != 0U) &&
-                ((TickType_t)(now - horizontal_shake_locked_until) < shake_lock_ticks))
-            {
-                return MSG_TILT_NONE;
-            }
-
-            if (last_shake_horizontal_key == MSG_TILT_NONE)
-            {
-                last_shake_horizontal_key = current_raw_direction;
-                horizontal_shake_cnt = 1U;
-                horizontal_shake_start = now;
-            }
-            else if (current_raw_direction != last_shake_horizontal_key)
-            {
-                if ((TickType_t)(now - horizontal_shake_start) > shake_window_ticks)
-                {
-                    horizontal_shake_cnt = 1U;
-                    horizontal_shake_start = now;
-                }
-                else if (horizontal_shake_cnt < 255U)
-                {
-                    horizontal_shake_cnt++;
-                }
-
-                last_shake_horizontal_key = current_raw_direction;
-                if (horizontal_shake_cnt >= 3U)
-                {
-                    shake_event = MSG_TILT_SHAKE_HORIZONTAL;
-                    horizontal_shake_cnt = 0U;
-                    last_shake_horizontal_key = MSG_TILT_NONE;
-                    horizontal_shake_start = now;
-                    horizontal_shake_locked_until = now;
-                }
-            }
-        }
-        else if (axis == TILT_SHAKE_AXIS_VERTICAL)
-        {
-            if ((vertical_shake_locked_until != 0U) &&
-                ((TickType_t)(now - vertical_shake_locked_until) < shake_lock_ticks))
-            {
-                return MSG_TILT_NONE;
-            }
-
-            if (last_shake_vertical_key == MSG_TILT_NONE)
-            {
-                last_shake_vertical_key = current_raw_direction;
-                vertical_shake_cnt = 1U;
-                vertical_shake_start = now;
-            }
-            else if (current_raw_direction != last_shake_vertical_key)
-            {
-                if ((TickType_t)(now - vertical_shake_start) > shake_window_ticks)
-                {
-                    vertical_shake_cnt = 1U;
-                    vertical_shake_start = now;
-                }
-                else if (vertical_shake_cnt < 255U)
-                {
-                    vertical_shake_cnt++;
-                }
-
-                last_shake_vertical_key = current_raw_direction;
-                if (vertical_shake_cnt >= 3U)
-                {
-                    shake_event = MSG_TILT_SHAKE_VERTICAL;
-                    vertical_shake_cnt = 0U;
-                    last_shake_vertical_key = MSG_TILT_NONE;
-                    vertical_shake_start = now;
-                    vertical_shake_locked_until = now;
-                }
-            }
-        }
-
-        if (shake_event != MSG_TILT_NONE)
-        {
-            output_locked_key = shake_event;
-            pending_output_key = MSG_TILT_NONE;
-            return shake_event;
-        }
 
         if (output_locked_key == MSG_TILT_NONE)
         {
@@ -515,8 +405,6 @@ TiltKey_t TiltKey_Update(const motion_sample_t *motion)
     if ((fabsf(pitch) < ANGLE_HYST) && (fabsf(roll) < ANGLE_HYST))
     {
         output_locked_key = MSG_TILT_NONE;
-        last_shake_horizontal_key = MSG_TILT_NONE;
-        last_shake_vertical_key = MSG_TILT_NONE;
         pending_output_key = MSG_TILT_NONE;
     }
 

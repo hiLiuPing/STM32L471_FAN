@@ -4,8 +4,8 @@ Build and run from the repository root:
 
 ```powershell
 D:\lvgl_pc\mingw64\bin\gcc.exe -std=c11 -Wall -Wextra -Werror `
-  -IUSER\Middle\Transfer Tools\tests\test_stability.c `
-  -o Tools\tests\test_stability.exe
+  -IUSER\Middle\Transfer -IUSER\APP Tools\tests\test_stability.c `
+  USER\APP\shake_detector.c -lm -o Tools\tests\test_stability.exe
 Tools\tests\test_stability.exe
 ```
 

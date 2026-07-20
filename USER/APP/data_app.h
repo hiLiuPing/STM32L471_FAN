@@ -71,8 +71,6 @@ typedef enum
     MSG_PWER_CHAGNE,
     MSG_PWER_FULL,
     MSG_FALL_DOWN,
-    MSG_TILT_SHAKE_VERTICAL,
-    MSG_TILT_SHAKE_HORIZONTAL,
 } TiltKey_t;
 
 extern TiltKey_t current_raw_direction;

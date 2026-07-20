@@ -43,6 +43,10 @@ typedef struct
 
 _Static_assert(sizeof(SettingsApp_Storage_t) == EE_BLOCK_SIZE,
                "Settings storage must remain one EEPROM block");
+_Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_enabled) == 5U,
+               "Legacy poetry enable storage offset changed");
+_Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_interval_min) == 6U,
+               "Poetry interval storage offset changed");
 _Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_duration_s) == 14U,
                "New settings must not move legacy storage fields");
 _Static_assert(offsetof(SettingsApp_Storage_t, system_auto_off_min) == 16U,
@@ -89,7 +93,6 @@ static void SettingsApp_LoadDefaults(AppSettings_t *settings)
         return;
     }
 
-    settings->poetry_popup_enabled = 1U;
     settings->poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT;
     settings->poetry_popup_duration_s = SETTINGS_APP_POETRY_DURATION_S_DEFAULT;
     settings->weather_time_sync_interval_min = SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DEFAULT;
@@ -106,10 +109,11 @@ static void SettingsApp_Normalize(AppSettings_t *settings)
         return;
     }
 
-    settings->poetry_popup_enabled = (settings->poetry_popup_enabled != 0U) ? 1U : 0U;
-    settings->poetry_popup_interval_min = SettingsApp_ClampU16(settings->poetry_popup_interval_min,
-                                                               SETTINGS_APP_POETRY_INTERVAL_MIN_MIN,
-                                                               SETTINGS_APP_POETRY_INTERVAL_MIN_MAX);
+    settings->poetry_popup_interval_min =
+        SettingsApp_ClampOptionalU16(settings->poetry_popup_interval_min,
+                                     SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED,
+                                     SETTINGS_APP_POETRY_INTERVAL_MIN_MIN,
+                                     SETTINGS_APP_POETRY_INTERVAL_MIN_MAX);
     settings->poetry_popup_duration_s = SettingsApp_ClampU16(settings->poetry_popup_duration_s,
                                                               SETTINGS_APP_POETRY_DURATION_S_MIN,
                                                               SETTINGS_APP_POETRY_DURATION_S_MAX);
@@ -141,8 +145,11 @@ static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSet
         return;
     }
 
-    settings->poetry_popup_enabled = storage->poetry_popup_enabled;
     settings->poetry_popup_interval_min = storage->poetry_popup_interval_min;
+    if (storage->poetry_popup_enabled == 0U)
+    {
+        settings->poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED;
+    }
     settings->poetry_popup_duration_s = (storage->version >= SETTINGS_APP_STORAGE_VERSION_V4) ?
                                             storage->poetry_popup_duration_s :
                                             SETTINGS_APP_POETRY_DURATION_S_DEFAULT;
@@ -169,7 +176,8 @@ static void SettingsApp_ToStorage(const AppSettings_t *settings, SettingsApp_Sto
 
     memset(storage, 0, sizeof(*storage));
     storage->version = SETTINGS_APP_STORAGE_VERSION;
-    storage->poetry_popup_enabled = settings->poetry_popup_enabled;
+    storage->poetry_popup_enabled =
+        (settings->poetry_popup_interval_min != SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED) ? 1U : 0U;
     storage->poetry_popup_interval_min = settings->poetry_popup_interval_min;
     storage->poetry_popup_duration_s = settings->poetry_popup_duration_s;
     storage->weather_time_sync_interval_min = settings->weather_time_sync_interval_min;
@@ -235,9 +243,19 @@ void SettingsApp_Init(void)
          (storage.version == SETTINGS_APP_STORAGE_VERSION_V1)))
     {
         SettingsApp_FromStorage(&storage, &s_settings);
-        if (storage.version == SETTINGS_APP_STORAGE_VERSION_V1)
+        if ((storage.version == SETTINGS_APP_STORAGE_VERSION_V1) &&
+            (storage.poetry_popup_enabled != 0U))
         {
             s_settings.poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT;
+        }
+        if (storage.poetry_popup_enabled !=
+            ((s_settings.poetry_popup_interval_min != SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED) ? 1U : 0U))
+        {
+            need_save = true;
+        }
+        if (storage.poetry_popup_interval_min != s_settings.poetry_popup_interval_min)
+        {
+            need_save = true;
         }
         if (storage.version != SETTINGS_APP_STORAGE_VERSION)
         {
@@ -434,8 +452,15 @@ void SettingsApp_Apply(void)
         interval_s = 0xFFFFU;
     }
 
-    ui_poetry_popup_set_timing((uint16_t)interval_s, snapshot.poetry_popup_duration_s);
-    ui_poetry_popup_set_enabled(snapshot.poetry_popup_enabled != 0U);
+    if (snapshot.poetry_popup_interval_min != SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED)
+    {
+        ui_poetry_popup_set_timing((uint16_t)interval_s, snapshot.poetry_popup_duration_s);
+        ui_poetry_popup_set_enabled(true);
+    }
+    else
+    {
+        ui_poetry_popup_set_enabled(false);
+    }
     LED_CMD_OnEvent(LED_TARGET_PWR,
                     (snapshot.rgb_pwr_enabled != 0U) ? LED_EVT_RAINBOW : LED_EVT_STOP);
     SettingsApp_ApplyActiveBrightness();

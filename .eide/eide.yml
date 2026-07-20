@@ -111,6 +111,7 @@ virtualFolder:
             - path: USER/APP/pwm_fan_control.c
             - path: USER/APP/fan_anim_res.c
             - path: USER/APP/poetry_app.c
+            - path: USER/APP/shake_detector.c
             - path: USER/APP/heiti_font_drv.c
           folders: []
         - name: BSP

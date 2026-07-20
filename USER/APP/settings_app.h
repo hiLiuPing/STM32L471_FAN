@@ -10,12 +10,13 @@ extern "C" {
 
 #include "FreeRTOS.h"
 
-#define SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT       1U
-#define SETTINGS_APP_POETRY_INTERVAL_MIN_MIN           1U
+#define SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED      0U
+#define SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT       20U
+#define SETTINGS_APP_POETRY_INTERVAL_MIN_MIN           5U
 #define SETTINGS_APP_POETRY_INTERVAL_MIN_MAX           60U
 
 #define SETTINGS_APP_POETRY_DURATION_S_DEFAULT         30U
-#define SETTINGS_APP_POETRY_DURATION_S_MIN             30U
+#define SETTINGS_APP_POETRY_DURATION_S_MIN             5U
 #define SETTINGS_APP_POETRY_DURATION_S_MAX             300U
 
 #define SETTINGS_APP_WEATHER_SYNC_INTERVAL_MIN_DISABLED 0U
@@ -25,7 +26,7 @@ extern "C" {
 
 #define SETTINGS_APP_BRIGHTNESS_DAY_PERCENT            95U
 #define SETTINGS_APP_BRIGHTNESS_NIGHT_PERCENT          50U
-#define SETTINGS_APP_BRIGHTNESS_MIN                    1U
+#define SETTINGS_APP_BRIGHTNESS_MIN                    10U
 #define SETTINGS_APP_BRIGHTNESS_MAX                    100U
 
 #define SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT           1U
@@ -50,7 +51,6 @@ typedef enum
 
 typedef struct
 {
-    uint8_t poetry_popup_enabled;
     uint16_t poetry_popup_interval_min;
     uint16_t poetry_popup_duration_s;
     uint16_t weather_time_sync_interval_min;

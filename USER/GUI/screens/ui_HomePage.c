@@ -1156,6 +1156,20 @@ void ui_HomePage_screen_init(void)
     egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 50U);
 }
 
+void ui_HomePage_screen_enter(void)
+{
+    DataApp_HomeStatus_t status;
+
+    s_home_scene_tick = egui_timer_get_current_time();
+    s_home_status_tick = s_home_scene_tick;
+    s_home_scene_state.is_valid = 0U;
+    s_home_weather_state.is_valid = 0U;
+    DataApp_HomeStatus_Get(&status);
+    ui_HomePage_update_render_snapshot(&status);
+    (void)ui_HomePage_battery_update(&status, s_home_scene_tick, 1U);
+    ui_HomePage_weather_reset(s_home_render_scene, status.is_day, s_home_scene_tick);
+}
+
 void ui_HomePage_screen_destroy(void)
 {
     ui_HomePage_fan_quick_reset();
@@ -1854,6 +1868,13 @@ static ui_home_theme2_style_t ui_HomePage_get_theme2_style(WeatherScene_t scene,
         }
     }
 
+    if (scene != WEATHER_SCENE_CLEAR)
+    {
+        style.cloud_from_state = HOME_THEME2_CLOUD_DAY;
+        style.cloud_to_state = HOME_THEME2_CLOUD_DAY;
+        style.cloud_blend = 0U;
+    }
+
     weather_style = ui_HomePage_get_style(scene, is_day);
     switch (scene)
     {
@@ -2296,7 +2317,7 @@ static void ui_HomePage_draw_battery(egui_canvas_t *canvas,
     else
     {
         (void)snprintf(percent_text, sizeof(percent_text), "%s%u%%",
-                       (status->battery_stale != 0U) ? "~" : "",
+                       (status->battery_stale != 0U) ? "*" : "",
                        (unsigned int)status->battery_percent);
     }
     ui_draw_text(canvas,

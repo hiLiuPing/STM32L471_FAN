@@ -508,7 +508,7 @@ static void ui_WeatherPage_on_draw(egui_view_t *self)
         (void)snprintf(temp_text,
                        sizeof(temp_text),
                        "%s%dC",
-                       (mode == UI_WEATHER_RENDER_STALE) ? "~" : "",
+                       (mode == UI_WEATHER_RENDER_STALE) ? "*" : "",
                        weather.future[i].temp_high);
         ui_draw_text(canvas,
                      EGUI_FONT_OF(&egui_res_font_montserrat_12_4),
@@ -523,7 +523,7 @@ static void ui_WeatherPage_on_draw(egui_view_t *self)
         (void)snprintf(temp_text,
                        sizeof(temp_text),
                        "%s%dC",
-                       (mode == UI_WEATHER_RENDER_STALE) ? "~" : "",
+                       (mode == UI_WEATHER_RENDER_STALE) ? "*" : "",
                        weather.future[i].temp_low);
         ui_draw_text(canvas,
                      EGUI_FONT_OF(&egui_res_font_montserrat_12_4),

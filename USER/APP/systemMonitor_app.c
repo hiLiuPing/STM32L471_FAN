@@ -23,7 +23,6 @@
 #define USER_MONITOR_RETRY_SYSTEM_APPLY   (1U << 4)
 #define USER_MONITOR_RETRY_SYSTEM_RESTART (1U << 5)
 #define USER_MONITOR_RETRY_SCREEN_STOP    (1U << 6)
-#define USER_MONITOR_RETRY_WEATHER_MANUAL (1U << 7)
 
 _Static_assert(MON_APP_MAX <= MONITOR_MAX_NUM, "App monitor IDs exceed monitor storage");
 
@@ -207,10 +206,6 @@ void UserMonitor_Service(void)
     {
         UserMonitor_OnDisplaySleep();
     }
-    if ((retry_mask & USER_MONITOR_RETRY_WEATHER_MANUAL) != 0U)
-    {
-        UserMonitor_RequestWeatherSync();
-    }
     if ((retry_mask & USER_MONITOR_RETRY_SYSTEM_RESTART) != 0U)
     {
         UserMonitor_OnKeyActivity();
@@ -328,28 +323,6 @@ void UserMonitor_OnDisplaySleep(void)
     if (Monitor_Stop(MON_SCREEN_IDLE) != pdPASS)
     {
         UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_SCREEN_STOP);
-    }
-}
-
-void UserMonitor_RequestWeatherSync(void)
-{
-    if ((WeatherApp_IsFirstSyncDone() == 0U) || (WeatherApp_IsSyncing() != 0U))
-    {
-        return;
-    }
-
-    if (Monitor_Stop(MON_WEATHER_SYNC) == pdPASS)
-    {
-    }
-    else
-    {
-        log_printf("[Monitor] weather manual stop fail");
-        UserMonitor_ScheduleRetry(USER_MONITOR_RETRY_WEATHER_MANUAL);
-        return;
-    }
-    if (xWeatherSyncTaskWakeSemaphore != NULL)
-    {
-        (void)xSemaphoreGive(xWeatherSyncTaskWakeSemaphore);
     }
 }
 

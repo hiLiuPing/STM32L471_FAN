@@ -5,6 +5,7 @@
 
 #include "time_utils.h"
 #include "protocol_crc8.h"
+#include "shake_detector.h"
 
 #define TWO_PI 6.2831853071795864769f
 
@@ -86,6 +87,67 @@ static void test_future_bitmap(void)
     assert(mask == 0x7FU);
 }
 
+static void test_weather_sync_bit_accumulation(void)
+{
+    const uint8_t bit_time = 1U << 0;
+    const uint8_t bit_now = 1U << 1;
+    const uint8_t bit_air = 1U << 2;
+    const uint8_t bit_future = 1U << 3;
+    const uint8_t required = bit_time | bit_now | bit_air | bit_future;
+    uint8_t bits = 0U;
+
+    bits |= bit_time | bit_now;
+    assert((bits & required) != required);
+    bits |= bit_air;
+    assert((bits & required) != required);
+    bits |= bit_future;
+    assert((bits & required) == required);
+    assert(((bits & (uint8_t)~bit_time) & required) != required);
+}
+
+static uint16_t adjust_optional_u16(uint16_t value,
+                                    int8_t delta,
+                                    uint16_t step,
+                                    uint16_t disabled,
+                                    uint16_t minimum,
+                                    uint16_t maximum)
+{
+    int32_t next;
+
+    if (delta > 0)
+    {
+        if (value == disabled) return minimum;
+        next = (int32_t)value + step;
+        return (next > maximum) ? maximum : (uint16_t)next;
+    }
+    if (delta < 0)
+    {
+        if (value <= minimum) return disabled;
+        next = (int32_t)value - step;
+        return (next < minimum) ? disabled : (uint16_t)next;
+    }
+    return value;
+}
+
+static void test_poetry_interval_setting(void)
+{
+    uint16_t interval = 0U;
+
+    interval = adjust_optional_u16(interval, 1, 5U, 0U, 5U, 60U);
+    assert(interval == 5U);
+    interval = adjust_optional_u16(interval, 1, 5U, 0U, 5U, 60U);
+    assert(interval == 10U);
+    interval = adjust_optional_u16(interval, -1, 5U, 0U, 5U, 60U);
+    assert(interval == 5U);
+    interval = adjust_optional_u16(interval, -1, 5U, 0U, 5U, 60U);
+    assert(interval == 0U);
+    assert((interval != 0U) == 0);
+    interval = 60U;
+    interval = adjust_optional_u16(interval, 1, 5U, 0U, 5U, 60U);
+    assert(interval == 60U);
+    assert((interval != 0U) == 1);
+}
+
 static void test_sensor_stale_and_recovery(void)
 {
     uint32_t last_success = 0xFFFFFF00U;
@@ -94,6 +156,63 @@ static void test_sensor_stale_and_recovery(void)
     assert(Time32_Elapsed(0x000002E8U, last_success) == 1000U);
     last_success = 0x00001000U;
     assert(Time32_Elapsed(0x00001001U, last_success) == 1U);
+}
+
+static bool feed_shake(ShakeDetector_t *detector, int16_t x, uint32_t now)
+{
+    ShakeDetectorSample_t sample = { x, 0, 1000 };
+
+    return ShakeDetector_Update(detector, &sample, now);
+}
+
+static void settle_shake(ShakeDetector_t *detector, uint32_t *now)
+{
+    for (uint32_t i = 0U; i < 45U; i++)
+    {
+        *now += 30U;
+        assert(!feed_shake(detector, 0, *now));
+    }
+}
+
+static void assert_shake_sequence(ShakeDetector_t *detector, uint32_t *now)
+{
+    for (uint8_t i = 0U; i < 7U; i++)
+    {
+        bool triggered;
+
+        *now += 120U;
+        triggered = feed_shake(detector, ((i & 1U) == 0U) ? 1000 : -1000, *now);
+        assert(triggered == (i == 6U));
+    }
+}
+
+static void test_shake_detector(void)
+{
+    ShakeDetector_t detector;
+    uint32_t now = 100U;
+
+    ShakeDetector_Init(&detector);
+    for (uint32_t i = 0U; i < 10U; i++)
+    {
+        assert(!feed_shake(&detector, 0, now));
+        now += 30U;
+    }
+    assert(!feed_shake(&detector, 1000, now));
+    settle_shake(&detector, &now);
+
+    ShakeDetector_Init(&detector);
+    assert(!feed_shake(&detector, 0, now));
+    assert_shake_sequence(&detector, &now);
+    now += 120U;
+    assert(!feed_shake(&detector, -1000, now));
+
+    settle_shake(&detector, &now);
+    assert_shake_sequence(&detector, &now);
+
+    ShakeDetector_Init(&detector);
+    now = 0xFFFFFF00U;
+    assert(!feed_shake(&detector, 0, now));
+    assert_shake_sequence(&detector, &now);
 }
 
 typedef struct
@@ -185,7 +304,10 @@ int main(void)
     test_auto_off_model();
     test_natural_phase_31_days();
     test_future_bitmap();
+    test_weather_sync_bit_accumulation();
+    test_poetry_interval_setting();
     test_sensor_stale_and_recovery();
+    test_shake_detector();
     test_frame_recovery();
     puts("stability host tests: PASS");
     return 0;

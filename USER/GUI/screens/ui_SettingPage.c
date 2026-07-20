@@ -12,7 +12,7 @@
 #include "weather_app.h"
 #include "widget/egui_view.h"
 
-#define UI_SETTING_ITEM_COUNT       9U
+#define UI_SETTING_ITEM_COUNT       8U
 #define UI_SETTING_FRAME_MS         50U
 #define UI_SETTING_ROW_X            132
 #define UI_SETTING_ROW_W            288
@@ -21,7 +21,7 @@
 #define UI_SETTING_ROW_GAP          2
 #define UI_SETTING_ROW_STEP         (UI_SETTING_ROW_H + UI_SETTING_ROW_GAP)
 #define UI_SETTING_SCROLL_DURATION_MS 200U
-#define UI_SETTING_VALUE_STEP       1U
+#define UI_SETTING_VALUE_STEP       5U
 #define UI_SETTING_FAST_STEP        5U
 #define UI_SETTING_DURATION_STEP    10U
 #define UI_SETTING_DURATION_FAST_STEP 30U
@@ -35,7 +35,6 @@
 typedef enum
 {
     UI_SETTING_ITEM_HOME_THEME = 0,
-    UI_SETTING_ITEM_POETRY_ENABLE,
     UI_SETTING_ITEM_POETRY_INTERVAL,
     UI_SETTING_ITEM_POETRY_DURATION,
     UI_SETTING_ITEM_WEATHER_INTERVAL,
@@ -68,8 +67,7 @@ typedef struct
 
 static const char *const s_setting_labels[UI_SETTING_ITEM_COUNT] = {
     "Home theme",
-    "Poetry popup",
-    "Poetry gap",
+    "Poetry interval",
     "Poetry stay",
     "Weather sync",
     "Network config",
@@ -523,7 +521,15 @@ static void ui_setting_format_value(uint8_t index, char *buf, uint16_t size)
                            "Dynamic" : "Classic");
         break;
     case UI_SETTING_ITEM_POETRY_INTERVAL:
-        (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.poetry_popup_interval_min);
+        if (s_setting_page.settings.poetry_popup_interval_min ==
+            SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED)
+        {
+            (void)snprintf(buf, size, "OFF");
+        }
+        else
+        {
+            (void)snprintf(buf, size, "%u min", (unsigned)s_setting_page.settings.poetry_popup_interval_min);
+        }
         break;
     case UI_SETTING_ITEM_POETRY_DURATION:
         (void)snprintf(buf, size, "%u s", (unsigned)s_setting_page.settings.poetry_popup_duration_s);
@@ -618,12 +624,7 @@ static void ui_setting_draw_rows(egui_canvas_t *canvas)
         ui_draw_text(canvas, font, s_setting_labels[i], x + 12, y + 2, 135, UI_SETTING_ROW_H - 4,
                      EGUI_ALIGN_LEFT | EGUI_ALIGN_VCENTER, selected ? 0xFFFFFF : 0xC8D8E8);
 
-        if (i == UI_SETTING_ITEM_POETRY_ENABLE)
-        {
-            ui_setting_draw_switch(canvas, x + UI_SETTING_ROW_W - 50, y + 3,
-                                   s_setting_page.settings.poetry_popup_enabled, accent);
-        }
-        else if (i == UI_SETTING_ITEM_NETWORK_CONFIG)
+        if (i == UI_SETTING_ITEM_NETWORK_CONFIG)
         {
             ui_setting_draw_switch(canvas, x + UI_SETTING_ROW_W - 50, y + 3,
                                    WeatherApp_IsProvisioningEnabled(), accent);
@@ -690,16 +691,13 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
                     SETTINGS_APP_HOME_THEME_2;
         }
         break;
-    case UI_SETTING_ITEM_POETRY_ENABLE:
-        if (delta != 0)
-        {
-            s_setting_page.settings.poetry_popup_enabled = (uint8_t)!s_setting_page.settings.poetry_popup_enabled;
-        }
-        break;
     case UI_SETTING_ITEM_POETRY_INTERVAL:
         s_setting_page.settings.poetry_popup_interval_min =
-            ui_setting_adjust_u16(s_setting_page.settings.poetry_popup_interval_min, delta, step,
-                                  SETTINGS_APP_POETRY_INTERVAL_MIN_MIN, SETTINGS_APP_POETRY_INTERVAL_MIN_MAX);
+            ui_setting_adjust_optional_u16(s_setting_page.settings.poetry_popup_interval_min,
+                                           delta, step,
+                                           SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED,
+                                           SETTINGS_APP_POETRY_INTERVAL_MIN_MIN,
+                                           SETTINGS_APP_POETRY_INTERVAL_MIN_MAX);
         break;
     case UI_SETTING_ITEM_POETRY_DURATION:
         step = (fast != 0U) ? UI_SETTING_DURATION_FAST_STEP : UI_SETTING_DURATION_STEP;
@@ -746,8 +744,7 @@ static void ui_SettingPage_adjust_selected(int8_t delta, uint8_t fast)
 
 static bool ui_SettingPage_is_toggle_item(uint8_t index)
 {
-    return ((index == (uint8_t)UI_SETTING_ITEM_POETRY_ENABLE) ||
-            (index == (uint8_t)UI_SETTING_ITEM_NETWORK_CONFIG) ||
+    return ((index == (uint8_t)UI_SETTING_ITEM_NETWORK_CONFIG) ||
             (index == (uint8_t)UI_SETTING_ITEM_RGB_PWR_ENABLE));
 }
 

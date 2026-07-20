@@ -25,7 +25,6 @@ void UserMonitor_ApplySettings(void);
 void UserMonitor_OnKeyActivity(void);
 void UserMonitor_OnDisplayWake(void);
 void UserMonitor_OnDisplaySleep(void);
-void UserMonitor_RequestWeatherSync(void);
 void UserMonitor_RestartWeatherSync(void);
 void UserMonitor_StopWeatherSync(void);
 void UserMonitor_StopAll(void);
