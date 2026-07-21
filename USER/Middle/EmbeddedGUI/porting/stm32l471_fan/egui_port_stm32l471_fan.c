@@ -327,12 +327,14 @@ void egui_port_set_display_power(bool on)
     egui_display_set_power(&s_egui_core, on ? 1U : 0U);
     if (on)
     {
+        egui_core_clear_screen(&s_egui_core);
         s_egui_brightness_check_ms = egui_timer_get_current_time();
-        egui_core_force_refresh(&s_egui_core);
+        egui_core_resume(&s_egui_core);
         UserMonitor_OnDisplayWake();
     }
     else
     {
+        egui_core_suspend(&s_egui_core);
         UserMonitor_OnDisplaySleep();
     }
 }

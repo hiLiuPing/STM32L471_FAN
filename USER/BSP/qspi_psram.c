@@ -17,6 +17,101 @@
 #define PSRAM_UNLOCK(p)
 #endif
 
+#define PSRAM_MMAP_TIMEOUT_PERIOD 1024U
+
+static int qspi_psram_send_reset_locked(qspi_psram_t *p, uint32_t instruction_mode)
+{
+    QSPI_CommandTypeDef cmd = {0};
+
+    cmd.InstructionMode = instruction_mode;
+    cmd.AddressMode = QSPI_ADDRESS_NONE;
+    cmd.DataMode = QSPI_DATA_NONE;
+    cmd.DummyCycles = 0U;
+    cmd.Instruction = PSRAM_CMD_RESET_EN;
+    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    {
+        return -1;
+    }
+
+    cmd.Instruction = PSRAM_CMD_RESET;
+    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int qspi_psram_enter_qpi_locked(qspi_psram_t *p)
+{
+    QSPI_CommandTypeDef cmd = {0};
+
+    p->mmap_active = 0U;
+    p->qpi_mode = 0U;
+    (void)HAL_QSPI_Abort(p->hqspi);
+    CLEAR_BIT(p->hqspi->Instance->CR, QUADSPI_CR_TCEN);
+    __HAL_QSPI_CLEAR_FLAG(p->hqspi, QSPI_FLAG_TO);
+
+    /* Reset in both possible bus widths so recovery works from an unknown mode. */
+    (void)qspi_psram_send_reset_locked(p, QSPI_INSTRUCTION_4_LINES);
+    (void)HAL_QSPI_Abort(p->hqspi);
+    if (qspi_psram_send_reset_locked(p, QSPI_INSTRUCTION_1_LINE) != 0)
+    {
+        return -1;
+    }
+
+    HAL_Delay(1U);
+    cmd.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    cmd.AddressMode = QSPI_ADDRESS_NONE;
+    cmd.DataMode = QSPI_DATA_NONE;
+    cmd.DummyCycles = 0U;
+    cmd.Instruction = PSRAM_CMD_ENTER_QPI;
+    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    {
+        return -1;
+    }
+
+    HAL_Delay(1U);
+    p->qpi_mode = 1U;
+    return 0;
+}
+
+static int qspi_psram_enable_memory_mapped_locked(qspi_psram_t *p)
+{
+    QSPI_CommandTypeDef cmd = {0};
+    QSPI_MemoryMappedTypeDef cfg = {0};
+
+    if ((p == NULL) || (p->initialized == 0U) || (p->qpi_mode == 0U))
+    {
+        return -1;
+    }
+
+    (void)HAL_QSPI_Abort(p->hqspi);
+    p->mmap_active = 0U;
+    cmd.InstructionMode = QSPI_INSTRUCTION_4_LINES;
+    cmd.AddressMode = QSPI_ADDRESS_4_LINES;
+    cmd.AddressSize = QSPI_ADDRESS_24_BITS;
+    cmd.DataMode = QSPI_DATA_4_LINES;
+    cmd.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
+    cmd.DummyCycles = 6U;
+    cmd.Instruction = PSRAM_CMD_READ;
+    cmd.SIOOMode = QSPI_SIOO_INST_EVERY_CMD;
+
+    cfg.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE;
+    if (HAL_QSPI_MemoryMapped(p->hqspi, &cmd, &cfg) != HAL_OK)
+    {
+        return -1;
+    }
+
+    /* Release nCS after an idle gap without enabling the unused timeout IRQ. */
+    WRITE_REG(p->hqspi->Instance->LPTR, PSRAM_MMAP_TIMEOUT_PERIOD);
+    __HAL_QSPI_CLEAR_FLAG(p->hqspi, QSPI_FLAG_TO);
+    __HAL_QSPI_DISABLE_IT(p->hqspi, QSPI_IT_TO);
+    SET_BIT(p->hqspi->Instance->CR, QUADSPI_CR_TCEN);
+    p->mmap_active = 1U;
+    return 0;
+}
+
 /**
  * @brief  初始化 QSPI PSRAM
  * @param  p: context 指针
@@ -152,6 +247,7 @@ int qspi_psram_write(qspi_psram_t *p, uint32_t addr, const uint8_t *buf, uint32_
 {
     QSPI_CommandTypeDef cmd = {0};
     int ret = 0;
+    uint8_t mmap_was_active = 0;
 
     if (p == NULL || !p->initialized || buf == NULL || len == 0)
         return -1;
@@ -164,7 +260,10 @@ int qspi_psram_write(qspi_psram_t *p, uint32_t addr, const uint8_t *buf, uint32_
     /* 如果在 MMAP 模式，先退出才能发命令。 */
     if (p->mmap_active)
     {
+        mmap_was_active = 1;
         HAL_QSPI_Abort(p->hqspi);
+        CLEAR_BIT(p->hqspi->Instance->CR, QUADSPI_CR_TCEN);
+        __HAL_QSPI_CLEAR_FLAG(p->hqspi, QSPI_FLAG_TO);
         p->mmap_active = 0;
     }
 
@@ -190,6 +289,16 @@ int qspi_psram_write(qspi_psram_t *p, uint32_t addr, const uint8_t *buf, uint32_
     }
 
 out:
+
+    /* 写完后恢复 MMAP 模式 */
+    if (mmap_was_active)
+    {
+        if (qspi_psram_enable_memory_mapped_locked(p) != 0)
+        {
+            ret = -1;
+        }
+    }
+
     PSRAM_UNLOCK(p);
     return ret;
 }
@@ -203,36 +312,20 @@ out:
  */
 int qspi_psram_enable_memory_mapped(qspi_psram_t *p)
 {
-    QSPI_CommandTypeDef cmd = {0};
-    QSPI_MemoryMappedTypeDef cfg = {0};
+    int ret;
 
     if (p == NULL || !p->initialized)
         return -1;
 
     PSRAM_LOCK(p);
+    ret = qspi_psram_enable_memory_mapped_locked(p);
+    PSRAM_UNLOCK(p);
 
-    HAL_QSPI_Abort(p->hqspi);
-
-    cmd.InstructionMode   = QSPI_INSTRUCTION_4_LINES;
-    cmd.AddressMode       = QSPI_ADDRESS_4_LINES;
-    cmd.AddressSize       = QSPI_ADDRESS_24_BITS;
-    cmd.DataMode          = QSPI_DATA_4_LINES;
-    cmd.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
-    cmd.DummyCycles       = 6;
-    cmd.Instruction       = PSRAM_CMD_READ;
-    cmd.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
-
-    cfg.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE;
-
-    if (HAL_QSPI_MemoryMapped(p->hqspi, &cmd, &cfg) != HAL_OK)
+    if (ret != 0)
     {
-        PSRAM_UNLOCK(p);
         log_printf("[PSRAM] memory mapped FAIL\r\n");
         return -1;
     }
-
-    p->mmap_active = 1;
-    PSRAM_UNLOCK(p);
     log_printf("[PSRAM] memory mapped enabled\r\n");
     return 0;
 }
@@ -249,6 +342,8 @@ int qspi_psram_exit_memory_mapped(qspi_psram_t *p)
 
     PSRAM_LOCK(p);
     HAL_QSPI_Abort(p->hqspi);
+    CLEAR_BIT(p->hqspi->Instance->CR, QUADSPI_CR_TCEN);
+    __HAL_QSPI_CLEAR_FLAG(p->hqspi, QSPI_FLAG_TO);
     p->mmap_active = 0;
     PSRAM_UNLOCK(p);
 
@@ -261,6 +356,46 @@ int qspi_psram_exit_memory_mapped(qspi_psram_t *p)
  * @param  p: context 指针
  * @retval 0
  */
+int qspi_psram_recover(qspi_psram_t *p)
+{
+    int ret = -1;
+
+    if ((p == NULL) || (p->hqspi == NULL))
+    {
+        return -1;
+    }
+
+    PSRAM_LOCK(p);
+    p->initialized = 0U;
+    p->qpi_mode = 0U;
+    p->mmap_active = 0U;
+    (void)HAL_QSPI_Abort(p->hqspi);
+
+    if ((HAL_QSPI_DeInit(p->hqspi) != HAL_OK) ||
+        (HAL_QSPI_Init(p->hqspi) != HAL_OK))
+    {
+        goto out;
+    }
+
+    if (qspi_psram_enter_qpi_locked(p) != 0)
+    {
+        goto out;
+    }
+
+    p->psram_size = PSRAM_SIZE;
+    p->page_size = PSRAM_PAGE_SIZE;
+    p->total_size = PSRAM_SIZE;
+    p->addr_len = 3U;
+    p->initialized = 1U;
+    ret = 0;
+
+out:
+    PSRAM_UNLOCK(p);
+    log_printf((ret == 0) ? "[PSRAM] recover OK\r\n" :
+                            "[PSRAM] recover FAIL\r\n");
+    return ret;
+}
+
 int qspi_psram_sync(qspi_psram_t *p)
 {
     (void)p;

@@ -427,3 +427,78 @@ const egui_image_std_t *HomeTheme2CloudCache_Get(uint8_t shape, uint8_t state)
 
     return &s_cloud_images[shape][state];
 }
+
+bool HomeTheme2CloudCache_Recover(void)
+{
+    uint32_t start_tick = HAL_GetTick();
+    uint32_t used_bytes;
+    uint8_t shape;
+    uint8_t state;
+
+    s_cache_ready = false;
+    log_printf("[HomeCloud] recover begin");
+
+    if (qspi_psram_recover(&g_psram) != 0)
+    {
+        log_printf("[HomeCloud] bus recover failed, QOI fallback");
+        return false;
+    }
+
+    if ((qspi_psram_enable_memory_mapped(&g_psram) == 0) &&
+        home_theme2_cloud_cache_bind_and_verify())
+    {
+        s_cache_ready = true;
+        log_printf("[HomeCloud] recover reused cache ms=%lu",
+                   (unsigned long)(HAL_GetTick() - start_tick));
+        return true;
+    }
+
+    if ((g_psram.mmap_active != 0U) &&
+        (qspi_psram_exit_memory_mapped(&g_psram) != 0))
+    {
+        log_printf("[HomeCloud] recover mmap exit failed, QOI fallback");
+        return false;
+    }
+
+    memset(s_cloud_infos, 0, sizeof(s_cloud_infos));
+    memset(s_cloud_images, 0, sizeof(s_cloud_images));
+    memset(s_cloud_slots, 0, sizeof(s_cloud_slots));
+    if (!home_theme2_cloud_cache_prepare_layout(&used_bytes))
+    {
+        log_printf("[HomeCloud] layout failed, QOI fallback");
+        return false;
+    }
+
+    for (shape = 0U; shape < HOME_THEME2_CLOUD_SHAPE_COUNT; shape++)
+    {
+        for (state = 0U; state < HOME_THEME2_CLOUD_STATE_COUNT; state++)
+        {
+            if (!home_theme2_cloud_cache_decode_image(shape, state))
+            {
+                log_printf("[HomeCloud] recover decode failed shape=%u state=%u, QOI fallback",
+                           (unsigned)shape,
+                           (unsigned)state);
+                return false;
+            }
+        }
+    }
+
+    if (qspi_psram_enable_memory_mapped(&g_psram) != 0)
+    {
+        log_printf("[HomeCloud] recover mmap failed, QOI fallback");
+        return false;
+    }
+
+    if (!home_theme2_cloud_cache_bind_and_verify())
+    {
+        (void)qspi_psram_exit_memory_mapped(&g_psram);
+        log_printf("[HomeCloud] recover verify failed, QOI fallback");
+        return false;
+    }
+
+    s_cache_ready = true;
+    log_printf("[HomeCloud] recover ready used=%lu ms=%lu",
+               (unsigned long)used_bytes,
+               (unsigned long)(HAL_GetTick() - start_tick));
+    return true;
+}

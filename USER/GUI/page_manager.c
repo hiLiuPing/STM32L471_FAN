@@ -95,6 +95,10 @@ static void ui_page_manager_load_page(uint8_t index, bool force)
 
     if ((current_page == target_page) && s_page_manager.loaded)
     {
+        if (force && (target_page->enter != NULL))
+        {
+            target_page->enter();
+        }
         egui_view_invalidate_full(*target_page->page_view);
         egui_core_force_refresh(s_page_manager.core);
         return;

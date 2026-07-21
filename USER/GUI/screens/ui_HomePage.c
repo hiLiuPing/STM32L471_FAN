@@ -13,6 +13,7 @@
 #include "home_theme2_cloud_res.h"
 #include "icons.h"
 #include "key.h"
+#include "log.h"
 #include "page_manager.h"
 #include "settings_app.h"
 #include "system_notify.h"
@@ -1168,6 +1169,14 @@ void ui_HomePage_screen_enter(void)
     ui_HomePage_update_render_snapshot(&status);
     (void)ui_HomePage_battery_update(&status, s_home_scene_tick, 1U);
     ui_HomePage_weather_reset(s_home_render_scene, status.is_day, s_home_scene_tick);
+
+    if (s_home_render_theme == SETTINGS_APP_HOME_THEME_2)
+    {
+        if (!HomeTheme2CloudCache_Recover())
+        {
+            log_printf("[HomePage] cloud cache unavailable, QOI fallback");
+        }
+    }
 }
 
 void ui_HomePage_screen_destroy(void)

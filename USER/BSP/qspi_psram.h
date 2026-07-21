@@ -58,6 +58,7 @@ int qspi_psram_read(qspi_psram_t *p, uint32_t addr, uint8_t *buf, uint32_t len);
 int qspi_psram_write(qspi_psram_t *p, uint32_t addr, const uint8_t *buf, uint32_t len);
 int qspi_psram_enable_memory_mapped(qspi_psram_t *p);
 int qspi_psram_exit_memory_mapped(qspi_psram_t *p);
+int qspi_psram_recover(qspi_psram_t *p);
 int qspi_psram_sync(qspi_psram_t *p);
 
 /* 测试函数：写入测试数据 → 进入 MMAP → 读出并比对打印。 */
