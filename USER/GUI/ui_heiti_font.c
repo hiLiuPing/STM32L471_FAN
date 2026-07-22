@@ -21,7 +21,11 @@ typedef struct
     uint8_t glyph_bitmap[HEITI_FONT_GLYPH_RAW_MAX];
 } ui_heiti_font_t;
 
-#define UI_HEITI_GLYPH_CACHE_SLOTS 16U
+/* 32 槽 × 256B 位图：在用字号最大 20px/4bpp（约 210B/字），256B 足够。
+ * 相比旧的 16 槽 × 512B，槽数翻倍（一屏诗词不再 LRU 抖动、避免每帧重读
+ * SPI Flash），总 RAM 仅增加约 0.6KB。超过 256B 的字形直接绘制不进缓存。 */
+#define UI_HEITI_GLYPH_CACHE_SLOTS      32U
+#define UI_HEITI_GLYPH_CACHE_BITMAP_MAX 256U
 #define UI_HEITI_MISSING_GLYPH_CP  0x00B7U
 
 typedef struct
@@ -32,8 +36,13 @@ typedef struct
     uint8_t bpp;
     uint8_t valid;
     uint32_t age;
-    uint8_t bitmap[HEITI_FONT_GLYPH_RAW_MAX];
+    uint8_t bitmap[UI_HEITI_GLYPH_CACHE_BITMAP_MAX];
 } ui_heiti_glyph_cache_t;
+
+static uint32_t ui_heiti_glyph_bitmap_bytes(const HeitiFont_GlyphDsc_t *dsc, uint8_t bpp)
+{
+    return (((uint32_t)dsc->box_w * dsc->box_h * bpp) + 7U) / 8U;
+}
 
 static int ui_heiti_font_draw_string(const egui_font_t *self,
                                      egui_canvas_t *canvas,
@@ -129,9 +138,17 @@ static const ui_heiti_glyph_cache_t *ui_heiti_glyph_cache_put(const ui_heiti_fon
                                                               const uint8_t *bitmap)
 {
     ui_heiti_glyph_cache_t *entry;
+    uint32_t bitmap_bytes;
 
     if ((font == NULL) || (dsc == NULL) || (bitmap == NULL))
     {
+        return NULL;
+    }
+
+    bitmap_bytes = ui_heiti_glyph_bitmap_bytes(dsc, bpp);
+    if (bitmap_bytes > UI_HEITI_GLYPH_CACHE_BITMAP_MAX)
+    {
+        /* 字形超出槽容量：调用方直接用驱动缓冲绘制，不缓存 */
         return NULL;
     }
 
@@ -142,7 +159,7 @@ static const ui_heiti_glyph_cache_t *ui_heiti_glyph_cache_put(const ui_heiti_fon
     entry->bpp = bpp;
     entry->valid = 1U;
     entry->age = ++s_heiti_glyph_cache_age;
-    memcpy(entry->bitmap, bitmap, sizeof(entry->bitmap));
+    memcpy(entry->bitmap, bitmap, bitmap_bytes);
 
     return entry;
 }
@@ -490,10 +507,19 @@ static int ui_heiti_font_measure_glyph(ui_heiti_font_t *font, uint32_t cp, egui_
 {
     uint32_t glyph_index;
     HeitiFont_GlyphDsc_t dsc;
+    const ui_heiti_glyph_cache_t *cache;
 
     if ((font == NULL) || (adv == NULL) || !ui_heiti_font_ensure_open(font))
     {
         return 0;
+    }
+
+    /* 已绘制过的字直接用缓存的 dsc，测量不再触发 Flash 读取 */
+    cache = ui_heiti_glyph_cache_find(font, cp);
+    if (cache != NULL)
+    {
+        *adv = (egui_dim_t)cache->dsc.adv_w;
+        return 1;
     }
 
     if ((HeitiFont_Lookup(&font->ctx, cp, &glyph_index) != HEITI_FONT_OK) ||

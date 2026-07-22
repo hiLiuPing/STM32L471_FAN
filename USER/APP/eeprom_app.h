@@ -14,7 +14,6 @@ extern "C" {
 typedef struct
 {
     EE24_HandleTypeDef handle;
-    I2C_Bus_t *bus;
     uint8_t initialized;
 } eeprom_ctx_t;
 

@@ -95,18 +95,20 @@ void User_Tasks_Init(void)
                                          tskIDLE_PRIORITY + 5U,
                                          &HardwareInitTaskHandle));
 
+    /* 优先级分层：输入/控制任务（3）高于 GUI 渲染与常规任务（2），
+     * 它们都是短促的事件/采样型工作，保证渲染重载下的输入与风扇响应。 */
     User_Tasks_RequireStatus(xTaskCreate(KeyTask,
                                          "KeyTask",
                                          256U,
                                          NULL,
-                                         tskIDLE_PRIORITY + 2U,
+                                         tskIDLE_PRIORITY + 3U,
                                          &KeyTaskHandle));
 
     User_Tasks_RequireStatus(xTaskCreate(KeyManllegeTask,
                                          "KeyMgrTask",
                                          128U * 2U,
                                          NULL,
-                                         tskIDLE_PRIORITY + 2U,
+                                         tskIDLE_PRIORITY + 3U,
                                          &KeyManllegeTaskHandle));
 
     User_Tasks_RequireStatus(xTaskCreate(LEDTask,
@@ -120,7 +122,7 @@ void User_Tasks_Init(void)
                                          "FanTask",
                                          256U * 2U,
                                          NULL,
-                                         tskIDLE_PRIORITY + 2U,
+                                         tskIDLE_PRIORITY + 3U,
                                          &FanTaskHandle));
 
     User_Tasks_RequireStatus(xTaskCreate(EGUIHandlerTask,
@@ -134,7 +136,7 @@ void User_Tasks_Init(void)
                                          "TransmitTask",
                                          512U,
                                          NULL,
-                                         tskIDLE_PRIORITY + 2U,
+                                         tskIDLE_PRIORITY + 3U,
                                          &TransmitTaskHandle));
 
     User_Tasks_RequireStatus(xTaskCreate(AppDataTask,

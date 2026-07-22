@@ -3,7 +3,7 @@
 
 /*
  * QSPI PSRAM 驱动（仿 spi_flash 模式）。
- * 芯片：APS6404（8MB / 64Mbit，QPI 模式）。
+ * 芯片：ESP-PSRAM64H（8MB / 64Mbit，QPI 模式）。
  */
 
 #include "main.h"

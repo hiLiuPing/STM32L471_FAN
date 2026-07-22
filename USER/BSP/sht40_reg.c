@@ -24,12 +24,15 @@ int32_t sht40_read_raw(sht40_ctx_t *ctx, uint16_t *rawT, uint16_t *rawH) {
     if(ctx->write_reg(ctx->handle, 0, &cmd, 1) != 0) return -1;
 
     // 2. 等待测量完成 (High Precision 典型耗时 10ms)
-    // 根据你的环境，此处可以兼容使用 vTaskDelay 或 HAL_Delay
-    #ifdef USE_FREERTOS
+    // 调度器运行时用 vTaskDelay 让出 CPU，避免 HAL_Delay 忙等 10ms
+    if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
+    {
         vTaskDelay(pdMS_TO_TICKS(10));
-    #else
+    }
+    else
+    {
         HAL_Delay(10);
-    #endif
+    }
 
     if(ctx->read_reg(ctx->handle, 0, rx, 6) != 0) return -1;
     if(SHT40_CRC8(&rx[0], 2) != rx[2] || SHT40_CRC8(&rx[3], 2) != rx[5]) return -2;

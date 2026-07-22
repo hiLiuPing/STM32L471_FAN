@@ -14,13 +14,8 @@
 #include "ui_poetry_popup.h"
 #include "weather_app.h"
 
-#define SETTINGS_APP_STORAGE_VERSION     6U
-#define SETTINGS_APP_STORAGE_VERSION_V5  5U
-#define SETTINGS_APP_STORAGE_VERSION_V4  4U
-#define SETTINGS_APP_STORAGE_VERSION_V3  3U
-#define SETTINGS_APP_STORAGE_VERSION_V2  2U
-#define SETTINGS_APP_STORAGE_VERSION_V1  1U
-#define SETTINGS_APP_SAVE_DELAY_MS       1000U
+#define SETTINGS_APP_STORAGE_VERSION 6U
+#define SETTINGS_APP_SAVE_DELAY_MS   1000U
 
 #pragma pack(push, 1)
 typedef struct
@@ -31,7 +26,7 @@ typedef struct
     uint16_t poetry_popup_interval_min;
     uint16_t weather_time_sync_interval_min;
     uint8_t rgb_pwr_enabled;
-    uint8_t legacy_brightness_night_percent;
+    uint8_t reserved_0;
     uint16_t screen_idle_timeout_min;
     uint16_t poetry_popup_duration_s;
     uint16_t system_auto_off_min;
@@ -44,15 +39,15 @@ typedef struct
 _Static_assert(sizeof(SettingsApp_Storage_t) == EE_BLOCK_SIZE,
                "Settings storage must remain one EEPROM block");
 _Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_enabled) == 5U,
-               "Legacy poetry enable storage offset changed");
+               "Settings V6 poetry enable offset changed");
 _Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_interval_min) == 6U,
-               "Poetry interval storage offset changed");
+               "Settings V6 poetry interval offset changed");
 _Static_assert(offsetof(SettingsApp_Storage_t, poetry_popup_duration_s) == 14U,
-               "New settings must not move legacy storage fields");
+               "Settings V6 poetry duration offset changed");
 _Static_assert(offsetof(SettingsApp_Storage_t, system_auto_off_min) == 16U,
-               "System auto-off storage offset changed");
+               "Settings V6 system auto-off offset changed");
 _Static_assert(offsetof(SettingsApp_Storage_t, home_theme) == 18U,
-               "Home theme storage offset changed");
+               "Settings V6 home theme offset changed");
 _Static_assert(offsetof(SettingsApp_Storage_t, crc) == (EE_BLOCK_SIZE - sizeof(uint16_t)),
                "Settings CRC must remain at the end of the EEPROM block");
 
@@ -150,20 +145,12 @@ static void SettingsApp_FromStorage(const SettingsApp_Storage_t *storage, AppSet
     {
         settings->poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED;
     }
-    settings->poetry_popup_duration_s = (storage->version >= SETTINGS_APP_STORAGE_VERSION_V4) ?
-                                            storage->poetry_popup_duration_s :
-                                            SETTINGS_APP_POETRY_DURATION_S_DEFAULT;
+    settings->poetry_popup_duration_s = storage->poetry_popup_duration_s;
     settings->weather_time_sync_interval_min = storage->weather_time_sync_interval_min;
-    settings->rgb_pwr_enabled = (storage->version >= SETTINGS_APP_STORAGE_VERSION_V3) ?
-                                    storage->rgb_pwr_enabled :
-                                    SETTINGS_APP_RGB_PWR_ENABLED_DEFAULT;
+    settings->rgb_pwr_enabled = storage->rgb_pwr_enabled;
     settings->screen_idle_timeout_min = storage->screen_idle_timeout_min;
-    settings->system_auto_off_min = (storage->version >= SETTINGS_APP_STORAGE_VERSION_V5) ?
-                                        storage->system_auto_off_min :
-                                        SETTINGS_APP_SYSTEM_AUTO_OFF_MIN_DEFAULT;
-    settings->home_theme = (storage->version >= SETTINGS_APP_STORAGE_VERSION) ?
-                               storage->home_theme :
-                               SETTINGS_APP_HOME_THEME_DEFAULT;
+    settings->system_auto_off_min = storage->system_auto_off_min;
+    settings->home_theme = storage->home_theme;
     SettingsApp_Normalize(settings);
 }
 
@@ -185,6 +172,24 @@ static void SettingsApp_ToStorage(const AppSettings_t *settings, SettingsApp_Sto
     storage->screen_idle_timeout_min = settings->screen_idle_timeout_min;
     storage->system_auto_off_min = settings->system_auto_off_min;
     storage->home_theme = settings->home_theme;
+}
+
+static bool SettingsApp_StorageIsCanonical(const SettingsApp_Storage_t *storage,
+                                           const AppSettings_t *settings)
+{
+    SettingsApp_Storage_t canonical;
+    const size_t payload_offset = offsetof(SettingsApp_Storage_t, version);
+    const size_t payload_size = offsetof(SettingsApp_Storage_t, crc) - payload_offset;
+
+    if ((storage == NULL) || (settings == NULL))
+    {
+        return false;
+    }
+
+    SettingsApp_ToStorage(settings, &canonical);
+    return memcmp((const uint8_t *)storage + payload_offset,
+                  (const uint8_t *)&canonical + payload_offset,
+                  payload_size) == 0;
 }
 
 static void SettingsApp_MarkDirty(TickType_t now)
@@ -235,33 +240,10 @@ void SettingsApp_Init(void)
     SettingsApp_LoadDefaults(&s_settings);
 
     if (AppConfig_Load(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage)) &&
-        ((storage.version == SETTINGS_APP_STORAGE_VERSION) ||
-         (storage.version == SETTINGS_APP_STORAGE_VERSION_V5) ||
-         (storage.version == SETTINGS_APP_STORAGE_VERSION_V4) ||
-         (storage.version == SETTINGS_APP_STORAGE_VERSION_V3) ||
-         (storage.version == SETTINGS_APP_STORAGE_VERSION_V2) ||
-         (storage.version == SETTINGS_APP_STORAGE_VERSION_V1)))
+        (storage.version == SETTINGS_APP_STORAGE_VERSION))
     {
         SettingsApp_FromStorage(&storage, &s_settings);
-        if ((storage.version == SETTINGS_APP_STORAGE_VERSION_V1) &&
-            (storage.poetry_popup_enabled != 0U))
-        {
-            s_settings.poetry_popup_interval_min = SETTINGS_APP_POETRY_INTERVAL_MIN_DEFAULT;
-        }
-        if (storage.poetry_popup_enabled !=
-            ((s_settings.poetry_popup_interval_min != SETTINGS_APP_POETRY_INTERVAL_MIN_DISABLED) ? 1U : 0U))
-        {
-            need_save = true;
-        }
-        if (storage.poetry_popup_interval_min != s_settings.poetry_popup_interval_min)
-        {
-            need_save = true;
-        }
-        if (storage.version != SETTINGS_APP_STORAGE_VERSION)
-        {
-            SettingsApp_Normalize(&s_settings);
-            need_save = true;
-        }
+        need_save = !SettingsApp_StorageIsCanonical(&storage, &s_settings);
         log_printf("[Settings] load ok");
     }
     else

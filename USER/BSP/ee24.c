@@ -1,265 +1,328 @@
-
-/************************************************************************************************************
-**************    Include Headers
-************************************************************************************************************/
-
 #include "ee24.h"
-#if EE24_RTOS == EE24_RTOS_DISABLE
-#elif EE24_RTOS == EE24_RTOS_CMSIS_V1
-#include "cmsis_os.h"
-#include "freertos.h"
-#elif EE24_RTOS == EE24_RTOS_CMSIS_V2
-#include "cmsis_os2.h"
-#include "freertos.h"
-#elif EE24_RTOS == EE24_RTOS_THREADX
-#include "app_threadx.h"
-#endif
 
-/************************************************************************************************************
-**************    Private Definitions
-************************************************************************************************************/
+#include <limits.h>
 
-// 建议修改后：
+#include "task.h"
+
 #if (EE24_SIZE <= 2)
-#define EE24_PSIZE     8
+#define EE24_PSIZE 8U
 #elif (EE24_SIZE <= 16)
-#define EE24_PSIZE     16
-#elif (EE24_SIZE <= 64)    // 32K 和 64K
-#define EE24_PSIZE     32
-#else                      // 128K 和 256K (你的型号)
-#define EE24_PSIZE     64  
+#define EE24_PSIZE 16U
+#elif (EE24_SIZE <= 64)
+#define EE24_PSIZE 32U
+#else
+#define EE24_PSIZE 64U
 #endif
 
-/************************************************************************************************************
-**************    Private Functions
-************************************************************************************************************/
+#define EE24_CAPACITY_BYTES ((uint32_t)EE24_SIZE * 128U)
+#define EE24_READY_POLL_TIMEOUT_MS 2U
 
-void EE24_Delay(uint32_t Delay);
-void EE24_Lock(EE24_HandleTypeDef *Handle);
-void EE24_UnLock(EE24_HandleTypeDef *Handle);
-
-/***********************************************************************************************************/
-
-void EE24_Delay(uint32_t Delay)
+static TickType_t EE24_MillisecondsToTicks(uint32_t milliseconds)
 {
-#if EE24_RTOS == EE24_RTOS_DISABLE
-  HAL_Delay(Delay);
-#elif (EE24_RTOS == EE24_RTOS_CMSIS_V1) || (EE24_RTOS == EE24_RTOS_CMSIS_V2)
-  uint32_t d = (configTICK_RATE_HZ * Delay) / 1000;
-  if (d == 0)
-      d = 1;
-  osDelay(d);
-#elif EE24_RTOS == EE24_RTOS_THREADX
-  uint32_t d = (TX_TIMER_TICKS_PER_SECOND * Delay) / 1000;
-  if (d == 0)
-    d = 1;
-  tx_thread_sleep(d);
+    TickType_t ticks = pdMS_TO_TICKS(milliseconds);
+
+    if ((milliseconds != 0U) && (ticks == 0U))
+    {
+        ticks = 1U;
+    }
+    return ticks;
+}
+
+static bool EE24_GetRemainingTimeout(uint32_t start_tick,
+                                     uint32_t timeout,
+                                     uint32_t *remaining)
+{
+    uint32_t elapsed;
+
+    if (remaining == NULL)
+    {
+        return false;
+    }
+
+    elapsed = HAL_GetTick() - start_tick;
+    if (elapsed >= timeout)
+    {
+        *remaining = 0U;
+        return false;
+    }
+
+    *remaining = timeout - elapsed;
+    return true;
+}
+
+static bool EE24_IsRangeValid(uint32_t address, size_t len)
+{
+    if ((len == 0U) || (address >= EE24_CAPACITY_BYTES))
+    {
+        return false;
+    }
+
+    return len <= (size_t)(EE24_CAPACITY_BYTES - address);
+}
+
+static uint8_t EE24_GetDeviceAddress(const EE24_HandleTypeDef *handle,
+                                     uint32_t address)
+{
+#if ((EE24_SIZE == EE24_1KBIT) || (EE24_SIZE == EE24_2KBIT))
+    (void)address;
+    return handle->Address;
+#elif (EE24_SIZE == EE24_4KBIT)
+    return (uint8_t)(handle->Address | ((address >> 8) & 0x01U));
+#elif (EE24_SIZE == EE24_8KBIT)
+    return (uint8_t)(handle->Address | ((address >> 8) & 0x03U));
+#elif (EE24_SIZE == EE24_16KBIT)
+    return (uint8_t)(handle->Address | ((address >> 8) & 0x07U));
+#else
+    (void)address;
+    return handle->Address;
 #endif
 }
 
-/***********************************************************************************************************/
-
-void EE24_Lock(EE24_HandleTypeDef *Handle)
+static uint16_t EE24_GetMemoryAddress(uint32_t address)
 {
-  while (Handle->Lock)
-  {
-    EE24_Delay(1);
-  }
-  Handle->Lock = 1;
+#if (EE24_SIZE <= EE24_16KBIT)
+    return (uint16_t)(address & 0x00FFU);
+#else
+    return (uint16_t)(address & 0xFFFFU);
+#endif
 }
 
-/***********************************************************************************************************/
-
-void EE24_UnLock(EE24_HandleTypeDef *Handle)
+static uint16_t EE24_GetMemoryAddressSize(void)
 {
-  Handle->Lock = 0;
+#if (EE24_SIZE <= EE24_16KBIT)
+    return I2C_MEMADD_SIZE_8BIT;
+#else
+    return I2C_MEMADD_SIZE_16BIT;
+#endif
 }
 
-/************************************************************************************************************
-**************    Public Functions
-************************************************************************************************************/
+static uint16_t EE24_GetReadChunk(uint32_t address, size_t len)
+{
+    size_t chunk = len;
+
+    if (chunk > UINT16_MAX)
+    {
+        chunk = UINT16_MAX;
+    }
+
+#if ((EE24_SIZE >= EE24_4KBIT) && (EE24_SIZE <= EE24_16KBIT))
+    {
+        size_t bank_remaining = 0x100U - (address & 0xFFU);
+
+        if (chunk > bank_remaining)
+        {
+            chunk = bank_remaining;
+        }
+    }
+#else
+    (void)address;
+#endif
+
+    return (uint16_t)chunk;
+}
+
+static bool EE24_TakeMutex(EE24_HandleTypeDef *handle, uint32_t timeout)
+{
+    if ((handle == NULL) || (handle->Mutex == NULL))
+    {
+        return false;
+    }
+
+    return xSemaphoreTake(handle->Mutex,
+                          EE24_MillisecondsToTicks(timeout)) == pdTRUE;
+}
+
+static void EE24_GiveMutex(EE24_HandleTypeDef *handle)
+{
+    if ((handle != NULL) && (handle->Mutex != NULL))
+    {
+        (void)xSemaphoreGive(handle->Mutex);
+    }
+}
+
+static bool EE24_WaitReady(EE24_HandleTypeDef *handle,
+                           uint8_t device_address,
+                           uint32_t start_tick,
+                           uint32_t timeout)
+{
+    uint32_t remaining;
+    uint32_t poll_timeout;
+
+    while (EE24_GetRemainingTimeout(start_tick, timeout, &remaining))
+    {
+        poll_timeout = remaining;
+        if (poll_timeout > EE24_READY_POLL_TIMEOUT_MS)
+        {
+            poll_timeout = EE24_READY_POLL_TIMEOUT_MS;
+        }
+
+        if (I2C_IsDeviceReady(handle->Bus, device_address, 1U,
+                              poll_timeout) == HAL_OK)
+        {
+            return true;
+        }
+
+        if (!EE24_GetRemainingTimeout(start_tick, timeout, &remaining))
+        {
+            break;
+        }
+        vTaskDelay(EE24_MillisecondsToTicks(1U));
+    }
+
+    return false;
+}
 
 #if EE24_USE_WP_PIN == false
-/**
-  * @brief  Initialize EEPROM handle
-  * @note   Initialize EEPROM handle and set EEPROM address
-  *
-  * @param  *Handle: Pointer to EE24_HandleTypeDef structure
-  * @param  *HI2c: Pointer to I2C_HandleTypeDef structure
-  * @param  I2CAddress: I2C Memory address
-  *
-  * @retval bool: true or false
-  */
-bool EE24_Init(EE24_HandleTypeDef *Handle, I2C_HandleTypeDef *HI2c, uint8_t I2CAddress)
-{
-  bool answer = false;
-  do
-  {
-    if ((Handle == NULL) || (HI2c == NULL))
-    {
-      break;
-    }
-    Handle->HI2c = HI2c;
-    Handle->Address = I2CAddress;
-    if (HAL_I2C_IsDeviceReady(Handle->HI2c, Handle->Address, 2, 100) == HAL_OK)
-    {
-      answer = true;
-    }
-  }
-  while (0);
-
-  return answer;
-}
+bool EE24_Init(EE24_HandleTypeDef *Handle, I2C_Bus_t *Bus, uint8_t I2CAddress)
 #else
-/**
-  * @brief  Initialize EEPROM handle
-  * @note   Initialize EEPROM handle and set memory address
-  *
-  * @param  *Handle: Pointer to EE24_HandleTypeDef structure
-  * @param  *HI2c: Pointer to I2C_HandleTypeDef structure
-  * @param  I2CAddress: I2C Memory address
-  * @param  *GPIO_TypeDef: Pointer to GPIO_TypeDef structure for Write protected pin
-  * @param  WpPin: PinNumber of write protected pin
-  *
-  * @retval bool: true or false
-  */
-bool EE24_Init(EE24_HandleTypeDef *Handle, I2C_HandleTypeDef *HI2c, uint8_t I2CAddress, GPIO_TypeDef *WpGpio, uint16_t WpPin)
+bool EE24_Init(EE24_HandleTypeDef *Handle, I2C_Bus_t *Bus, uint8_t I2CAddress,
+               GPIO_TypeDef *WpGpio, uint16_t WpPin)
+#endif
 {
-  bool answer = false;
-  do
-  {
-    if ((Handle == NULL) || (HI2c == NULL) || (WpGpio == NULL))
+    if ((Handle == NULL) || (Bus == NULL) || (Bus->hi2c == NULL) ||
+        (Bus->mutex == NULL) || (I2CAddress > 0x7FU))
     {
-      break;
+        return false;
     }
-    Handle->HI2c = HI2c;
-    Handle->Address = I2CAddress;
+
+#if EE24_USE_WP_PIN == true
+    if (WpGpio == NULL)
+    {
+        return false;
+    }
     Handle->WpGpio = WpGpio;
     Handle->WpPin = WpPin;
     HAL_GPIO_WritePin(Handle->WpGpio, Handle->WpPin, GPIO_PIN_SET);
-    if (HAL_I2C_IsDeviceReady(Handle->HI2c, Handle->Address, 2, 100) == HAL_OK)
-    {
-      answer = true;
-    }
-  }
-  while (0);
-
-  return answer;
-}
 #endif
 
-/***********************************************************************************************************/
-
-/**
-  * @brief  Read from Memory
-  * @note   Read data from memory and copy to an array
-  *
-  * @param  *Handle: Pointer to EE24_HandleTypeDef structure
-  * @param  Address: Start address for read
-  * @param  *Data: Pointer to copy data from EEPROM
-  * @param  Len: Data length to read
-  * @param  Timeout: Timeout of this operation in ms
-  *
-  * @retval bool: true or false
-  */
-bool EE24_Read(EE24_HandleTypeDef *Handle, uint32_t Address, uint8_t *Data, size_t Len, uint32_t Timeout)
-{
-  EE24_Lock(Handle);
-  bool answer = false;
-  do
-  {
-#if ((EE24_SIZE == EE24_1KBIT) || (EE24_SIZE == EE24_2KBIT))
-    if (HAL_I2C_Mem_Read(Handle->HI2c, Handle->Address, Address, I2C_MEMADD_SIZE_8BIT, Data, Len, Timeout) == HAL_OK)
-#elif (EE24_SIZE == EE24_4KBIT)
-    if (HAL_I2C_Mem_Read(Handle->HI2c, Handle->Address | ((Address & 0x0100) >> 7), (Address & 0xff), I2C_MEMADD_SIZE_8BIT, Data, Len, Timeout) == HAL_OK)
-#elif (EE24_SIZE == EE24_8KBIT)
-    if (HAL_I2C_Mem_Read(Handle->HI2c, Handle->Address | ((Address & 0x0300) >> 7), (Address & 0xff), I2C_MEMADD_SIZE_8BIT, Data, Len, Timeout) == HAL_OK)
-#elif (EE24_SIZE == EE24_16KBIT)
-    if (HAL_I2C_Mem_Read(Handle->HI2c, Handle->Address | ((Address & 0x0700) >> 7), (Address & 0xff), I2C_MEMADD_SIZE_8BIT, Data, Len, Timeout) == HAL_OK)
-#else
-    if (HAL_I2C_Mem_Read(Handle->HI2c, Handle->Address, Address, I2C_MEMADD_SIZE_16BIT, Data, Len, Timeout) == HAL_OK)
-#endif
+    Handle->Bus = Bus;
+    Handle->Address = I2CAddress;
+    if (Handle->Mutex == NULL)
     {
-      answer = true;
+        Handle->Mutex = xSemaphoreCreateMutexStatic(&Handle->MutexStorage);
     }
-  }
-  while (0);
+    if ((Handle->Mutex == NULL) ||
+        (EE24_GetDeviceAddress(Handle, EE24_CAPACITY_BYTES - 1U) > 0x7FU))
+    {
+        return false;
+    }
 
-  EE24_UnLock(Handle);
-  return answer;
+    return I2C_IsDeviceReady(Handle->Bus, Handle->Address, 2U, 100U) == HAL_OK;
 }
 
-/***********************************************************************************************************/
-
-/**
-  * @brief  Write to Memory
-  * @note   Write an array to memory
-  *
-  * @param  *Handle: Pointer to EE24_HandleTypeDef structure
-  * @param  Address: Start address for write
-  * @param  *Data: Pointer to copy data to EEPEOM
-  * @param  Len: Data length to write
-  * @param  Timeout: Timeout of this operation in ms
-  *
-  * @retval bool: true or false
-  */
-bool EE24_Write(EE24_HandleTypeDef *Handle, uint32_t Address, uint8_t *Data, size_t Len, uint32_t Timeout)
+bool EE24_Read(EE24_HandleTypeDef *Handle, uint32_t Address,
+               uint8_t *Data, size_t Len, uint32_t Timeout)
 {
-  EE24_Lock(Handle);
-  bool answer = false;
-  do
-  {
-    uint16_t w;
-    uint32_t startTime = HAL_GetTick();
+    uint32_t start_tick;
+    uint32_t remaining;
+    uint16_t chunk;
+    bool answer = false;
+
+    if ((Handle == NULL) || (Handle->Bus == NULL) || (Data == NULL) ||
+        (Timeout == 0U) || !EE24_IsRangeValid(Address, Len))
+    {
+        return false;
+    }
+
+    start_tick = HAL_GetTick();
+    if (!EE24_TakeMutex(Handle, Timeout))
+    {
+        return false;
+    }
+
+    while (Len != 0U)
+    {
+        if (!EE24_GetRemainingTimeout(start_tick, Timeout, &remaining))
+        {
+            break;
+        }
+
+        chunk = EE24_GetReadChunk(Address, Len);
+        if (I2C_Mem_ReadEx(Handle->Bus,
+                           EE24_GetDeviceAddress(Handle, Address),
+                           EE24_GetMemoryAddress(Address),
+                           EE24_GetMemoryAddressSize(),
+                           Data,
+                           chunk,
+                           remaining) != HAL_OK)
+        {
+            break;
+        }
+
+        Address += chunk;
+        Data += chunk;
+        Len -= chunk;
+    }
+
+    answer = (Len == 0U);
+    EE24_GiveMutex(Handle);
+    return answer;
+}
+
+bool EE24_Write(EE24_HandleTypeDef *Handle, uint32_t Address,
+                const uint8_t *Data, size_t Len, uint32_t Timeout)
+{
+    uint32_t start_tick;
+    uint32_t remaining;
+    uint16_t chunk;
+    uint8_t device_address;
+    bool answer = false;
+
+    if ((Handle == NULL) || (Handle->Bus == NULL) || (Data == NULL) ||
+        (Timeout == 0U) || !EE24_IsRangeValid(Address, Len))
+    {
+        return false;
+    }
+
+    start_tick = HAL_GetTick();
+    if (!EE24_TakeMutex(Handle, Timeout))
+    {
+        return false;
+    }
+
 #if EE24_USE_WP_PIN == true
     HAL_GPIO_WritePin(Handle->WpGpio, Handle->WpPin, GPIO_PIN_RESET);
 #endif
-    while (1)
+
+    while (Len != 0U)
     {
-      w = EE24_PSIZE - (Address  % EE24_PSIZE);
-      if (w > Len)
-      {
-        w = Len;
-      }
-#if ((EE24_SIZE == EE24_1KBIT) || (EE24_SIZE == EE24_2KBIT))
-        if (HAL_I2C_Mem_Write(Handle->HI2c, Handle->Address, Address, I2C_MEMADD_SIZE_8BIT, Data, w, Timeout) == HAL_OK)
-#elif (EE24_SIZE == EE24_4KBIT)
-        if (HAL_I2C_Mem_Write(Handle->HI2c, Handle->Address | ((Address & 0x0100) >> 7), (Address & 0xff), I2C_MEMADD_SIZE_8BIT, Data, w, Timeout) == HAL_OK)
-#elif (EE24_SIZE == EE24_8KBIT)
-        if (HAL_I2C_Mem_Write(Handle->HI2c, Handle->Address | ((Address & 0x0300) >> 7), (Address & 0xff), I2C_MEMADD_SIZE_8BIT, Data, w, Timeout) == HAL_OK)
-#elif (EE24_SIZE == EE24_16KBIT)
-        if (HAL_I2C_Mem_Write(Handle->HI2c, Handle->Address | ((Address & 0x0700) >> 7), (Address & 0xff), I2C_MEMADD_SIZE_8BIT, Data, w, Timeout) == HAL_OK)
-#else
-        if (HAL_I2C_Mem_Write(Handle->HI2c, Handle->Address, Address, I2C_MEMADD_SIZE_16BIT, Data, w, Timeout) == HAL_OK)
-#endif
-      {
-        EE24_Delay(10);
-        Len -= w;
-        Data += w;
-        Address += w;
-        if (Len == 0)
+        if (!EE24_GetRemainingTimeout(start_tick, Timeout, &remaining))
         {
-          answer = true;
-          break;
+            break;
         }
-        if (HAL_GetTick() - startTime >= Timeout)
+
+        chunk = (uint16_t)(EE24_PSIZE - (Address % EE24_PSIZE));
+        if ((size_t)chunk > Len)
         {
-          break;
+            chunk = (uint16_t)Len;
         }
-      }
-      else
-      {
-        break;
-      }
+        device_address = EE24_GetDeviceAddress(Handle, Address);
+
+        if (I2C_Mem_WriteEx(Handle->Bus,
+                            device_address,
+                            EE24_GetMemoryAddress(Address),
+                            EE24_GetMemoryAddressSize(),
+                            Data,
+                            chunk,
+                            remaining) != HAL_OK)
+        {
+            break;
+        }
+        if (!EE24_WaitReady(Handle, device_address, start_tick, Timeout))
+        {
+            break;
+        }
+
+        Address += chunk;
+        Data += chunk;
+        Len -= chunk;
     }
-  }
-  while (0);
+
+    answer = (Len == 0U);
 
 #if EE24_USE_WP_PIN == true
     HAL_GPIO_WritePin(Handle->WpGpio, Handle->WpPin, GPIO_PIN_SET);
 #endif
-  EE24_UnLock(Handle);
-  return answer;
+    EE24_GiveMutex(Handle);
+    return answer;
 }
-
-/***********************************************************************************************************/

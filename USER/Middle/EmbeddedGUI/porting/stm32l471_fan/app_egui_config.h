@@ -6,8 +6,10 @@
 #define EGUI_CONFIG_SCREEN_HEIGHT 142
 #define EGUI_CONFIG_COLOR_DEPTH   16
 
-/* Existing LVGL port used LV_COLOR_16_SWAP=1 for SPI RGB565 byte order. */
-#define EGUI_CONFIG_COLOR_16_SWAP 1
+/* RGB565 byte order is now handled in hardware: the LCD driver sends pixel
+ * payloads as 16-bit SPI frames (MSB first), so no CPU byte swap is needed.
+ * See LCD_SPI_SetFrame16() in USER/BSP. */
+#define EGUI_CONFIG_COLOR_16_SWAP 0
 
 /* Two PFB buffers let SPI DMA flush one tile while the next tile renders. */
 #define EGUI_CONFIG_PFB_WIDTH        EGUI_CONFIG_SCREEN_WIDTH

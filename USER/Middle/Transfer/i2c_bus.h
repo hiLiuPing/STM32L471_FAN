@@ -22,13 +22,14 @@ typedef struct {
 
 #ifdef USE_FREERTOS
     SemaphoreHandle_t mutex;
+    StaticSemaphore_t mutex_storage;
 #endif
     volatile uint8_t locked;
 
 } I2C_Bus_t;
 
 void I2C_Bus_Init(I2C_Bus_t *bus);
-void I2C_Bus_Lock(I2C_Bus_t *bus);
+uint8_t I2C_Bus_Lock(I2C_Bus_t *bus);
 void I2C_Bus_Unlock(I2C_Bus_t *bus);
 uint8_t I2C_Bus_IsLocked(const I2C_Bus_t *bus);
 I2C_HandleTypeDef *I2C_Bus_GetHandle(I2C_Bus_t *bus);
@@ -43,9 +44,19 @@ HAL_StatusTypeDef I2C_Read(I2C_Bus_t *bus, uint8_t dev_addr,
                            uint8_t *data, uint16_t len);
 
 HAL_StatusTypeDef I2C_Mem_Write(I2C_Bus_t *bus, uint8_t dev_addr,
-                                uint8_t reg, uint8_t *data, uint16_t len);
+                                uint8_t reg, const uint8_t *data, uint16_t len);
 
 HAL_StatusTypeDef I2C_Mem_Read(I2C_Bus_t *bus, uint8_t dev_addr,
                                uint8_t reg, uint8_t *data, uint16_t len);
+
+HAL_StatusTypeDef I2C_Mem_WriteEx(I2C_Bus_t *bus, uint8_t dev_addr,
+                                  uint16_t mem_addr, uint16_t mem_addr_size,
+                                  const uint8_t *data, uint16_t len,
+                                  uint32_t timeout);
+
+HAL_StatusTypeDef I2C_Mem_ReadEx(I2C_Bus_t *bus, uint8_t dev_addr,
+                                 uint16_t mem_addr, uint16_t mem_addr_size,
+                                 uint8_t *data, uint16_t len,
+                                 uint32_t timeout);
 
 #endif

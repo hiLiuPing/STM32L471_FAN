@@ -521,4 +521,3 @@ void qspi_psram_test(qspi_psram_t *p)
 fail:
     log_printf("======== PSRAM TEST FAIL ========\r\n");
 }
-

@@ -48,6 +48,8 @@ void LCD_WR_Bus(uint8_t dat);
 void LCD_WR_DATA8(uint8_t dat);
 void LCD_WR_DATA(uint16_t dat);
 void LCD_WR_REG(uint8_t reg);
+/* 像素突发用 16 位 SPI 帧（免字节交换），命令仍为 8 位帧 */
+void LCD_SPI_SetFrame16(bool enable, bool wait_busy);
 
 /* ���廭����ɫ */
 #define WHITE 0xFFFF

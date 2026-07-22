@@ -14,7 +14,7 @@ static int32_t generic_i2c_write(void *handle, uint8_t reg, const uint8_t *data,
 {
     generic_i2c_t *dev = (generic_i2c_t *)handle;
 
-    return (I2C_Mem_Write(dev->bus, (uint8_t)dev->dev_addr, reg, (uint8_t *)data, len) == HAL_OK) ? 0 : -1;
+    return (I2C_Mem_Write(dev->bus, (uint8_t)dev->dev_addr, reg, data, len) == HAL_OK) ? 0 : -1;
 }
 
 static int32_t generic_i2c_read(void *handle, uint8_t reg, uint8_t *data, uint16_t len)

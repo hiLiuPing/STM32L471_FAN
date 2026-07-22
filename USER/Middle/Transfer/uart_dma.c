@@ -1,6 +1,9 @@
 #include "uart_dma.h"
 #include <string.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 //  uint32_t number = 0;
 //  uint32_t numberB = 0;
 
@@ -87,11 +90,21 @@ int uart_dma_read(uart_dma_t* ctrl, uint8_t *data, uint32_t len, uint32_t timeou
     uint32_t tick = HAL_GetTick();
     uint32_t rec = 0;
 
-    while (rec < len)
+    for (;;)
     {
         rec += lwrb_read(&ctrl->uart_rb, &data[rec], len - rec);
 
-        if ((HAL_GetTick() - tick) > timeout) break;
+        /* timeout=0 表示单次非阻塞读取；到期判定用 >=，环空时不再自旋 */
+        if ((rec >= len) || ((HAL_GetTick() - tick) >= timeout))
+        {
+            break;
+        }
+
+        /* 等数据期间让出 CPU（1 tick），而不是忙等轮询环形缓冲 */
+        if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
+        {
+            vTaskDelay(1U);
+        }
     }
     return rec;
 }

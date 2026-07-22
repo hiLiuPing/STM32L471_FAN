@@ -1,16 +1,40 @@
 #include "lcd.h"
 #include "lcdfont.h"
 #include "string.h"
-// #include "dma.h"
+
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include "task.h"
 
 extern SPI_HandleTypeDef hspi1;
-// extern DMA_HandleTypeDef DMA_InitStructure;
+extern DMA_HandleTypeDef hdma_spi1_tx;
 
 static volatile bool s_lcd_dma_busy = false;
 static lcd_dma_done_cb_t s_lcd_dma_done_cb = NULL;
 static void *s_lcd_dma_user_data = NULL;
+static SemaphoreHandle_t s_lcd_dma_done_sem = NULL;
+static StaticSemaphore_t s_lcd_dma_done_sem_buf;
+static bool s_lcd_render_ready = false;
 
-static void LCD_DMA_Finish(SPI_HandleTypeDef *hspi, bool wait_until_idle)
+#define LCD_DMA_WAIT_TIMEOUT_MS 20U
+
+static void LCD_Render_Setup(void)
+{
+    if (s_lcd_render_ready)
+    {
+        return;
+    }
+
+    /* One DMA request per pixel instead of per byte. */
+    hdma_spi1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+    hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+    (void)HAL_DMA_Init(&hdma_spi1_tx);
+
+    s_lcd_dma_done_sem = xSemaphoreCreateBinaryStatic(&s_lcd_dma_done_sem_buf);
+    s_lcd_render_ready = true;
+}
+
+static void LCD_DMA_Finish(SPI_HandleTypeDef *hspi)
 {
     lcd_dma_done_cb_t done_cb;
     void *user_data;
@@ -20,17 +44,65 @@ static void LCD_DMA_Finish(SPI_HandleTypeDef *hspi, bool wait_until_idle)
         return;
     }
 
-    while (wait_until_idle && (__HAL_SPI_GET_FLAG(hspi, SPI_FLAG_BSY) == SET))
-    {
-    }
-
     LCD_CS_Set();
+    LCD_SPI_SetFrame16(false, false);
 
     done_cb = s_lcd_dma_done_cb;
     user_data = s_lcd_dma_user_data;
     s_lcd_dma_done_cb = NULL;
     s_lcd_dma_user_data = NULL;
     s_lcd_dma_busy = false;
+
+    if (done_cb != NULL)
+    {
+        done_cb(user_data);
+    }
+
+    /* Wake a task blocked in LCD_Color_Render_DMA_Wait(). The callback above
+     * may already have chained the next transfer; waiters re-check the busy
+     * flag, so a spurious give is harmless. */
+    if (s_lcd_dma_done_sem != NULL)
+    {
+        if (__get_IPSR() != 0U)
+        {
+            BaseType_t higher_prio_woken = pdFALSE;
+
+            (void)xSemaphoreGiveFromISR(s_lcd_dma_done_sem, &higher_prio_woken);
+            portYIELD_FROM_ISR(higher_prio_woken);
+        }
+        else
+        {
+            (void)xSemaphoreGive(s_lcd_dma_done_sem);
+        }
+    }
+}
+
+/* Recover a transfer whose DMA interrupt was lost or whose peripheral state
+ * no longer progresses. The callback is completed in task context so the PFB
+ * queue cannot remain permanently owned by the failed tile. */
+static void LCD_DMA_ForceRecover(void)
+{
+    lcd_dma_done_cb_t done_cb;
+    void *user_data;
+
+    taskENTER_CRITICAL();
+    if (!s_lcd_dma_busy)
+    {
+        taskEXIT_CRITICAL();
+        return;
+    }
+
+    (void)HAL_SPI_DMAStop(&hspi1);
+    __HAL_SPI_DISABLE(&hspi1);
+    LCD_CS_Set();
+    LCD_SPI_SetFrame16(false, false);
+
+    done_cb = s_lcd_dma_done_cb;
+    user_data = s_lcd_dma_user_data;
+    s_lcd_dma_done_cb = NULL;
+    s_lcd_dma_user_data = NULL;
+    s_lcd_dma_busy = false;
+    taskEXIT_CRITICAL();
 
     if (done_cb != NULL)
     {
@@ -54,8 +126,7 @@ void LCD_DrawPoint(uint16_t x, uint16_t y, uint16_t color)
 void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const uint16_t *color_p)
 {
     uint32_t pixel_count;
-    uint32_t byte_count;
-    const uint8_t *data;
+    const uint16_t *data;
     const uint32_t max_chunk = 0xFFFFU;
 
     if ((color_p == NULL) || (xe < xs) || (ye < ys))
@@ -63,18 +134,20 @@ void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const 
         return;
     }
 
+    LCD_Render_Setup();
+
     pixel_count = ((uint32_t)xe - xs + 1U) * ((uint32_t)ye - ys + 1U);
-    byte_count = pixel_count * 2U;
-    data = (const uint8_t *)color_p;
+    data = color_p;
 
     LCD_Address_Set(xs, ys, xe, ye);
 
     LCD_DC_Set();
     LCD_CS_Clr();
+    LCD_SPI_SetFrame16(true, true);
 
-    while (byte_count > 0U)
+    while (pixel_count > 0U)
     {
-        uint16_t chunk = (byte_count > max_chunk) ? (uint16_t)max_chunk : (uint16_t)byte_count;
+        uint16_t chunk = (pixel_count > max_chunk) ? (uint16_t)max_chunk : (uint16_t)pixel_count;
 
         if (HAL_SPI_Transmit(&hspi1, (uint8_t *)data, chunk, HAL_MAX_DELAY) != HAL_OK)
         {
@@ -82,9 +155,10 @@ void LCD_Color_Render(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, const 
         }
 
         data += chunk;
-        byte_count -= chunk;
+        pixel_count -= chunk;
     }
 
+    LCD_SPI_SetFrame16(false, true);
     LCD_CS_Set();
 }
 
@@ -97,7 +171,6 @@ bool LCD_Color_Render_DMA(uint16_t xs,
                           void *user_data)
 {
     uint32_t pixel_count;
-    uint32_t byte_count;
 
     if ((color_p == NULL) || (xe < xs) || (ye < ys) || s_lcd_dma_busy)
     {
@@ -105,12 +178,14 @@ bool LCD_Color_Render_DMA(uint16_t xs,
     }
 
     pixel_count = ((uint32_t)xe - xs + 1U) * ((uint32_t)ye - ys + 1U);
-    byte_count = pixel_count * 2U;
 
-    if ((byte_count == 0U) || (byte_count > 0xFFFFU))
+    /* 16-bit frames: the DMA item count is the pixel count. */
+    if ((pixel_count == 0U) || (pixel_count > 0xFFFFU))
     {
         return false;
     }
+
+    LCD_Render_Setup();
 
     LCD_Address_Set(xs, ys, xe, ye);
 
@@ -120,9 +195,11 @@ bool LCD_Color_Render_DMA(uint16_t xs,
 
     LCD_DC_Set();
     LCD_CS_Clr();
+    LCD_SPI_SetFrame16(true, true);
 
-    if (HAL_SPI_Transmit_DMA(&hspi1, (uint8_t *)color_p, (uint16_t)byte_count) != HAL_OK)
+    if (HAL_SPI_Transmit_DMA(&hspi1, (uint8_t *)color_p, (uint16_t)pixel_count) != HAL_OK)
     {
+        LCD_SPI_SetFrame16(false, false);
         LCD_CS_Set();
         s_lcd_dma_done_cb = NULL;
         s_lcd_dma_user_data = NULL;
@@ -135,19 +212,38 @@ bool LCD_Color_Render_DMA(uint16_t xs,
 
 void LCD_Color_Render_DMA_Wait(void)
 {
+    TickType_t wait_start = xTaskGetTickCount();
+
     while (s_lcd_dma_busy)
     {
+        /* Block on the completion semaphore instead of spinning: during a
+         * full-tile SPI transfer (~170us per 428x16 tile) the CPU is handed
+         * back to other tasks. Falls back to spinning before the scheduler
+         * runs or in interrupt context. */
+        if ((s_lcd_dma_done_sem != NULL) &&
+            (__get_IPSR() == 0U) &&
+            (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING))
+        {
+            (void)xSemaphoreTake(s_lcd_dma_done_sem, pdMS_TO_TICKS(10U));
+        }
+
+        if ((xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) &&
+            ((xTaskGetTickCount() - wait_start) >= pdMS_TO_TICKS(LCD_DMA_WAIT_TIMEOUT_MS)))
+        {
+            LCD_DMA_ForceRecover();
+            wait_start = xTaskGetTickCount();
+        }
     }
 }
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    LCD_DMA_Finish(hspi, true);
+    LCD_DMA_Finish(hspi);
 }
 
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
-    LCD_DMA_Finish(hspi, false);
+    LCD_DMA_Finish(hspi);
 }
 
 /**

@@ -70,6 +70,25 @@ void LCD_WR_Bus(uint8_t dat)
     LCD_CS_Set();
 }
 
+/*
+ * 像素突发模式：RGB565 像素以 16 位 SPI 帧发送（先移出 [15:8] 再 [7:0]，
+ * 与面板字节序一致），省去帧缓冲的 CPU 字节交换；命令/参数仍用 8 位帧。
+ * DS 位仅允许在 SPE=0 时修改（RM0351）。
+ */
+void LCD_SPI_SetFrame16(bool enable, bool wait_busy)
+{
+    if (wait_busy)
+    {
+        while (__HAL_SPI_GET_FLAG(&hspi1, SPI_FLAG_BSY) == SET)
+        {
+        }
+    }
+    __HAL_SPI_DISABLE(&hspi1);
+    MODIFY_REG(hspi1.Instance->CR2, SPI_CR2_DS,
+               enable ? SPI_DATASIZE_16BIT : SPI_DATASIZE_8BIT);
+    hspi1.Init.DataSize = enable ? SPI_DATASIZE_16BIT : SPI_DATASIZE_8BIT;
+}
+
 /**
  * @brief       ÏòÒº¾§Ð´¼Ä´æÆ÷ÃüÁî
  * @param       reg: ÒªÐ´µÄÃüÁî
@@ -196,26 +215,42 @@ void  MY_LCD_Fill(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey, uint16_t *
 
 void LCD_Fill(uint16_t xs, uint16_t ys, uint16_t xe, uint16_t ye, uint16_t color)
 {
-    uint32_t i;
     uint32_t num = (uint32_t)(xe - xs) * (ye - ys);
-    
+    /* 批量填充：整块行缓冲一次发送，代替逐字节 SPI 事务。
+     * 走 LCD_Color_Render 的 16 位帧路径，无需字节序拆分。 */
+    uint16_t line_buf[128];
+    uint32_t i;
+
+    if (num == 0U)
+    {
+        return;
+    }
+
+    for (i = 0U; i < (sizeof(line_buf) / sizeof(line_buf[0])); i++)
+    {
+        line_buf[i] = color;
+    }
+
     LCD_Address_Set(xs, ys, xe - 1, ye - 1);
-    
-    // 设置 DC 为数据模式
+
     LCD_DC_Set();
     LCD_CS_Clr();
-    
-    // 循环发送，直接调用 HAL_SPI_Transmit
-    // 注意：如果是 16 位颜色，这里手动拆分为两个 8 位发送，效率更高
-    uint8_t color_high = color >> 8;
-    uint8_t color_low = color & 0xFF;
-    
-    for(i = 0; i < num; i++)
+    LCD_SPI_SetFrame16(true, true);
+
+    while (num > 0U)
     {
-        HAL_SPI_Transmit(&hspi1, &color_high, 1, 0xFF);
-        HAL_SPI_Transmit(&hspi1, &color_low, 1, 0xFF);
+        uint16_t chunk = (num > (sizeof(line_buf) / sizeof(line_buf[0])))
+                             ? (uint16_t)(sizeof(line_buf) / sizeof(line_buf[0]))
+                             : (uint16_t)num;
+
+        if (HAL_SPI_Transmit(&hspi1, (uint8_t *)line_buf, chunk, 0xFFFF) != HAL_OK)
+        {
+            break;
+        }
+        num -= chunk;
     }
-    
+
+    LCD_SPI_SetFrame16(false, true);
     LCD_CS_Set();
 }
 

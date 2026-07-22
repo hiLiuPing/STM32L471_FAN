@@ -1,6 +1,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "stm32l4xx.h"
+
 static StaticTask_t g_idle_task_tcb;
 static StackType_t g_idle_task_stack[configMINIMAL_STACK_SIZE];
 
@@ -35,6 +37,13 @@ void vApplicationMallocFailedHook(void)
 
 void vApplicationTickHook(void)
 {
+}
+
+void vApplicationIdleHook(void)
+{
+    /* Sleep 模式：内核时钟停、外设/SysTick 继续，任意中断即刻唤醒。
+     * 空闲时不再空转烧电，SWD 调试不受影响（仅 STOP/STANDBY 才需处理）。 */
+    __WFI();
 }
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)

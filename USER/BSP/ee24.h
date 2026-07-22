@@ -38,14 +38,15 @@ extern "C"
 ************************************************************************************************************/
 
 #include <stdbool.h>
-#include "i2c.h"
+#include <stddef.h>
+#include "i2c_bus.h"
 #include "NimaLTD.I-CUBE-EE24_conf.h"
 
 /************************************************************************************************************
 **************    Public Definitions
 ************************************************************************************************************/
 
-#define EE24_ADDRESS_DEFAULT 0xA0
+#define EE24_ADDRESS_DEFAULT 0x50U
 
 /************************************************************************************************************
 **************    Public struct/enum
@@ -53,9 +54,10 @@ extern "C"
 
 typedef struct
 {
-  I2C_HandleTypeDef      *HI2c;
+  I2C_Bus_t              *Bus;
   uint8_t                Address;
-  uint8_t                Lock;
+  SemaphoreHandle_t      Mutex;
+  StaticSemaphore_t      MutexStorage;
 #if EE24_USE_WP_PIN == true
   GPIO_TypeDef           *WpGpio;
   uint16_t                WpPin;
@@ -68,12 +70,12 @@ typedef struct
 ************************************************************************************************************/
 
 #if EE24_USE_WP_PIN == false
-bool EE24_Init(EE24_HandleTypeDef *Handle, I2C_HandleTypeDef *HI2c, uint8_t I2CAddress);
+bool EE24_Init(EE24_HandleTypeDef *Handle, I2C_Bus_t *Bus, uint8_t I2CAddress);
 #else
-bool EE24_Init(EE24_HandleTypeDef *Handle, I2C_HandleTypeDef *HI2c, uint8_t I2CAddress, GPIO_TypeDef *WpGpio, uint16_t WpPin);
+bool EE24_Init(EE24_HandleTypeDef *Handle, I2C_Bus_t *Bus, uint8_t I2CAddress, GPIO_TypeDef *WpGpio, uint16_t WpPin);
 #endif
 bool EE24_Read(EE24_HandleTypeDef *Handle, uint32_t Address, uint8_t *Data, size_t Len, uint32_t Timeout);
-bool EE24_Write(EE24_HandleTypeDef *Handle, uint32_t Address, uint8_t *Data, size_t Len, uint32_t Timeout);
+bool EE24_Write(EE24_HandleTypeDef *Handle, uint32_t Address, const uint8_t *Data, size_t Len, uint32_t Timeout);
 
 #ifdef __cplusplus
 }

@@ -10,21 +10,13 @@ eeprom_ctx_t g_ee_ctx = {0};
 
 bool AppConfig_Init(eeprom_ctx_t *ctx, I2C_Bus_t *bus, uint8_t dev_addr)
 {
-    I2C_HandleTypeDef *hi2c;
-
     if ((ctx == NULL) || (bus == NULL))
     {
         return false;
     }
 
-    hi2c = I2C_Bus_GetHandle(bus);
-    if (hi2c == NULL)
-    {
-        return false;
-    }
-
-    ctx->bus = bus;
-    if (EE24_Init(&ctx->handle, hi2c, dev_addr))
+    ctx->initialized = 0U;
+    if (EE24_Init(&ctx->handle, bus, dev_addr))
     {
         ctx->initialized = 1U;
         log_printf("[EEPROM] init ok");
@@ -44,19 +36,16 @@ bool AppConfig_Load(uint32_t offset, void *data, uint16_t size)
     uint16_t calc_crc;
 
     if ((data == NULL) || (size < 6U) ||
-        (g_ee_ctx.initialized == 0U) || (g_ee_ctx.bus == NULL))
+        (g_ee_ctx.initialized == 0U))
     {
         return false;
     }
 
-    I2C_Bus_Lock(g_ee_ctx.bus);
     if (!EE24_Read(&g_ee_ctx.handle, offset, buf, size, 1000U))
     {
-        I2C_Bus_Unlock(g_ee_ctx.bus);
         log_printf("[EEPROM] read failed");
         return false;
     }
-    I2C_Bus_Unlock(g_ee_ctx.bus);
 
     memcpy(&magic, buf, sizeof(magic));
     if (magic != APP_CONFIG_MAGIC)
@@ -77,7 +66,7 @@ bool AppConfig_Save(uint32_t offset, void *data, uint16_t size)
     uint16_t crc;
 
     if ((data == NULL) || (size < 6U) ||
-        (g_ee_ctx.initialized == 0U) || (g_ee_ctx.bus == NULL))
+        (g_ee_ctx.initialized == 0U))
     {
         return false;
     }
@@ -86,14 +75,11 @@ bool AppConfig_Save(uint32_t offset, void *data, uint16_t size)
     crc = AppConfig_CRC16(buf, (uint16_t)(size - sizeof(crc)));
     memcpy(&buf[size - sizeof(crc)], &crc, sizeof(crc));
 
-    I2C_Bus_Lock(g_ee_ctx.bus);
     if (!EE24_Write(&g_ee_ctx.handle, offset, buf, size, 1000U))
     {
-        I2C_Bus_Unlock(g_ee_ctx.bus);
         log_printf("[EEPROM] write failed");
         return false;
     }
-    I2C_Bus_Unlock(g_ee_ctx.bus);
 
     return true;
 }
