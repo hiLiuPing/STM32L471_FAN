@@ -18,6 +18,7 @@
 #endif
 
 #define PSRAM_MMAP_TIMEOUT_PERIOD 1024U
+#define PSRAM_HAL_TIMEOUT_MS      100U
 
 static int qspi_psram_send_reset_locked(qspi_psram_t *p, uint32_t instruction_mode)
 {
@@ -28,13 +29,13 @@ static int qspi_psram_send_reset_locked(qspi_psram_t *p, uint32_t instruction_mo
     cmd.DataMode = QSPI_DATA_NONE;
     cmd.DummyCycles = 0U;
     cmd.Instruction = PSRAM_CMD_RESET_EN;
-    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         return -1;
     }
 
     cmd.Instruction = PSRAM_CMD_RESET;
-    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         return -1;
     }
@@ -66,7 +67,7 @@ static int qspi_psram_enter_qpi_locked(qspi_psram_t *p)
     cmd.DataMode = QSPI_DATA_NONE;
     cmd.DummyCycles = 0U;
     cmd.Instruction = PSRAM_CMD_ENTER_QPI;
-    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         return -1;
     }
@@ -148,7 +149,7 @@ int qspi_psram_init(qspi_psram_t *p, QSPI_HandleTypeDef *hqspi)
 
     /* RESET ENABLE (0x66) */
     cmd.Instruction = PSRAM_CMD_RESET_EN;
-    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         log_printf("[PSRAM] reset en FAIL\r\n");
         return -1;
@@ -156,7 +157,7 @@ int qspi_psram_init(qspi_psram_t *p, QSPI_HandleTypeDef *hqspi)
 
     /* RESET (0x99) */
     cmd.Instruction = PSRAM_CMD_RESET;
-    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         log_printf("[PSRAM] reset FAIL\r\n");
         return -1;
@@ -166,7 +167,7 @@ int qspi_psram_init(qspi_psram_t *p, QSPI_HandleTypeDef *hqspi)
 
     /* ENTER QPI (0x35) */
     cmd.Instruction = PSRAM_CMD_ENTER_QPI;
-    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         log_printf("[PSRAM] enter QPI FAIL\r\n");
         return -1;
@@ -220,12 +221,12 @@ int qspi_psram_read(qspi_psram_t *p, uint32_t addr, uint8_t *buf, uint32_t len)
     cmd.Address           = addr;
     cmd.NbData            = len;
 
-    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         PSRAM_UNLOCK(p);
         return -1;
     }
-    if (HAL_QSPI_Receive(p->hqspi, buf, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Receive(p->hqspi, buf, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         PSRAM_UNLOCK(p);
         return -1;
@@ -277,12 +278,12 @@ int qspi_psram_write(qspi_psram_t *p, uint32_t addr, const uint8_t *buf, uint32_
     cmd.Address           = addr;
     cmd.NbData            = len;
 
-    if (HAL_QSPI_Command(p->hqspi, &cmd, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         ret = -1;
         goto out;
     }
-    if (HAL_QSPI_Transmit(p->hqspi, (uint8_t *)buf, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_QSPI_Transmit(p->hqspi, (uint8_t *)buf, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
     {
         ret = -1;
         goto out;
