@@ -3,21 +3,25 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "core/egui_core.h"
 #include "core/egui_display_driver.h"
 #include "core/egui_platform.h"
 #include "core/egui_timer.h"
+#include "home_theme2_cloud_cache.h"
 #include "lcd.h"
 #include "log.h"
 #include "main.h"
 #include "page_manager.h"
+#include "psram_app.h"
 #include "settings_app.h"
 #include "systemMonitor_app.h"
 #include "ui.h"
 
 #define EGUI_PORT_BRIGHTNESS_CHECK_MS        1000U
 #define EGUI_PORT_BRIGHTNESS_PERCENT_INVALID 0xFFU
+#define EGUI_PORT_PSRAM_READ_CHUNK            128U
 
 static egui_core_t s_egui_core;
 EGUI_CONFIG_PFB_BUFFER_DECLARE(s_egui_pfb);
@@ -75,13 +79,66 @@ static void egui_port_interrupt_enable(egui_base_t level)
     __set_PRIMASK((uint32_t)level);
 }
 
+static void egui_port_load_external_resource(egui_core_t *core,
+                                             void *dest,
+                                             egui_uintptr_t res_id,
+                                             uint32_t start_offset,
+                                             uint32_t size)
+{
+    uint32_t resource_addr;
+    uint32_t copied = 0U;
+
+    (void)core;
+    if ((dest == NULL) || (size == 0U))
+    {
+        return;
+    }
+
+    memset(dest, 0, size);
+    if ((res_id < PSRAM_EXTERNAL_RESOURCE_ID_BASE) ||
+        ((res_id - PSRAM_EXTERNAL_RESOURCE_ID_BASE) >= g_psram.total_size))
+    {
+        HomeTheme2CloudCache_MarkReadFault();
+        return;
+    }
+
+    resource_addr = (uint32_t)(res_id - PSRAM_EXTERNAL_RESOURCE_ID_BASE);
+    if ((start_offset > (g_psram.total_size - resource_addr)) ||
+        (size > (g_psram.total_size - resource_addr - start_offset)))
+    {
+        HomeTheme2CloudCache_MarkReadFault();
+        return;
+    }
+
+    resource_addr += start_offset;
+    while (copied < size)
+    {
+        uint32_t chunk = size - copied;
+
+        if (chunk > EGUI_PORT_PSRAM_READ_CHUNK)
+        {
+            chunk = EGUI_PORT_PSRAM_READ_CHUNK;
+        }
+        if (qspi_psram_read(&g_psram,
+                            resource_addr + copied,
+                            (uint8_t *)dest + copied,
+                            chunk) != 0)
+        {
+            memset((uint8_t *)dest + copied, 0, size - copied);
+            HomeTheme2CloudCache_MarkReadFault();
+            return;
+        }
+        copied += chunk;
+    }
+}
+
 static const egui_platform_ops_t s_egui_platform_ops = {
     .assert_handler = egui_port_assert_handler,
     .delay = egui_port_delay,
     .get_tick_ms = egui_port_get_tick_ms,
     .interrupt_disable = egui_port_interrupt_disable,
     .interrupt_enable = egui_port_interrupt_enable,
-    .load_external_resource = NULL,
+    .load_external_resource = egui_port_load_external_resource,
     .timer_start = NULL,
     .timer_stop = NULL,
 };

@@ -22,6 +22,7 @@ int PSRAM_App_Init(void)
     }
 
     log_printf("[APP] PSRAM init OK\r\n");
+    qspi_psram_log_id(&g_psram);
 
     // qspi_psram_test(&g_psram);
 

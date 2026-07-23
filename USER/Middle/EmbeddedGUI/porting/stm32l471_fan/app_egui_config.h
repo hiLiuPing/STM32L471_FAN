@@ -22,6 +22,13 @@
 /* Enable 8-bit alpha channel pixel accessor for egui_image_std */
 #define EGUI_CONFIG_FUNCTION_IMAGE_FORMAT_RGB565_8 1
 
+/* Dynamic-theme cloud frames live in PSRAM and are loaded through bounded
+ * SRAM row caches. QSPI and the LCD SPI bus are independent peripherals. */
+#define EGUI_CONFIG_FUNCTION_EXTERNAL_RESOURCE 1
+#define EGUI_CONFIG_EXTERNAL_RESOURCE_SHARED_DISPLAY_BUS 0
+#define EGUI_CONFIG_IMAGE_EXTERNAL_DATA_CACHE_MAX_BYTES  (229U * 2U * 2U)
+#define EGUI_CONFIG_IMAGE_EXTERNAL_ALPHA_CACHE_MAX_BYTES (229U * 2U)
+
 /* No touch in this migration round. Physical keys remain enabled. */
 #define EGUI_CONFIG_FUNCTION_SUPPORT_TOUCH 0
 #define EGUI_CONFIG_FUNCTION_SUPPORT_KEY   1
@@ -52,7 +59,7 @@
 #define EGUI_CONFIG_DEBUG_LOG_LEVEL 0
 
 /* Debug monitors: FPS/render time (bottom-right) and memory (bottom-left) */
-#define EGUI_CONFIG_DEBUG_PERF_MONITOR_SHOW 0
+#define EGUI_CONFIG_DEBUG_PERF_MONITOR_SHOW 1
 #define EGUI_CONFIG_DEBUG_MEM_MONITOR_SHOW  0
 
 #endif /* __APP_EGUI_CONFIG_H__ */

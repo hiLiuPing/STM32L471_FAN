@@ -11,6 +11,11 @@ extern qspi_psram_t g_psram;
 #define PSRAM_UI_CACHE_BASE     (PSRAM_BASE)
 #define PSRAM_UI_CACHE_SIZE     (8U * 1024U * 1024U)
 
+/* External-resource IDs are opaque handles, not CPU-dereferenceable pointers. */
+#define PSRAM_EXTERNAL_RESOURCE_ID_BASE ((uintptr_t)0xA5000000UL)
+#define PSRAM_EXTERNAL_RESOURCE_ID(addr) \
+    (PSRAM_EXTERNAL_RESOURCE_ID_BASE + (uintptr_t)(addr))
+
 
 
 

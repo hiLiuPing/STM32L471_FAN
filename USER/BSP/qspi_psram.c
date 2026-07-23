@@ -17,8 +17,57 @@
 #define PSRAM_UNLOCK(p)
 #endif
 
-#define PSRAM_MMAP_TIMEOUT_PERIOD 1024U
-#define PSRAM_HAL_TIMEOUT_MS      100U
+#define PSRAM_MMAP_TIMEOUT_PERIOD  64U
+#define PSRAM_MAX_TRANSACTION_SIZE 128U
+#define PSRAM_HAL_TIMEOUT_MS        100U
+
+static int qspi_psram_read_id_spi_locked(qspi_psram_t *p)
+{
+    QSPI_CommandTypeDef cmd = {0};
+    uint8_t all_zero = 1U;
+    uint8_t all_ff = 1U;
+    uint32_t i;
+
+    cmd.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    cmd.Instruction = PSRAM_CMD_READ_ID;
+    cmd.AddressMode = QSPI_ADDRESS_1_LINE;
+    cmd.AddressSize = QSPI_ADDRESS_24_BITS;
+    cmd.Address = 0U;
+    cmd.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
+    cmd.DataMode = QSPI_DATA_1_LINE;
+    cmd.DummyCycles = 0U;
+    cmd.NbData = PSRAM_ID_SIZE;
+    cmd.SIOOMode = QSPI_SIOO_INST_EVERY_CMD;
+
+    if ((HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK) ||
+        (HAL_QSPI_Receive(p->hqspi, p->id, PSRAM_HAL_TIMEOUT_MS) != HAL_OK))
+    {
+        (void)HAL_QSPI_Abort(p->hqspi);
+        memset(p->id, 0, sizeof(p->id));
+        p->id_valid = 0U;
+        return -1;
+    }
+
+    for (i = 0U; i < PSRAM_ID_SIZE; i++)
+    {
+        if (p->id[i] != 0x00U)
+        {
+            all_zero = 0U;
+        }
+        if (p->id[i] != 0xFFU)
+        {
+            all_ff = 0U;
+        }
+    }
+    if ((all_zero != 0U) || (all_ff != 0U))
+    {
+        p->id_valid = 0U;
+        return -1;
+    }
+
+    p->id_valid = 1U;
+    return 0;
+}
 
 static int qspi_psram_send_reset_locked(qspi_psram_t *p, uint32_t instruction_mode)
 {
@@ -165,6 +214,10 @@ int qspi_psram_init(qspi_psram_t *p, QSPI_HandleTypeDef *hqspi)
 
     HAL_Delay(1);
 
+    /* Capture the ID while the device is still in SPI mode. Runtime ID
+     * queries return this cached value and never disturb the QPI session. */
+    (void)qspi_psram_read_id_spi_locked(p);
+
     /* ENTER QPI (0x35) */
     cmd.Instruction = PSRAM_CMD_ENTER_QPI;
     if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
@@ -198,18 +251,22 @@ int qspi_psram_init(qspi_psram_t *p, QSPI_HandleTypeDef *hqspi)
 int qspi_psram_read(qspi_psram_t *p, uint32_t addr, uint8_t *buf, uint32_t len)
 {
     QSPI_CommandTypeDef cmd = {0};
+    uint32_t offset = 0U;
 
-    if (p == NULL || !p->initialized || buf == NULL || len == 0)
+    if (p == NULL || !p->initialized || !p->qpi_mode || buf == NULL || len == 0U)
         return -1;
 
-    if (addr + len > p->total_size)
+    if ((addr >= p->total_size) || (len > (p->total_size - addr)))
         return -1;
 
     /* 如果在 MMAP 模式下，不应当走命令模式读，提示使用者走指针访问。 */
-    if (p->mmap_active)
-        return -1;
-
     PSRAM_LOCK(p);
+
+    if (p->mmap_active)
+    {
+        PSRAM_UNLOCK(p);
+        return -1;
+    }
 
     cmd.InstructionMode   = QSPI_INSTRUCTION_4_LINES;
     cmd.AddressMode       = QSPI_ADDRESS_4_LINES;
@@ -218,18 +275,25 @@ int qspi_psram_read(qspi_psram_t *p, uint32_t addr, uint8_t *buf, uint32_t len)
     cmd.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
     cmd.DummyCycles       = 6;
     cmd.Instruction       = PSRAM_CMD_READ;
-    cmd.Address           = addr;
-    cmd.NbData            = len;
+    while (offset < len)
+    {
+        uint32_t chunk = len - offset;
 
-    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
-    {
-        PSRAM_UNLOCK(p);
-        return -1;
-    }
-    if (HAL_QSPI_Receive(p->hqspi, buf, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
-    {
-        PSRAM_UNLOCK(p);
-        return -1;
+        if (chunk > PSRAM_MAX_TRANSACTION_SIZE)
+        {
+            chunk = PSRAM_MAX_TRANSACTION_SIZE;
+        }
+
+        cmd.Address = addr + offset;
+        cmd.NbData = chunk;
+        if ((HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK) ||
+            (HAL_QSPI_Receive(p->hqspi, buf + offset, PSRAM_HAL_TIMEOUT_MS) != HAL_OK))
+        {
+            (void)HAL_QSPI_Abort(p->hqspi);
+            PSRAM_UNLOCK(p);
+            return -1;
+        }
+        offset += chunk;
     }
 
     PSRAM_UNLOCK(p);
@@ -249,11 +313,12 @@ int qspi_psram_write(qspi_psram_t *p, uint32_t addr, const uint8_t *buf, uint32_
     QSPI_CommandTypeDef cmd = {0};
     int ret = 0;
     uint8_t mmap_was_active = 0;
+    uint32_t offset = 0U;
 
-    if (p == NULL || !p->initialized || buf == NULL || len == 0)
+    if (p == NULL || !p->initialized || !p->qpi_mode || buf == NULL || len == 0U)
         return -1;
 
-    if (addr + len > p->total_size)
+    if ((addr >= p->total_size) || (len > (p->total_size - addr)))
         return -1;
 
     PSRAM_LOCK(p);
@@ -275,18 +340,25 @@ int qspi_psram_write(qspi_psram_t *p, uint32_t addr, const uint8_t *buf, uint32_
     cmd.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
     cmd.DummyCycles       = 0;
     cmd.Instruction       = PSRAM_CMD_WRITE;
-    cmd.Address           = addr;
-    cmd.NbData            = len;
+    while (offset < len)
+    {
+        uint32_t chunk = len - offset;
 
-    if (HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
-    {
-        ret = -1;
-        goto out;
-    }
-    if (HAL_QSPI_Transmit(p->hqspi, (uint8_t *)buf, PSRAM_HAL_TIMEOUT_MS) != HAL_OK)
-    {
-        ret = -1;
-        goto out;
+        if (chunk > PSRAM_MAX_TRANSACTION_SIZE)
+        {
+            chunk = PSRAM_MAX_TRANSACTION_SIZE;
+        }
+
+        cmd.Address = addr + offset;
+        cmd.NbData = chunk;
+        if ((HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK) ||
+            (HAL_QSPI_Transmit(p->hqspi, (uint8_t *)buf + offset, PSRAM_HAL_TIMEOUT_MS) != HAL_OK))
+        {
+            (void)HAL_QSPI_Abort(p->hqspi);
+            ret = -1;
+            goto out;
+        }
+        offset += chunk;
     }
 
 out:
@@ -401,6 +473,49 @@ int qspi_psram_sync(qspi_psram_t *p)
 {
     (void)p;
     return 0;
+}
+
+int qspi_psram_read_id(qspi_psram_t *p, uint8_t *id, uint32_t len)
+{
+    if ((p == NULL) || (id == NULL) || (len == 0U) ||
+        (len > PSRAM_ID_SIZE) || (p->initialized == 0U))
+    {
+        return -1;
+    }
+
+    PSRAM_LOCK(p);
+    if (p->id_valid == 0U)
+    {
+        PSRAM_UNLOCK(p);
+        return -1;
+    }
+    memcpy(id, p->id, len);
+    PSRAM_UNLOCK(p);
+    return 0;
+}
+
+void qspi_psram_log_id(qspi_psram_t *p)
+{
+    uint8_t id[PSRAM_ID_SIZE];
+    const char *name = "Unknown";
+
+    if (qspi_psram_read_id(p, id, sizeof(id)) != 0)
+    {
+        log_printf("[PSRAM] id unavailable");
+        return;
+    }
+
+    /* These marketed parts may share the same AP Memory-compatible silicon
+     * ID, so keep the model label conservative and always print raw bytes. */
+    if ((id[0] == 0x0DU) && (id[1] == 0x5DU))
+    {
+        name = "AP Memory family (APS6404L/ESP-PSRAM64H compatible)";
+    }
+
+    log_printf("[PSRAM] id raw: %02X %02X %02X %02X %02X %02X %02X %02X",
+               (unsigned)id[0], (unsigned)id[1], (unsigned)id[2], (unsigned)id[3],
+               (unsigned)id[4], (unsigned)id[5], (unsigned)id[6], (unsigned)id[7]);
+    log_printf("[PSRAM] id name: %s", name);
 }
 
 /**

@@ -24,6 +24,7 @@ bool HomeTheme2CloudCache_Init(void);
 bool HomeTheme2CloudCache_IsReady(void);
 const egui_image_std_t *HomeTheme2CloudCache_Get(uint8_t shape, uint8_t state);
 bool HomeTheme2CloudCache_Recover(void);
+void HomeTheme2CloudCache_MarkReadFault(void);
 
 #ifdef __cplusplus
 }

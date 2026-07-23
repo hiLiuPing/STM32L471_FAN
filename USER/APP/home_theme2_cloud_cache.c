@@ -9,6 +9,7 @@
 
 #define HOME_THEME2_CLOUD_CACHE_MAX_WIDTH 229U
 #define HOME_THEME2_CLOUD_CACHE_ALIGN      4U
+#define HOME_THEME2_CLOUD_VERIFY_CHUNK     128U
 #define HOME_THEME2_CLOUD_CACHE_FNV_OFFSET 2166136261UL
 #define HOME_THEME2_CLOUD_CACHE_FNV_PRIME  16777619UL
 
@@ -46,7 +47,9 @@ static egui_image_std_t s_cloud_images[HOME_THEME2_CLOUD_SHAPE_COUNT][HOME_THEME
 static home_theme2_cloud_cache_slot_t s_cloud_slots[HOME_THEME2_CLOUD_SHAPE_COUNT][HOME_THEME2_CLOUD_STATE_COUNT];
 static uint16_t s_pixel_row[HOME_THEME2_CLOUD_CACHE_MAX_WIDTH];
 static uint8_t s_alpha_row[HOME_THEME2_CLOUD_CACHE_MAX_WIDTH];
+static uint8_t s_verify_buf[HOME_THEME2_CLOUD_VERIFY_CHUNK];
 static bool s_cache_ready = false;
+static bool s_external_read_failed = false;
 
 static uint32_t home_theme2_cloud_cache_align(uint32_t value)
 {
@@ -65,17 +68,36 @@ static uint32_t home_theme2_cloud_cache_hash(const uint8_t *data, uint32_t size,
     return hash;
 }
 
-static uint32_t home_theme2_cloud_cache_hash_mmap(const volatile uint8_t *data, uint32_t size)
+static bool home_theme2_cloud_cache_hash_psram(uint32_t addr,
+                                               uint32_t size,
+                                               uint32_t *result)
 {
     uint32_t hash = HOME_THEME2_CLOUD_CACHE_FNV_OFFSET;
-    uint32_t i;
+    uint32_t offset = 0U;
 
-    for (i = 0U; i < size; i++)
+    if ((result == NULL) || (size == 0U))
     {
-        hash ^= data[i];
-        hash *= HOME_THEME2_CLOUD_CACHE_FNV_PRIME;
+        return false;
     }
-    return hash;
+
+    while (offset < size)
+    {
+        uint32_t chunk = size - offset;
+
+        if (chunk > sizeof(s_verify_buf))
+        {
+            chunk = sizeof(s_verify_buf);
+        }
+        if (qspi_psram_read(&g_psram, addr + offset, s_verify_buf, chunk) != 0)
+        {
+            return false;
+        }
+        hash = home_theme2_cloud_cache_hash(s_verify_buf, chunk, hash);
+        offset += chunk;
+    }
+
+    *result = hash;
+    return true;
 }
 
 static uint16_t home_theme2_cloud_cache_rgb565(uint8_t r, uint8_t g, uint8_t b)
@@ -327,23 +349,24 @@ static bool home_theme2_cloud_cache_bind_and_verify(void)
             const egui_image_qoi_info_t *source =
                 (const egui_image_qoi_info_t *)s_cloud_sources[shape][state]->base.res;
             home_theme2_cloud_cache_slot_t *slot = &s_cloud_slots[shape][state];
-            const volatile uint8_t *pixel_addr =
-                PSRAM_MMAP_BASE + PSRAM_UI_CACHE_BASE + slot->pixel_offset;
-            const volatile uint8_t *alpha_addr =
-                PSRAM_MMAP_BASE + PSRAM_UI_CACHE_BASE + slot->alpha_offset;
+            uint32_t pixel_addr = PSRAM_UI_CACHE_BASE + slot->pixel_offset;
+            uint32_t alpha_addr = PSRAM_UI_CACHE_BASE + slot->alpha_offset;
+            uint32_t pixel_hash;
+            uint32_t alpha_hash;
             egui_image_std_info_t *info = &s_cloud_infos[shape][state];
 
-            if ((home_theme2_cloud_cache_hash_mmap(pixel_addr, slot->pixel_size) != slot->pixel_hash) ||
-                (home_theme2_cloud_cache_hash_mmap(alpha_addr, slot->alpha_size) != slot->alpha_hash))
+            if (!home_theme2_cloud_cache_hash_psram(pixel_addr, slot->pixel_size, &pixel_hash) ||
+                !home_theme2_cloud_cache_hash_psram(alpha_addr, slot->alpha_size, &alpha_hash) ||
+                (pixel_hash != slot->pixel_hash) || (alpha_hash != slot->alpha_hash))
             {
                 return false;
             }
 
-            info->data_buf = (const void *)pixel_addr;
-            info->alpha_buf = (const void *)alpha_addr;
+            info->data_buf = (const void *)PSRAM_EXTERNAL_RESOURCE_ID(pixel_addr);
+            info->alpha_buf = (const void *)PSRAM_EXTERNAL_RESOURCE_ID(alpha_addr);
             info->data_type = EGUI_IMAGE_DATA_TYPE_RGB565;
             info->alpha_type = EGUI_IMAGE_ALPHA_TYPE_8;
-            info->res_type = EGUI_RESOURCE_TYPE_INTERNAL;
+            info->res_type = EGUI_RESOURCE_TYPE_EXTERNAL;
             info->width = source->width;
             info->height = source->height;
             egui_image_std_init(&s_cloud_images[shape][state].base, info);
@@ -360,6 +383,7 @@ bool HomeTheme2CloudCache_Init(void)
     uint8_t state;
 
     s_cache_ready = false;
+    s_external_read_failed = false;
     memset(s_cloud_infos, 0, sizeof(s_cloud_infos));
     memset(s_cloud_images, 0, sizeof(s_cloud_images));
     memset(s_cloud_slots, 0, sizeof(s_cloud_slots));
@@ -391,15 +415,8 @@ bool HomeTheme2CloudCache_Init(void)
         }
     }
 
-    if (qspi_psram_enable_memory_mapped(&g_psram) != 0)
-    {
-        log_printf("[HomeCloud] PSRAM mmap failed, QOI fallback");
-        return false;
-    }
-
     if (!home_theme2_cloud_cache_bind_and_verify())
     {
-        (void)qspi_psram_exit_memory_mapped(&g_psram);
         log_printf("[HomeCloud] PSRAM verify failed, QOI fallback");
         return false;
     }
@@ -413,12 +430,14 @@ bool HomeTheme2CloudCache_Init(void)
 
 bool HomeTheme2CloudCache_IsReady(void)
 {
-    return s_cache_ready;
+    return s_cache_ready && !s_external_read_failed &&
+           (g_psram.initialized != 0U) && (g_psram.qpi_mode != 0U) &&
+           (g_psram.mmap_active == 0U);
 }
 
 const egui_image_std_t *HomeTheme2CloudCache_Get(uint8_t shape, uint8_t state)
 {
-    if (!s_cache_ready ||
+    if (!HomeTheme2CloudCache_IsReady() ||
         (shape >= HOME_THEME2_CLOUD_SHAPE_COUNT) ||
         (state >= HOME_THEME2_CLOUD_STATE_COUNT))
     {
@@ -426,6 +445,16 @@ const egui_image_std_t *HomeTheme2CloudCache_Get(uint8_t shape, uint8_t state)
     }
 
     return &s_cloud_images[shape][state];
+}
+
+void HomeTheme2CloudCache_MarkReadFault(void)
+{
+    if (!s_external_read_failed)
+    {
+        log_printf("[HomeCloud] PSRAM external read failed, QOI fallback");
+    }
+    s_external_read_failed = true;
+    s_cache_ready = false;
 }
 
 bool HomeTheme2CloudCache_Recover(void)
@@ -444,20 +473,13 @@ bool HomeTheme2CloudCache_Recover(void)
         return false;
     }
 
-    if ((qspi_psram_enable_memory_mapped(&g_psram) == 0) &&
-        home_theme2_cloud_cache_bind_and_verify())
+    s_external_read_failed = false;
+    if (home_theme2_cloud_cache_bind_and_verify())
     {
         s_cache_ready = true;
         log_printf("[HomeCloud] recover reused cache ms=%lu",
                    (unsigned long)(HAL_GetTick() - start_tick));
         return true;
-    }
-
-    if ((g_psram.mmap_active != 0U) &&
-        (qspi_psram_exit_memory_mapped(&g_psram) != 0))
-    {
-        log_printf("[HomeCloud] recover mmap exit failed, QOI fallback");
-        return false;
     }
 
     memset(s_cloud_infos, 0, sizeof(s_cloud_infos));
@@ -483,15 +505,8 @@ bool HomeTheme2CloudCache_Recover(void)
         }
     }
 
-    if (qspi_psram_enable_memory_mapped(&g_psram) != 0)
-    {
-        log_printf("[HomeCloud] recover mmap failed, QOI fallback");
-        return false;
-    }
-
     if (!home_theme2_cloud_cache_bind_and_verify())
     {
-        (void)qspi_psram_exit_memory_mapped(&g_psram);
         log_printf("[HomeCloud] recover verify failed, QOI fallback");
         return false;
     }

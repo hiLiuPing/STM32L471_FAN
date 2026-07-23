@@ -2744,6 +2744,11 @@
               <FileType>1</FileType>
               <FilePath>../USER/Middle/EmbeddedGUI/porting/stm32l471_fan/egui_port_stm32l471_fan.c</FilePath>
             </File>
+            <File>
+              <FileName>app_egui_resource_generate.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../USER/Middle/EmbeddedGUI/porting/stm32l471_fan/app_egui_resource_generate.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -2765,4 +2770,3 @@
     <files />
   </RTE>
 </Project>
-
