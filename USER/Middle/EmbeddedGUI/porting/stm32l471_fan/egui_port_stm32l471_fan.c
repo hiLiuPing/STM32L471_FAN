@@ -21,7 +21,8 @@
 
 #define EGUI_PORT_BRIGHTNESS_CHECK_MS        1000U
 #define EGUI_PORT_BRIGHTNESS_PERCENT_INVALID 0xFFU
-#define EGUI_PORT_PSRAM_READ_CHUNK            128U
+#define EGUI_PORT_PERF_LOG_ENABLE            0
+#define EGUI_PORT_PERF_LOG_SAMPLE_INTERVAL   5U
 
 static egui_core_t s_egui_core;
 EGUI_CONFIG_PFB_BUFFER_DECLARE(s_egui_pfb);
@@ -30,6 +31,46 @@ static bool s_egui_started = false;
 static bool s_egui_display_on = true;
 static uint32_t s_egui_brightness_check_ms = 0U;
 static uint8_t s_egui_applied_brightness_percent = EGUI_PORT_BRIGHTNESS_PERCENT_INVALID;
+
+#if EGUI_CONFIG_DEBUG_PERF_MONITOR_SHOW && EGUI_PORT_PERF_LOG_ENABLE
+static uint32_t egui_port_perf_counter_delta(uint32_t current, uint32_t previous)
+{
+    return (current >= previous) ? (current - previous) : current;
+}
+
+void egui_port_debug_perf_sample(uint32_t fps,
+                                 uint32_t cpu_percent,
+                                 uint32_t render_avg_time_ms,
+                                 uint32_t flush_avg_time_ms)
+{
+    static HomeTheme2CloudCacheStats_t previous;
+    static uint8_t sample_count;
+    HomeTheme2CloudCacheStats_t current;
+
+    HomeTheme2CloudCache_GetStats(&current);
+    sample_count++;
+    if (sample_count < EGUI_PORT_PERF_LOG_SAMPLE_INTERVAL)
+    {
+        return;
+    }
+    sample_count = 0U;
+    log_printf("[PERF] fps=%lu cpu=%lu render|flush=%lu|%lu "
+               "psram call/txn/bytes=%lu/%lu/%lu max=%lu err=%lu "
+               "cloud draw/blend rows=%lu/%lu",
+               (unsigned long)fps,
+               (unsigned long)cpu_percent,
+               (unsigned long)render_avg_time_ms,
+               (unsigned long)flush_avg_time_ms,
+               (unsigned long)egui_port_perf_counter_delta(current.psram_read_call_count, previous.psram_read_call_count),
+               (unsigned long)egui_port_perf_counter_delta(current.psram_read_transaction_count, previous.psram_read_transaction_count),
+               (unsigned long)egui_port_perf_counter_delta(current.psram_read_byte_count, previous.psram_read_byte_count),
+               (unsigned long)current.psram_read_max_time_ms,
+               (unsigned long)egui_port_perf_counter_delta(current.psram_read_failure_count, previous.psram_read_failure_count),
+               (unsigned long)egui_port_perf_counter_delta(current.draw_row_count, previous.draw_row_count),
+               (unsigned long)egui_port_perf_counter_delta(current.blend_row_count, previous.blend_row_count));
+    previous = current;
+}
+#endif
 
 static void egui_port_apply_active_brightness(void)
 {
@@ -86,7 +127,6 @@ static void egui_port_load_external_resource(egui_core_t *core,
                                              uint32_t size)
 {
     uint32_t resource_addr;
-    uint32_t copied = 0U;
 
     (void)core;
     if ((dest == NULL) || (size == 0U))
@@ -111,24 +151,10 @@ static void egui_port_load_external_resource(egui_core_t *core,
     }
 
     resource_addr += start_offset;
-    while (copied < size)
+    if (qspi_psram_read(&g_psram, resource_addr, (uint8_t *)dest, size) != 0)
     {
-        uint32_t chunk = size - copied;
-
-        if (chunk > EGUI_PORT_PSRAM_READ_CHUNK)
-        {
-            chunk = EGUI_PORT_PSRAM_READ_CHUNK;
-        }
-        if (qspi_psram_read(&g_psram,
-                            resource_addr + copied,
-                            (uint8_t *)dest + copied,
-                            chunk) != 0)
-        {
-            memset((uint8_t *)dest + copied, 0, size - copied);
-            HomeTheme2CloudCache_MarkReadFault();
-            return;
-        }
-        copied += chunk;
+        memset(dest, 0, size);
+        HomeTheme2CloudCache_MarkReadFault();
     }
 }
 

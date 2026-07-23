@@ -134,6 +134,19 @@ void egui_debug_mark_overlay_dirty(egui_core_t *core, egui_debug_overlay_t *over
 #define debug_perf_stats   (core->debug.debug_perf_stats)
 #define debug_perf_overlay (core->debug.debug_perf_overlay)
 
+/* Ports may override this to record peripheral statistics in the exact same
+ * sampling window as the render/flush performance monitor. */
+__EGUI_WEAK__ void egui_port_debug_perf_sample(uint32_t fps,
+                                               uint32_t cpu_percent,
+                                               uint32_t render_avg_time_ms,
+                                               uint32_t flush_avg_time_ms)
+{
+    EGUI_UNUSED(fps);
+    EGUI_UNUSED(cpu_percent);
+    EGUI_UNUSED(render_avg_time_ms);
+    EGUI_UNUSED(flush_avg_time_ms);
+}
+
 /** Format the performance overlay text from the current aggregated counters. */
 static uint8_t egui_debug_set_perf_text(egui_core_t *core, uint32_t fps, uint32_t cpu_percent, uint32_t render_avg_time_ms, uint32_t flush_avg_time_ms)
 {
@@ -215,6 +228,8 @@ void egui_debug_perf_update_monitor(egui_core_t *core, uint32_t timestamp)
     {
         egui_debug_mark_overlay_dirty(core, &debug_perf_overlay);
     }
+    egui_port_debug_perf_sample(fps, cpu_percent,
+                                render_avg_time_ms, flush_avg_time_ms);
 
     debug_perf_stats.window_start_time = timestamp;
     debug_perf_stats.refr_count = 0;

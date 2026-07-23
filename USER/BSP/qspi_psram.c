@@ -18,8 +18,46 @@
 #endif
 
 #define PSRAM_MMAP_TIMEOUT_PERIOD  64U
-#define PSRAM_MAX_TRANSACTION_SIZE 128U
 #define PSRAM_HAL_TIMEOUT_MS        100U
+
+static qspi_psram_stats_t s_psram_stats;
+
+static uint32_t qspi_psram_command_chunk_size(const qspi_psram_t *p,
+                                               uint32_t addr,
+                                               uint32_t remaining)
+{
+    uint32_t chunk = remaining;
+    uint32_t page_size = p->page_size;
+
+    if (chunk > PSRAM_COMMAND_MAX_TRANSFER_SIZE)
+    {
+        chunk = PSRAM_COMMAND_MAX_TRANSFER_SIZE;
+    }
+    if (page_size != 0U)
+    {
+        uint32_t page_remaining = page_size - (addr % page_size);
+
+        if (chunk > page_remaining)
+        {
+            chunk = page_remaining;
+        }
+    }
+    return chunk;
+}
+
+static void qspi_psram_finish_read_stats(uint32_t start_tick, int failed)
+{
+    uint32_t elapsed = HAL_GetTick() - start_tick;
+
+    if (elapsed > s_psram_stats.read_max_time_ms)
+    {
+        s_psram_stats.read_max_time_ms = elapsed;
+    }
+    if (failed != 0)
+    {
+        s_psram_stats.read_failure_count++;
+    }
+}
 
 static int qspi_psram_read_id_spi_locked(qspi_psram_t *p)
 {
@@ -176,6 +214,7 @@ int qspi_psram_init(qspi_psram_t *p, QSPI_HandleTypeDef *hqspi)
         return -1;
 
     memset(p, 0, sizeof(qspi_psram_t));
+    memset(&s_psram_stats, 0, sizeof(s_psram_stats));
     p->hqspi = hqspi;
 
 #if PSRAM_USE_FREERTOS
@@ -252,18 +291,29 @@ int qspi_psram_read(qspi_psram_t *p, uint32_t addr, uint8_t *buf, uint32_t len)
 {
     QSPI_CommandTypeDef cmd = {0};
     uint32_t offset = 0U;
+    uint32_t start_tick = HAL_GetTick();
 
     if (p == NULL || !p->initialized || !p->qpi_mode || buf == NULL || len == 0U)
+    {
+        s_psram_stats.read_call_count++;
+        qspi_psram_finish_read_stats(start_tick, 1);
         return -1;
+    }
 
     if ((addr >= p->total_size) || (len > (p->total_size - addr)))
+    {
+        s_psram_stats.read_call_count++;
+        qspi_psram_finish_read_stats(start_tick, 1);
         return -1;
+    }
 
     /* 如果在 MMAP 模式下，不应当走命令模式读，提示使用者走指针访问。 */
     PSRAM_LOCK(p);
+    s_psram_stats.read_call_count++;
 
     if (p->mmap_active)
     {
+        qspi_psram_finish_read_stats(start_tick, 1);
         PSRAM_UNLOCK(p);
         return -1;
     }
@@ -277,25 +327,24 @@ int qspi_psram_read(qspi_psram_t *p, uint32_t addr, uint8_t *buf, uint32_t len)
     cmd.Instruction       = PSRAM_CMD_READ;
     while (offset < len)
     {
-        uint32_t chunk = len - offset;
-
-        if (chunk > PSRAM_MAX_TRANSACTION_SIZE)
-        {
-            chunk = PSRAM_MAX_TRANSACTION_SIZE;
-        }
+        uint32_t chunk = qspi_psram_command_chunk_size(p, addr + offset, len - offset);
 
         cmd.Address = addr + offset;
         cmd.NbData = chunk;
+        s_psram_stats.read_transaction_count++;
         if ((HAL_QSPI_Command(p->hqspi, &cmd, PSRAM_HAL_TIMEOUT_MS) != HAL_OK) ||
             (HAL_QSPI_Receive(p->hqspi, buf + offset, PSRAM_HAL_TIMEOUT_MS) != HAL_OK))
         {
             (void)HAL_QSPI_Abort(p->hqspi);
+            qspi_psram_finish_read_stats(start_tick, 1);
             PSRAM_UNLOCK(p);
             return -1;
         }
+        s_psram_stats.read_byte_count += chunk;
         offset += chunk;
     }
 
+    qspi_psram_finish_read_stats(start_tick, 0);
     PSRAM_UNLOCK(p);
     return 0;
 }
@@ -342,12 +391,7 @@ int qspi_psram_write(qspi_psram_t *p, uint32_t addr, const uint8_t *buf, uint32_
     cmd.Instruction       = PSRAM_CMD_WRITE;
     while (offset < len)
     {
-        uint32_t chunk = len - offset;
-
-        if (chunk > PSRAM_MAX_TRANSACTION_SIZE)
-        {
-            chunk = PSRAM_MAX_TRANSACTION_SIZE;
-        }
+        uint32_t chunk = qspi_psram_command_chunk_size(p, addr + offset, len - offset);
 
         cmd.Address = addr + offset;
         cmd.NbData = chunk;
@@ -475,6 +519,35 @@ int qspi_psram_sync(qspi_psram_t *p)
     return 0;
 }
 
+void qspi_psram_get_stats(qspi_psram_t *p, qspi_psram_stats_t *stats)
+{
+    if (stats == NULL)
+    {
+        return;
+    }
+    if (p == NULL)
+    {
+        memset(stats, 0, sizeof(*stats));
+        return;
+    }
+
+    PSRAM_LOCK(p);
+    *stats = s_psram_stats;
+    PSRAM_UNLOCK(p);
+}
+
+void qspi_psram_reset_stats(qspi_psram_t *p)
+{
+    if (p == NULL)
+    {
+        return;
+    }
+
+    PSRAM_LOCK(p);
+    memset(&s_psram_stats, 0, sizeof(s_psram_stats));
+    PSRAM_UNLOCK(p);
+}
+
 int qspi_psram_read_id(qspi_psram_t *p, uint8_t *id, uint32_t len)
 {
     if ((p == NULL) || (id == NULL) || (len == 0U) ||
@@ -519,9 +592,8 @@ void qspi_psram_log_id(qspi_psram_t *p)
 }
 
 /**
- * @brief  PSRAM 测试函数：写入测试数据 → 进入 MMAP → 读出并比对打印
- * @note   调用本函数前 PSRAM 必须已完成 init，且未进入 MMAP。
- *         测试完自动进入 MMAP 模式。
+ * @brief  PSRAM command-mode read/write self-test.
+ * @note   Memory-mapped mode is never enabled by this test.
  * @param  p: context 指针
  */
 void qspi_psram_test(qspi_psram_t *p)
@@ -575,18 +647,14 @@ void qspi_psram_test(qspi_psram_t *p)
     }
     log_printf("[PSRAM TEST] pattern 3 (0xA5) written @ 0x%08lX\r\n", test_addr);
 
-    /* ---- 进入 MMAP 模式 ---- */
-    log_printf("[PSRAM TEST] entering memory-mapped mode...\r\n");
-    if (qspi_psram_enable_memory_mapped(p) != 0)
-    {
-        log_printf("[PSRAM TEST] enable MMAP FAIL\r\n");
-        goto fail;
-    }
-
-    /* ---- 通过 MMAP 读取并比对 ---- */
+    /* Verification intentionally stays in command mode. */
 
     /* Pattern 1 @ 0x0000 */
-    for (i = 0; i < 256; i++) rbuf[i] = PSRAM_MMAP_BASE[0x0000 + i];
+    if (qspi_psram_read(p, 0x0000U, rbuf, sizeof(rbuf)) != 0)
+    {
+        log_printf("[PSRAM TEST] read pattern 1 FAIL\r\n");
+        goto fail;
+    }
     err_cnt = 0;
     for (i = 0; i < 256; i++)
     {
@@ -601,7 +669,11 @@ void qspi_psram_test(qspi_psram_t *p)
     log_printf("[PSRAM TEST] pattern 1 verify: %lu errors\r\n", (unsigned long)err_cnt);
 
     /* Pattern 2 @ 0x1000 */
-    for (i = 0; i < 256; i++) rbuf[i] = PSRAM_MMAP_BASE[0x1000 + i];
+    if (qspi_psram_read(p, 0x1000U, rbuf, sizeof(rbuf)) != 0)
+    {
+        log_printf("[PSRAM TEST] read pattern 2 FAIL\r\n");
+        goto fail;
+    }
     err_cnt = 0;
     for (i = 0; i < 256; i++)
     {
@@ -617,7 +689,11 @@ void qspi_psram_test(qspi_psram_t *p)
     log_printf("[PSRAM TEST] pattern 2 verify: %lu errors\r\n", (unsigned long)err_cnt);
 
     /* Pattern 3 @ 0x2000 */
-    for (i = 0; i < 256; i++) rbuf[i] = PSRAM_MMAP_BASE[0x2000 + i];
+    if (qspi_psram_read(p, 0x2000U, rbuf, sizeof(rbuf)) != 0)
+    {
+        log_printf("[PSRAM TEST] read pattern 3 FAIL\r\n");
+        goto fail;
+    }
     err_cnt = 0;
     for (i = 0; i < 256; i++)
     {

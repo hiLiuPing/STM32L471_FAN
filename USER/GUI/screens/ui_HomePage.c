@@ -1151,6 +1151,12 @@ void ui_HomePage_screen_init(void)
     s_home_heiti_16 = NULL;
     DataApp_HomeStatus_Get(&status);
     ui_HomePage_update_render_snapshot(&status);
+    if (s_home_render_theme == SETTINGS_APP_HOME_THEME_2)
+    {
+        HomeTheme2CloudCache_RequestBlend(s_home_theme2_style.cloud_from_state,
+                                          s_home_theme2_style.cloud_to_state,
+                                          s_home_theme2_style.cloud_blend);
+    }
     (void)ui_HomePage_battery_update(&status, s_home_scene_tick, 1U);
     ui_HomePage_weather_reset(s_home_render_scene, status.is_day, s_home_scene_tick);
     egui_view_start_periodic(view, &s_home_page.timer, view, ui_HomePage_timer_cb, 50U);
@@ -1166,6 +1172,12 @@ void ui_HomePage_screen_enter(void)
     s_home_weather_state.is_valid = 0U;
     DataApp_HomeStatus_Get(&status);
     ui_HomePage_update_render_snapshot(&status);
+    if (s_home_render_theme == SETTINGS_APP_HOME_THEME_2)
+    {
+        HomeTheme2CloudCache_RequestBlend(s_home_theme2_style.cloud_from_state,
+                                          s_home_theme2_style.cloud_to_state,
+                                          s_home_theme2_style.cloud_blend);
+    }
     (void)ui_HomePage_battery_update(&status, s_home_scene_tick, 1U);
     ui_HomePage_weather_reset(s_home_render_scene, status.is_day, s_home_scene_tick);
 
@@ -1386,6 +1398,16 @@ static void ui_HomePage_timer_cb(egui_timer_t *timer)
     previous_theme = s_home_render_theme;
     previous_theme2_style = s_home_theme2_style;
     ui_HomePage_update_render_snapshot(&status);
+    if (s_home_render_theme == SETTINGS_APP_HOME_THEME_2)
+    {
+        HomeTheme2CloudCache_RequestBlend(s_home_theme2_style.cloud_from_state,
+                                          s_home_theme2_style.cloud_to_state,
+                                          s_home_theme2_style.cloud_blend);
+        if (HomeTheme2CloudCache_Service())
+        {
+            refresh_full = 1U;
+        }
+    }
     if (previous_theme != s_home_render_theme)
     {
         s_home_scene_state.is_valid = 0U;
@@ -1511,8 +1533,6 @@ static void ui_HomePage_draw_theme2_cloud(egui_canvas_t *canvas,
 {
     const egui_image_qoi_t *from_image;
     const egui_image_qoi_t *to_image;
-    const egui_image_std_t *from_cached_image;
-    const egui_image_std_t *to_cached_image;
     egui_alpha_t saved_alpha;
 
     if (!ui_HomePage_canvas_intersects(canvas, (egui_dim_t)x, (egui_dim_t)y,
@@ -1523,30 +1543,25 @@ static void ui_HomePage_draw_theme2_cloud(egui_canvas_t *canvas,
 
     from_image = ui_HomePage_theme2_cloud_image(shape, s_home_theme2_style.cloud_from_state);
     to_image = ui_HomePage_theme2_cloud_image(shape, s_home_theme2_style.cloud_to_state);
-    from_cached_image = HomeTheme2CloudCache_Get(shape, s_home_theme2_style.cloud_from_state);
-    to_cached_image = HomeTheme2CloudCache_Get(shape, s_home_theme2_style.cloud_to_state);
 
-    if (from_cached_image != NULL)
+    if (HomeTheme2CloudCache_Draw(canvas,
+                                  shape,
+                                  (int16_t)x,
+                                  (int16_t)y,
+                                  s_home_theme2_style.cloud_from_state,
+                                  s_home_theme2_style.cloud_to_state,
+                                  s_home_theme2_style.cloud_blend))
     {
-        egui_image_draw_image(&from_cached_image->base, canvas, x, y);
+        return;
     }
-    else
-    {
-        egui_image_draw_image(&from_image->base, canvas, x, y);
-    }
+
+    egui_image_draw_image(&from_image->base, canvas, x, y);
 
     if ((s_home_theme2_style.cloud_blend != 0U) && (to_image != from_image))
     {
         saved_alpha = egui_canvas_get_alpha(canvas);
         egui_canvas_mix_alpha(canvas, s_home_theme2_style.cloud_blend);
-        if (to_cached_image != NULL)
-        {
-            egui_image_draw_image(&to_cached_image->base, canvas, x, y);
-        }
-        else
-        {
-            egui_image_draw_image(&to_image->base, canvas, x, y);
-        }
+        egui_image_draw_image(&to_image->base, canvas, x, y);
         egui_canvas_set_alpha(canvas, saved_alpha);
     }
 }

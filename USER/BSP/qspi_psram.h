@@ -29,8 +29,28 @@
 
 /* ================= chip size ================= */
 #define PSRAM_SIZE              (8 * 1024 * 1024)   /* 8 MB */
-#define PSRAM_PAGE_SIZE         1024
+#define PSRAM_PAGE_SIZE         1024U
 #define PSRAM_ID_SIZE           8U
+
+/* Maximum payload of one command-mode QSPI transaction. Keep this
+ * configurable so 128/256/512/1024-byte hardware benchmarks can use the
+ * same driver without changing call sites. Transactions are also clipped at
+ * the next PSRAM_PAGE_SIZE boundary. */
+#ifndef PSRAM_COMMAND_MAX_TRANSFER_SIZE
+#define PSRAM_COMMAND_MAX_TRANSFER_SIZE 512U
+#endif
+#if PSRAM_COMMAND_MAX_TRANSFER_SIZE == 0U
+#error "PSRAM_COMMAND_MAX_TRANSFER_SIZE must be greater than zero"
+#endif
+
+typedef struct
+{
+    uint32_t read_call_count;
+    uint32_t read_transaction_count;
+    uint32_t read_byte_count;
+    uint32_t read_max_time_ms;
+    uint32_t read_failure_count;
+} qspi_psram_stats_t;
 
 /* ================= context ================= */
 typedef struct
@@ -64,14 +84,13 @@ int qspi_psram_enable_memory_mapped(qspi_psram_t *p);
 int qspi_psram_exit_memory_mapped(qspi_psram_t *p);
 int qspi_psram_recover(qspi_psram_t *p);
 int qspi_psram_sync(qspi_psram_t *p);
+void qspi_psram_get_stats(qspi_psram_t *p, qspi_psram_stats_t *stats);
+void qspi_psram_reset_stats(qspi_psram_t *p);
 /* Returns the ID captured in 1-line SPI mode before qspi_psram_init() enters QPI. */
 int qspi_psram_read_id(qspi_psram_t *p, uint8_t *id, uint32_t len);
 void qspi_psram_log_id(qspi_psram_t *p);
 
-/* 测试函数：写入测试数据 → 进入 MMAP → 读出并比对打印。 */
+/* Command-mode read/write self-test. It never enables memory mapping. */
 void qspi_psram_test(qspi_psram_t *p);
-
-/* MMAP 基地址（L476 的 QUADSPI 映射区）。 */
-#define PSRAM_MMAP_BASE         ((volatile uint8_t *)0x90000000)
 
 #endif /* __QSPI_PSRAM_H__ */
