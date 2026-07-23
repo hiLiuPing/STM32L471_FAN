@@ -216,11 +216,11 @@ static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value);
 #define HOME_STATUS_ENV_H 32
 #define HOME_STATUS_ENV_TEXT_Y HOME_BOTTOM_STATUS_Y
 #define HOME_STATUS_ENV_TEXT_H HOME_BOTTOM_STATUS_H
-#define HOME_ENV_HUMIDITY_ICON_X 245
 #define HOME_ENV_HUMIDITY_TEXT_X 252
 #define HOME_ENV_HUMIDITY_TEXT_W 40
 #define HOME_ENV_TEMPERATURE_TEXT_X 268
 #define HOME_ENV_TEMPERATURE_TEXT_W 81
+#define HOME_ENV_HUMIDITY_ICON_W 10
 #define HOME_ENV_TEMPERATURE_ICON_W 10
 #define HOME_ENV_ICON_TEXT_GAP 3
 #define HOME_ENV_ICON_Y 113
@@ -2578,6 +2578,9 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
     uint32_t humidity_rgb = ground_text_rgb;
     uint32_t temperature_rgb = ground_text_rgb;
     egui_alpha_t icon_alpha = EGUI_ALPHA_60;
+    egui_dim_t humidity_text_width = 0;
+    egui_dim_t humidity_text_height = 0;
+    egui_dim_t humidity_icon_x;
     egui_dim_t temperature_text_width = 0;
     egui_dim_t temperature_text_height = 0;
     egui_dim_t temperature_icon_x;
@@ -2623,6 +2626,18 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
 
     (void)egui_font_get_str_size_with_canvas(heiti_font,
                                              canvas,
+                                             humidity_text,
+                                             0U,
+                                             0,
+                                             &humidity_text_width,
+                                             &humidity_text_height);
+    humidity_icon_x = (egui_dim_t)(HOME_ENV_HUMIDITY_TEXT_X +
+                                   HOME_ENV_HUMIDITY_TEXT_W -
+                                   humidity_text_width -
+                                   HOME_ENV_ICON_TEXT_GAP -
+                                   HOME_ENV_HUMIDITY_ICON_W);
+    (void)egui_font_get_str_size_with_canvas(heiti_font,
+                                             canvas,
                                              temperature_text,
                                              0U,
                                              0,
@@ -2635,7 +2650,7 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
                                       HOME_ENV_TEMPERATURE_ICON_W);
 
     ui_HomePage_draw_humidity_icon(canvas,
-                                   HOME_ENV_HUMIDITY_ICON_X,
+                                   humidity_icon_x,
                                    HOME_ENV_ICON_Y,
                                    humidity_rgb,
                                    icon_alpha);

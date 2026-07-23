@@ -1,27 +1,86 @@
 #include "spi_flash.h"
+
 #include <string.h>
+
 #include "log.h"
 
-// #define FLASH_USE_FREERTOS 1
+#define SPI_FLASH_SPI_TIMEOUT_MS          100U
+#define SPI_FLASH_LOCK_TIMEOUT_MS         1000U
+#define SPI_FLASH_SYNC_TIMEOUT_MS         5000U
+#define SPI_FLASH_PAGE_TIMEOUT_MS         20U
+#define SPI_FLASH_SECTOR_TIMEOUT_MS       3000U
+#define SPI_FLASH_BLOCK_TIMEOUT_MS        5000U
+#define SPI_FLASH_CHIP_TIMEOUT_MS         300000U
 
-/* ================= OS abstraction ================= */
+static void flash_delay_ms(uint32_t delay_ms)
+{
 #if FLASH_USE_FREERTOS
+    TickType_t ticks = pdMS_TO_TICKS(delay_ms);
 
-#define FLASH_DELAY(ms)      vTaskDelay(pdMS_TO_TICKS(ms))
-#define FLASH_TICK()         xTaskGetTickCount()
-#define FLASH_LOCK(f)        xSemaphoreTake((f)->lock, portMAX_DELAY)
-#define FLASH_UNLOCK(f)      xSemaphoreGive((f)->lock)
-
+    if ((delay_ms != 0U) && (ticks == 0U))
+    {
+        ticks = 1U;
+    }
+    vTaskDelay(ticks);
 #else
+    HAL_Delay(delay_ms);
+#endif
+}
 
-#define FLASH_DELAY(ms)      HAL_Delay(ms)
-#define FLASH_TICK()         HAL_GetTick()
-#define FLASH_LOCK(f)
-#define FLASH_UNLOCK(f)
+static int flash_lock(spi_flash_t *f)
+{
+    if (f == NULL)
+    {
+        return SPI_FLASH_ERR_INVALID_ARGUMENT;
+    }
 
+#if FLASH_USE_FREERTOS
+    TickType_t ticks;
+
+    if (f->lock == NULL)
+    {
+        return SPI_FLASH_ERR_NOT_READY;
+    }
+
+    ticks = pdMS_TO_TICKS(SPI_FLASH_LOCK_TIMEOUT_MS);
+    if (ticks == 0U)
+    {
+        ticks = 1U;
+    }
+    if (xSemaphoreTake(f->lock, ticks) != pdTRUE)
+    {
+        return SPI_FLASH_ERR_LOCK_TIMEOUT;
+    }
 #endif
 
-/* ================= CS ================= */
+    return SPI_FLASH_OK;
+}
+
+static void flash_unlock(spi_flash_t *f)
+{
+#if FLASH_USE_FREERTOS
+    if ((f != NULL) && (f->lock != NULL))
+    {
+        (void)xSemaphoreGive(f->lock);
+    }
+#else
+    (void)f;
+#endif
+}
+
+static void flash_destroy_lock(spi_flash_t *f)
+{
+#if FLASH_USE_FREERTOS
+    if ((f != NULL) && (f->lock != NULL))
+    {
+        vSemaphoreDelete(f->lock);
+        f->lock = NULL;
+    }
+#else
+    (void)f;
+#endif
+}
+
 static inline void cs_low(spi_flash_t *f)
 {
     HAL_GPIO_WritePin(f->cs_port, f->cs_pin, GPIO_PIN_RESET);
@@ -32,402 +91,633 @@ static inline void cs_high(spi_flash_t *f)
     HAL_GPIO_WritePin(f->cs_port, f->cs_pin, GPIO_PIN_SET);
 }
 
-/* ================= basic ================= */
-
-
-static inline void flash_lock(spi_flash_t *f)
+static int flash_status_from_hal(HAL_StatusTypeDef status)
 {
-#if FLASH_USE_FREERTOS
-    xSemaphoreTake(f->lock, portMAX_DELAY);
-#else
-    (void)f;
-#endif
-}
-
-static inline void flash_unlock(spi_flash_t *f)
-{
-#if FLASH_USE_FREERTOS
-    xSemaphoreGive(f->lock);
-#else
-    (void)f;
-#endif
-}
-
-
-
-static uint8_t flash_rdsr(spi_flash_t *f)
-{
-    uint8_t cmd = FLASH_CMD_RDSR;
-    uint8_t sr = 0;
-
-    cs_low(f);
-    HAL_SPI_Transmit(f->hspi, &cmd, 1, HAL_MAX_DELAY);
-    HAL_SPI_Receive(f->hspi, &sr, 1, HAL_MAX_DELAY);
-    cs_high(f);
-
-    return sr;
-}
-int spi_flash_sync(spi_flash_t *f)
-{
-    flash_lock(f);
-
-    uint32_t start = HAL_GetTick();
-
-    while (flash_rdsr(f) & FLASH_SR_BUSY)
+    if (status == HAL_OK)
     {
-        if (HAL_GetTick() - start > 5000)
+        return SPI_FLASH_OK;
+    }
+    if (status == HAL_TIMEOUT)
+    {
+        return SPI_FLASH_ERR_TIMEOUT;
+    }
+    return SPI_FLASH_ERR_IO;
+}
+
+static int flash_spi_transmit(spi_flash_t *f, const uint8_t *data, uint32_t len)
+{
+    while (len != 0U)
+    {
+        uint16_t chunk = (len > UINT16_MAX) ? UINT16_MAX : (uint16_t)len;
+        HAL_StatusTypeDef status = HAL_SPI_Transmit(f->hspi,
+                                                    (uint8_t *)data,
+                                                    chunk,
+                                                    SPI_FLASH_SPI_TIMEOUT_MS);
+        int ret = flash_status_from_hal(status);
+
+        if (ret != SPI_FLASH_OK)
         {
-            flash_unlock(f);
-            return -1;
+            return ret;
         }
+        data += chunk;
+        len -= chunk;
     }
 
-    flash_unlock(f);
-    return 0;
-}
-static void flash_wren(spi_flash_t *f)
-{
-    uint8_t cmd = FLASH_CMD_WREN;
-    cs_low(f);
-    HAL_SPI_Transmit(f->hspi, &cmd, 1, HAL_MAX_DELAY);
-    cs_high(f);
+    return SPI_FLASH_OK;
 }
 
-/* ================= reset ================= */
-static void flash_reset(spi_flash_t *f)
+static int flash_spi_receive(spi_flash_t *f, uint8_t *data, uint32_t len)
 {
-    uint8_t cmd;
+    while (len != 0U)
+    {
+        uint16_t chunk = (len > UINT16_MAX) ? UINT16_MAX : (uint16_t)len;
+        HAL_StatusTypeDef status = HAL_SPI_Receive(f->hspi,
+                                                   data,
+                                                   chunk,
+                                                   SPI_FLASH_SPI_TIMEOUT_MS);
+        int ret = flash_status_from_hal(status);
 
-    cs_low(f);
-    cmd = FLASH_CMD_RESET_EN;
-    HAL_SPI_Transmit(f->hspi, &cmd, 1, 100);
-    cs_high(f);
+        if (ret != SPI_FLASH_OK)
+        {
+            return ret;
+        }
+        data += chunk;
+        len -= chunk;
+    }
 
-    FLASH_DELAY(1);
-
-    cs_low(f);
-    cmd = FLASH_CMD_RESET;
-    HAL_SPI_Transmit(f->hspi, &cmd, 1, 100);
-    cs_high(f);
-
-    FLASH_DELAY(5);
+    return SPI_FLASH_OK;
 }
 
-/* ================= wait ================= */
-static int flash_wait_ready(spi_flash_t *f, flash_wait_type_t type)
+static int flash_send_command(spi_flash_t *f, uint8_t command)
 {
-    uint32_t timeout;
+    int ret;
 
+    cs_low(f);
+    ret = flash_spi_transmit(f, &command, 1U);
+    cs_high(f);
+    return ret;
+}
+
+static int flash_read_status(spi_flash_t *f, uint8_t *status)
+{
+    uint8_t command = FLASH_CMD_RDSR;
+    int ret;
+
+    if (status == NULL)
+    {
+        return SPI_FLASH_ERR_INVALID_ARGUMENT;
+    }
+
+    *status = 0U;
+    cs_low(f);
+    ret = flash_spi_transmit(f, &command, 1U);
+    if (ret == SPI_FLASH_OK)
+    {
+        ret = flash_spi_receive(f, status, 1U);
+    }
+    cs_high(f);
+
+    if ((ret == SPI_FLASH_OK) && (*status == 0xFFU))
+    {
+        return SPI_FLASH_ERR_IO;
+    }
+    return ret;
+}
+
+static int flash_write_enable(spi_flash_t *f)
+{
+    uint8_t status;
+    int ret = flash_send_command(f, FLASH_CMD_WREN);
+
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+
+    ret = flash_read_status(f, &status);
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+    if ((status & FLASH_SR_WEL) == 0U)
+    {
+        return SPI_FLASH_ERR_WRITE_ENABLE;
+    }
+    return SPI_FLASH_OK;
+}
+
+static int flash_reset(spi_flash_t *f)
+{
+    int ret = flash_send_command(f, FLASH_CMD_RESET_EN);
+
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+    flash_delay_ms(1U);
+
+    ret = flash_send_command(f, FLASH_CMD_RESET);
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+    flash_delay_ms(5U);
+    return SPI_FLASH_OK;
+}
+
+static uint32_t flash_wait_timeout(flash_wait_type_t type)
+{
     switch (type)
     {
-        case FLASH_T_PAGE:   timeout = 10; break;
-        case FLASH_T_SECTOR: timeout = 500; break;
-        case FLASH_T_BLOCK:  timeout = 4000; break;
-        case FLASH_T_CHIP:   timeout = 20000; break;
-        default: timeout = 1000; break;
-    }
-
-    uint32_t start = FLASH_TICK();
-    uint32_t retry = 0;
-
-    while (1)
-    {
-        uint8_t sr = flash_rdsr(f);
-
-        /* ================= 关键修复1：非法值直接判失败 ================= */
-        if (sr == 0xFF)
-        {
-            retry++;
-            if (retry > 100)
-            {
-                log_printf("[FLASH] SR invalid 0xFF\r\n");
-                return -2;
-            }
-            continue;
-        }
-
-        /* ================= BUSY清除 ================= */
-        if (!(sr & FLASH_SR_BUSY))
-        {
-            return 0;
-        }
-
-        FLASH_DELAY(1);
-
-        /* ================= timeout ================= */
-        if (FLASH_TICK() - start > timeout)
-        {
-            log_printf("[FLASH] wait timeout SR=0x%02X\r\n", sr);
-
-            flash_reset(f);
-
-            return -1;
-        }
+    case FLASH_T_PAGE:
+        return SPI_FLASH_PAGE_TIMEOUT_MS;
+    case FLASH_T_SECTOR:
+        return SPI_FLASH_SECTOR_TIMEOUT_MS;
+    case FLASH_T_BLOCK:
+        return SPI_FLASH_BLOCK_TIMEOUT_MS;
+    case FLASH_T_CHIP:
+        return SPI_FLASH_CHIP_TIMEOUT_MS;
+    default:
+        return SPI_FLASH_SYNC_TIMEOUT_MS;
     }
 }
 
-/* ================= addr ================= */
-static inline void pack_addr(spi_flash_t *f, uint32_t addr, uint8_t *b)
+static int flash_wait_ready_ms(spi_flash_t *f, uint32_t timeout_ms)
 {
-    if (f->addr_len == 3)
+    uint32_t start = HAL_GetTick();
+
+    for (;;)
     {
-        b[0] = addr >> 16;
-        b[1] = addr >> 8;
-        b[2] = addr;
+        uint8_t status;
+        int ret = flash_read_status(f, &status);
+
+        if (ret != SPI_FLASH_OK)
+        {
+            return ret;
+        }
+        if ((status & FLASH_SR_BUSY) == 0U)
+        {
+            return SPI_FLASH_OK;
+        }
+        if ((HAL_GetTick() - start) >= timeout_ms)
+        {
+            log_printf("[FLASH] ready timeout status=0x%02X", status);
+            return SPI_FLASH_ERR_TIMEOUT;
+        }
+        flash_delay_ms(1U);
+    }
+}
+
+static int flash_wait_ready(spi_flash_t *f, flash_wait_type_t type)
+{
+    return flash_wait_ready_ms(f, flash_wait_timeout(type));
+}
+
+static inline void pack_addr(spi_flash_t *f, uint32_t addr, uint8_t *bytes)
+{
+    if (f->addr_len == 3U)
+    {
+        bytes[0] = (uint8_t)(addr >> 16);
+        bytes[1] = (uint8_t)(addr >> 8);
+        bytes[2] = (uint8_t)addr;
     }
     else
     {
-        b[0] = addr >> 24;
-        b[1] = addr >> 16;
-        b[2] = addr >> 8;
-        b[3] = addr;
+        bytes[0] = (uint8_t)(addr >> 24);
+        bytes[1] = (uint8_t)(addr >> 16);
+        bytes[2] = (uint8_t)(addr >> 8);
+        bytes[3] = (uint8_t)addr;
     }
 }
 
-/* ================= init ================= */
+static int flash_validate(const spi_flash_t *f)
+{
+    if ((f == NULL) || (f->hspi == NULL) || (f->cs_port == NULL))
+    {
+        return SPI_FLASH_ERR_INVALID_ARGUMENT;
+    }
+    if ((f->flash_size == 0U) ||
+        ((f->addr_len != 3U) && (f->addr_len != 4U)))
+    {
+        return SPI_FLASH_ERR_NOT_READY;
+    }
+    return SPI_FLASH_OK;
+}
+
+static int flash_validate_range(const spi_flash_t *f, uint32_t addr, uint32_t len)
+{
+    int ret = flash_validate(f);
+
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+    if (len == 0U)
+    {
+        return SPI_FLASH_OK;
+    }
+    if ((addr >= f->flash_size) || (len > (f->flash_size - addr)))
+    {
+        return SPI_FLASH_ERR_RANGE;
+    }
+    return SPI_FLASH_OK;
+}
+
 int spi_flash_init(spi_flash_t *f,
                    SPI_HandleTypeDef *hspi,
                    GPIO_TypeDef *cs_port,
                    uint16_t cs_pin)
 {
-    memset(f, 0, sizeof(*f));
+    uint32_t id;
+    int ret;
 
+    if ((f == NULL) || (hspi == NULL) || (cs_port == NULL))
+    {
+        return SPI_FLASH_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(f, 0, sizeof(*f));
     f->hspi = hspi;
     f->cs_port = cs_port;
     f->cs_pin = cs_pin;
-
-    /* ================= 默认Flash参数（SPI Flash）================= */
-    f->page_size   = 256;
-    f->sector_size = 4096;
-    f->block_size  = 65536;   // ⭐关键补充（默认W25Q）
-
-    f->addr_len = 3;
+    f->page_size = 256U;
+    f->sector_size = 4096U;
+    f->block_size = 65536U;
+    f->addr_len = 3U;
     f->type = FLASH_TYPE_SPI;
 
 #if FLASH_USE_FREERTOS
     f->lock = xSemaphoreCreateMutex();
+    if (f->lock == NULL)
+    {
+        return SPI_FLASH_ERR_NOT_READY;
+    }
 #endif
 
-    /* RESET Flash（防止4Byte模式残留） */
-    flash_reset(f);
-
-    uint32_t id = spi_flash_read_id(f);
-    log_printf("Flash ID: 0x%06X\r\n", id);
-
-    /* ================= Winbond W25Q系列识别 ================= */
-    if ((id >> 16) == 0xEF)
+    cs_high(f);
+    ret = flash_reset(f);
+    if (ret != SPI_FLASH_OK)
     {
-        uint8_t dev = id & 0xFF;
+        log_printf("[FLASH] reset failed ret=%d", ret);
+        goto fail;
+    }
 
-        switch (dev)
+    ret = spi_flash_read_id(f, &id);
+    if (ret != SPI_FLASH_OK)
+    {
+        log_printf("[FLASH] read ID failed ret=%d", ret);
+        goto fail;
+    }
+    log_printf("Flash ID: 0x%06lX", (unsigned long)id);
+
+    if ((id >> 16) != 0xEFU)
+    {
+        ret = SPI_FLASH_ERR_UNSUPPORTED;
+        goto fail;
+    }
+
+    switch (id & 0xFFU)
+    {
+    case 0x17U:
+        f->flash_size = 8U * 1024U * 1024U;
+        break;
+    case 0x18U:
+        f->flash_size = 16U * 1024U * 1024U;
+        break;
+    case 0x19U:
+        f->flash_size = 32U * 1024U * 1024U;
+        f->addr_len = 4U;
+        break;
+    default:
+        ret = SPI_FLASH_ERR_UNSUPPORTED;
+        goto fail;
+    }
+
+    if (f->addr_len == 4U)
+    {
+        ret = flash_lock(f);
+        if (ret == SPI_FLASH_OK)
         {
-        case 0x17:  // 8M
-            f->flash_size = 8 * 1024 * 1024;
-            break;
-
-        case 0x18:  // 16M
-            f->flash_size = 16 * 1024 * 1024;
-            break;
-
-        case 0x19:  // 32M (W25Q256)
-            f->flash_size = 32 * 1024 * 1024;
-            f->addr_len = 4;
-            break;
-
-        default:
-            return -1;
+            ret = flash_send_command(f, FLASH_CMD_ENTER_4B);
+            flash_unlock(f);
+        }
+        if (ret != SPI_FLASH_OK)
+        {
+            log_printf("[FLASH] enter 4-byte mode failed ret=%d", ret);
+            goto fail;
         }
     }
-    else
-    {
-        return -2;
-    }
 
-    /* ================= 4Byte模式 ================= */
-    if (f->addr_len == 4)
-    {
-        uint8_t cmd = FLASH_CMD_ENTER_4B;
-        cs_low(f);
-        HAL_SPI_Transmit(hspi, &cmd, 1, HAL_MAX_DELAY);
-        cs_high(f);
-    }
+    return SPI_FLASH_OK;
 
-    return 0;
+fail:
+    f->flash_size = 0U;
+    flash_destroy_lock(f);
+    return ret;
 }
-/* ================= read ================= */
+
 int spi_flash_read(spi_flash_t *f, uint32_t addr, uint8_t *buf, uint32_t len)
 {
-    FLASH_LOCK(f);
+    uint8_t command;
+    uint8_t address[4];
+    int ret = flash_validate_range(f, addr, len);
 
-    cs_low(f);
-
-    uint8_t cmd = (len > 512) ? FLASH_CMD_FAST_READ : FLASH_CMD_READ;
-    HAL_SPI_Transmit(f->hspi, &cmd, 1, HAL_MAX_DELAY);
-
-    uint8_t a[4];
-    pack_addr(f, addr, a);
-    HAL_SPI_Transmit(f->hspi, a, f->addr_len, HAL_MAX_DELAY);
-
-    /* ================= FIX: 标准 Fast Read dummy ================= */
-    if (cmd == FLASH_CMD_FAST_READ)
+    if (ret != SPI_FLASH_OK)
     {
-        uint8_t dummy = 0x00;   // ✔ 固定1 byte dummy（安全标准写法）
-        HAL_SPI_Transmit(f->hspi, &dummy, 1, HAL_MAX_DELAY);
+        return ret;
+    }
+    if (len == 0U)
+    {
+        return SPI_FLASH_OK;
+    }
+    if (buf == NULL)
+    {
+        return SPI_FLASH_ERR_INVALID_ARGUMENT;
     }
 
-    HAL_SPI_Receive(f->hspi, buf, len, HAL_MAX_DELAY);
+    ret = flash_lock(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
 
+    command = (len > 512U) ? FLASH_CMD_FAST_READ : FLASH_CMD_READ;
+    pack_addr(f, addr, address);
+    cs_low(f);
+    ret = flash_spi_transmit(f, &command, 1U);
+    if (ret == SPI_FLASH_OK)
+    {
+        ret = flash_spi_transmit(f, address, f->addr_len);
+    }
+    if ((ret == SPI_FLASH_OK) && (command == FLASH_CMD_FAST_READ))
+    {
+        uint8_t dummy = 0U;
+        ret = flash_spi_transmit(f, &dummy, 1U);
+    }
+    if (ret == SPI_FLASH_OK)
+    {
+        ret = flash_spi_receive(f, buf, len);
+    }
     cs_high(f);
+    flash_unlock(f);
 
-    FLASH_UNLOCK(f);
-    return 0;
+    if (ret != SPI_FLASH_OK)
+    {
+        log_printf("[FLASH] read failed addr=0x%08lX len=%lu ret=%d",
+                   (unsigned long)addr, (unsigned long)len, ret);
+    }
+    return ret;
 }
 
-/* ================= write ================= */
 int spi_flash_write(spi_flash_t *f, uint32_t addr, const uint8_t *buf, uint32_t len)
 {
-    FLASH_LOCK(f);
+    uint32_t remaining = len;
+    int ret = flash_validate_range(f, addr, len);
 
-    while (len)
+    if (ret != SPI_FLASH_OK)
     {
-        uint32_t off = addr % f->page_size;
-        uint32_t chunk = f->page_size - off;
+        return ret;
+    }
+    if (len == 0U)
+    {
+        return SPI_FLASH_OK;
+    }
+    if (buf == NULL)
+    {
+        return SPI_FLASH_ERR_INVALID_ARGUMENT;
+    }
 
-        if (chunk > len) chunk = len;
+    ret = flash_lock(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
 
-        flash_wren(f);
+    while (remaining != 0U)
+    {
+        uint8_t command = FLASH_CMD_PAGE_PROGRAM;
+        uint8_t address[4];
+        uint32_t page_offset = addr % f->page_size;
+        uint32_t chunk = f->page_size - page_offset;
 
+        if (chunk > remaining)
+        {
+            chunk = remaining;
+        }
+
+        ret = flash_write_enable(f);
+        if (ret != SPI_FLASH_OK)
+        {
+            break;
+        }
+
+        pack_addr(f, addr, address);
         cs_low(f);
-
-        uint8_t cmd = FLASH_CMD_PAGE_PROGRAM;
-        HAL_SPI_Transmit(f->hspi, &cmd, 1, HAL_MAX_DELAY);
-
-        uint8_t a[4];
-        pack_addr(f, addr, a);
-        HAL_SPI_Transmit(f->hspi, a, f->addr_len, HAL_MAX_DELAY);
-
-        HAL_SPI_Transmit(f->hspi, (uint8_t*)buf, chunk, HAL_MAX_DELAY);
-
+        ret = flash_spi_transmit(f, &command, 1U);
+        if (ret == SPI_FLASH_OK)
+        {
+            ret = flash_spi_transmit(f, address, f->addr_len);
+        }
+        if (ret == SPI_FLASH_OK)
+        {
+            ret = flash_spi_transmit(f, buf, chunk);
+        }
         cs_high(f);
+        if (ret != SPI_FLASH_OK)
+        {
+            break;
+        }
 
-       
-
-
-        flash_wait_ready(f, FLASH_T_PAGE);
+        ret = flash_wait_ready(f, FLASH_T_PAGE);
+        if (ret != SPI_FLASH_OK)
+        {
+            break;
+        }
 
         addr += chunk;
-        buf  += chunk;
-        len  -= chunk;
+        buf += chunk;
+        remaining -= chunk;
     }
 
-    FLASH_UNLOCK(f);
-    return 0;
+    flash_unlock(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        log_printf("[FLASH] write failed addr=0x%08lX remaining=%lu ret=%d",
+                   (unsigned long)addr, (unsigned long)remaining, ret);
+    }
+    return ret;
 }
 
-/* ================= erase ================= */
-/**
- * @brief 擦除指定范围的 Flash 空间
- * @note  针对 LittleFS 优化：移除了自动对齐逻辑，改为严格对齐检查
- * @return 0:成功, -1:参数超限, -2:对齐错误, -3:等待超时
- */
 int spi_flash_erase(spi_flash_t *f, uint32_t addr, uint32_t len)
 {
-    flash_lock(f);
+    uint32_t end;
+    int ret = flash_validate_range(f, addr, len);
 
-    // 1. 基础合法性检查
-    if (len == 0) {
-        flash_unlock(f);
-        return 0;
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+    if (len == 0U)
+    {
+        return SPI_FLASH_OK;
+    }
+    if ((f->sector_size == 0U) ||
+        ((addr % f->sector_size) != 0U) ||
+        ((len % f->sector_size) != 0U))
+    {
+        return SPI_FLASH_ERR_ALIGNMENT;
     }
 
-    if (addr + len > f->flash_size) {
-        log_printf("[FLASH] Erase out of range: 0x%08X + %lu\r\n", addr, len);
-        flash_unlock(f);
-        return -1;
+    ret = flash_lock(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
     }
 
-    /* ================= 核心修改：严格对齐校验 ================= */
-    // W25Q256 最小物理擦除单位是 4096 字节 (Sector)
-    // 如果不对齐，说明上层逻辑（如 LittleFS 配置）有误，必须报错而不是偷偷对齐
-    if ((addr % 4096 != 0) || (len % 4096 != 0)) {
-        log_printf("[FLASH] Erase ALIGN ERROR! Addr: 0x%08X, Len: %lu\r\n", addr, len);
-        flash_unlock(f);
-        return -2; 
-    }
-
-    uint32_t end = addr + len;
-
-    while (addr < end) {
-        flash_wren(f);
-
-        cs_low(f);
-
-        uint8_t cmd;
+    end = addr + len;
+    while (addr < end)
+    {
+        uint8_t command;
+        uint8_t address[4];
         uint32_t erase_size;
+        flash_wait_type_t wait_type;
 
-        /* ================= 智能擦除策略 ================= */
-        // 如果当前地址 64KB 对齐，且剩余长度足够 64KB，优先使用 Block Erase 以提高速度
-        if ((addr % 65536 == 0) && (end - addr >= 65536)) {
-            cmd = FLASH_CMD_BLOCK_ERASE; // 0xD8
-            erase_size = 65536;
-        } else {
-            cmd = FLASH_CMD_SECTOR_ERASE; // 0x20
-            erase_size = 4096;
+        if ((f->block_size != 0U) &&
+            ((addr % f->block_size) == 0U) &&
+            ((end - addr) >= f->block_size))
+        {
+            command = FLASH_CMD_BLOCK_ERASE;
+            erase_size = f->block_size;
+            wait_type = FLASH_T_BLOCK;
+        }
+        else
+        {
+            command = FLASH_CMD_SECTOR_ERASE;
+            erase_size = f->sector_size;
+            wait_type = FLASH_T_SECTOR;
         }
 
-        HAL_SPI_Transmit(f->hspi, &cmd, 1, HAL_MAX_DELAY);
+        ret = flash_write_enable(f);
+        if (ret != SPI_FLASH_OK)
+        {
+            break;
+        }
 
-        uint8_t a[4];
-        pack_addr(f, addr, a);
-        HAL_SPI_Transmit(f->hspi, a, f->addr_len, HAL_MAX_DELAY);
-
+        pack_addr(f, addr, address);
+        cs_low(f);
+        ret = flash_spi_transmit(f, &command, 1U);
+        if (ret == SPI_FLASH_OK)
+        {
+            ret = flash_spi_transmit(f, address, f->addr_len);
+        }
         cs_high(f);
-
-        /* ================= 关键修复：超时时间切换 ================= */
-        // Block Erase 的等待时间（通常 2-3s）远长于 Sector Erase（通常 400ms）
-        if (flash_wait_ready(f, (cmd == FLASH_CMD_BLOCK_ERASE) ? FLASH_T_BLOCK : FLASH_T_SECTOR) != 0) {
-            flash_unlock(f);
-            return -3;
+        if (ret != SPI_FLASH_OK)
+        {
+            break;
         }
 
+        ret = flash_wait_ready(f, wait_type);
+        if (ret != SPI_FLASH_OK)
+        {
+            break;
+        }
         addr += erase_size;
     }
 
     flash_unlock(f);
-    return 0;
-}
-
-/* ================= chip erase ================= */
-int spi_flash_chip_erase(spi_flash_t *f)
-{
-    FLASH_LOCK(f);
-
-    flash_wren(f);
-
-    uint8_t cmd = FLASH_CMD_CHIP_ERASE;
-
-    cs_low(f);
-    HAL_SPI_Transmit(f->hspi, &cmd, 1, HAL_MAX_DELAY);
-    cs_high(f);
-
-    int ret = flash_wait_ready(f, FLASH_T_CHIP);
-
-    FLASH_UNLOCK(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        log_printf("[FLASH] erase failed addr=0x%08lX ret=%d",
+                   (unsigned long)addr, ret);
+    }
     return ret;
 }
 
-/* ================= ID ================= */
-uint32_t spi_flash_read_id(spi_flash_t *f)
+int spi_flash_chip_erase(spi_flash_t *f)
 {
-    uint8_t cmd = FLASH_CMD_READ_ID;
-    uint8_t id[3];
+    int ret = flash_validate(f);
+
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+
+    ret = flash_lock(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+
+    ret = flash_write_enable(f);
+    if (ret == SPI_FLASH_OK)
+    {
+        ret = flash_send_command(f, FLASH_CMD_CHIP_ERASE);
+    }
+    if (ret == SPI_FLASH_OK)
+    {
+        ret = flash_wait_ready(f, FLASH_T_CHIP);
+    }
+
+    flash_unlock(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        log_printf("[FLASH] chip erase failed ret=%d", ret);
+    }
+    return ret;
+}
+
+int spi_flash_read_id(spi_flash_t *f, uint32_t *id)
+{
+    uint8_t command = FLASH_CMD_READ_ID;
+    uint8_t id_bytes[3] = {0U};
+    int ret;
+
+    if ((f == NULL) || (f->hspi == NULL) ||
+        (f->cs_port == NULL) || (id == NULL))
+    {
+        return SPI_FLASH_ERR_INVALID_ARGUMENT;
+    }
+
+    *id = 0U;
+    ret = flash_lock(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
 
     cs_low(f);
-    HAL_SPI_Transmit(f->hspi, &cmd, 1, HAL_MAX_DELAY);
-    HAL_SPI_Receive(f->hspi, id, 3, HAL_MAX_DELAY);
+    ret = flash_spi_transmit(f, &command, 1U);
+    if (ret == SPI_FLASH_OK)
+    {
+        ret = flash_spi_receive(f, id_bytes, sizeof(id_bytes));
+    }
     cs_high(f);
+    flash_unlock(f);
 
-    return (id[0]<<16)|(id[1]<<8)|id[2];
+    if (ret == SPI_FLASH_OK)
+    {
+        *id = ((uint32_t)id_bytes[0] << 16) |
+              ((uint32_t)id_bytes[1] << 8) |
+              (uint32_t)id_bytes[2];
+    }
+    return ret;
 }
-/* spi_flash.c */
 
+int spi_flash_sync(spi_flash_t *f)
+{
+    int ret = flash_validate(f);
+
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+
+    ret = flash_lock(f);
+    if (ret != SPI_FLASH_OK)
+    {
+        return ret;
+    }
+    ret = flash_wait_ready_ms(f, SPI_FLASH_SYNC_TIMEOUT_MS);
+    flash_unlock(f);
+    return ret;
+}

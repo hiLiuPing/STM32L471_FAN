@@ -29,6 +29,7 @@
 #define FLASH_CMD_ENTER_4B       0xB7
 
 #define FLASH_SR_BUSY            0x01
+#define FLASH_SR_WEL             0x02
 
 
 /* ================= timing ================= */
@@ -44,6 +45,20 @@ typedef enum
     FLASH_TYPE_SPI = 0,
     FLASH_TYPE_INTERNAL
 } flash_type_t;
+
+typedef enum
+{
+    SPI_FLASH_OK = 0,
+    SPI_FLASH_ERR_INVALID_ARGUMENT = -1,
+    SPI_FLASH_ERR_RANGE = -2,
+    SPI_FLASH_ERR_ALIGNMENT = -3,
+    SPI_FLASH_ERR_IO = -4,
+    SPI_FLASH_ERR_TIMEOUT = -5,
+    SPI_FLASH_ERR_NOT_READY = -6,
+    SPI_FLASH_ERR_LOCK_TIMEOUT = -7,
+    SPI_FLASH_ERR_UNSUPPORTED = -8,
+    SPI_FLASH_ERR_WRITE_ENABLE = -9
+} spi_flash_status_t;
 
 /* ================= struct ================= */
 typedef struct
@@ -84,7 +99,7 @@ int spi_flash_erase(spi_flash_t *f, uint32_t addr, uint32_t len);
 
 int spi_flash_chip_erase(spi_flash_t *f);
 
-uint32_t spi_flash_read_id(spi_flash_t *f);
+int spi_flash_read_id(spi_flash_t *f, uint32_t *id);
 int spi_flash_sync(spi_flash_t *f);
 
 // int flash_boot_write(uint32_t addr, uint8_t *buf, uint32_t len);

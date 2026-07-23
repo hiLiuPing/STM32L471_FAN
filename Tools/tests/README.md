@@ -28,3 +28,16 @@ build\test_storage_protection.exe
 This test injects EEPROM read/data failures and LittleFS mount/format failures.
 It verifies that mount errors never trigger formatting, unavailable filesystems
 do not publish a handle, and EEPROM I/O errors remain distinct from invalid data.
+
+Build and run the SPI Flash fault-injection tests:
+
+```powershell
+D:\lvgl_pc\mingw64\bin\gcc.exe -std=c11 -Wall -Wextra -Werror `
+  Tools\tests\test_spi_flash.c `
+  -o build\test_spi_flash.exe
+build\test_spi_flash.exe
+```
+
+This test verifies finite HAL timeouts, HAL error propagation, CS recovery,
+write-enable checking, page-program ready timeouts, and reads larger than the
+HAL SPI 16-bit transfer length.
