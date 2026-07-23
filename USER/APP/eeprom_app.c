@@ -28,35 +28,41 @@ bool AppConfig_Init(eeprom_ctx_t *ctx, I2C_Bus_t *bus, uint8_t dev_addr)
     return false;
 }
 
-bool AppConfig_Load(uint32_t offset, void *data, uint16_t size)
+AppConfig_LoadResult_t AppConfig_Load(uint32_t offset, void *data, uint16_t size)
 {
     uint8_t *buf = (uint8_t *)data;
     uint32_t magic;
     uint16_t read_crc;
     uint16_t calc_crc;
 
-    if ((data == NULL) || (size < 6U) ||
-        (g_ee_ctx.initialized == 0U))
+    if ((data == NULL) || (size < 6U))
     {
-        return false;
+        return APP_CONFIG_LOAD_INVALID_ARGUMENT;
+    }
+
+    if (g_ee_ctx.initialized == 0U)
+    {
+        return APP_CONFIG_LOAD_NOT_READY;
     }
 
     if (!EE24_Read(&g_ee_ctx.handle, offset, buf, size, 1000U))
     {
         log_printf("[EEPROM] read failed");
-        return false;
+        return APP_CONFIG_LOAD_IO_ERROR;
     }
 
     memcpy(&magic, buf, sizeof(magic));
     if (magic != APP_CONFIG_MAGIC)
     {
-        return false;
+        return APP_CONFIG_LOAD_INVALID_DATA;
     }
 
     memcpy(&read_crc, &buf[size - sizeof(read_crc)], sizeof(read_crc));
     calc_crc = AppConfig_CRC16(buf, (uint16_t)(size - sizeof(read_crc)));
 
-    return (read_crc == calc_crc);
+    return (read_crc == calc_crc) ?
+               APP_CONFIG_LOAD_OK :
+               APP_CONFIG_LOAD_INVALID_DATA;
 }
 
 bool AppConfig_Save(uint32_t offset, void *data, uint16_t size)

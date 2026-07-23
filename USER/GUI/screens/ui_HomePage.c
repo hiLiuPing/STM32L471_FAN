@@ -210,14 +210,20 @@ static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value);
 #define HOME_BOTTOM_STATUS_Y 112
 #define HOME_BOTTOM_STATUS_H 24
 #define HOME_BOTTOM_STATUS_CENTER_Y (HOME_BOTTOM_STATUS_Y + (HOME_BOTTOM_STATUS_H / 2))
-#define HOME_STATUS_ENV_X 242
+#define HOME_STATUS_ENV_X 198
 #define HOME_STATUS_ENV_Y 110
-#define HOME_STATUS_ENV_W 186
+#define HOME_STATUS_ENV_W 230
 #define HOME_STATUS_ENV_H 32
-#define HOME_STATUS_ENV_TEXT_X 242
 #define HOME_STATUS_ENV_TEXT_Y HOME_BOTTOM_STATUS_Y
-#define HOME_STATUS_ENV_TEXT_W 108
 #define HOME_STATUS_ENV_TEXT_H HOME_BOTTOM_STATUS_H
+#define HOME_ENV_HUMIDITY_ICON_X 245
+#define HOME_ENV_HUMIDITY_TEXT_X 252
+#define HOME_ENV_HUMIDITY_TEXT_W 40
+#define HOME_ENV_TEMPERATURE_TEXT_X 268
+#define HOME_ENV_TEMPERATURE_TEXT_W 81
+#define HOME_ENV_TEMPERATURE_ICON_W 10
+#define HOME_ENV_ICON_TEXT_GAP 3
+#define HOME_ENV_ICON_Y 113
 #define HOME_STATUS_PM25_X 8
 #define HOME_STATUS_PM25_Y HOME_BOTTOM_STATUS_Y
 #define HOME_STATUS_PM25_W 130
@@ -250,6 +256,21 @@ static void ui_HomePage_show_fan_popup(SystemNotifyType_t type, int16_t value);
 #define HOME_GROUND_TEXT_NIGHT_RGB 0xEAF4FF
 #define HOME_TOP_TEXT_LUMA_SWITCH  140U
 #define HOME_BATTERY_ACTIVE_RGB    0xFFD166
+#define HOME_ENV_COLD_RGB          0x38BDF8
+#define HOME_ENV_NORMAL_RGB        0x4ADE80
+#define HOME_ENV_WARNING_RGB       0xFACC15
+#define HOME_ENV_DANGER_RGB        0xEF4444
+#define HOME_TEMP_COLD_END_X10     180
+#define HOME_TEMP_NORMAL_START_X10 230
+#define HOME_TEMP_NORMAL_END_X10   270
+#define HOME_TEMP_WARNING_X10      310
+#define HOME_TEMP_DANGER_X10       350
+#define HOME_HUMIDITY_DRY_DANGER   20U
+#define HOME_HUMIDITY_DRY_WARNING  30U
+#define HOME_HUMIDITY_NORMAL_START 40U
+#define HOME_HUMIDITY_NORMAL_END   65U
+#define HOME_HUMIDITY_WET_WARNING  80U
+#define HOME_HUMIDITY_WET_DANGER   90U
 
 /* Dynamic theme: dawn 06:00-08:30, day 08:30-17:00, dusk 17:00-19:00. */
 #define HOME_THEME2_DAWN_START_MINUTE   (6U * 60U)
@@ -2419,12 +2440,150 @@ static void ui_HomePage_draw_pm25_status(egui_canvas_t *canvas,
                  ground_text_rgb);
 }
 
+static uint8_t ui_HomePage_value_mix_amount(int32_t value,
+                                             int32_t from_value,
+                                             int32_t to_value)
+{
+    if (value <= from_value)
+    {
+        return 0U;
+    }
+    if (value >= to_value)
+    {
+        return 255U;
+    }
+
+    return (uint8_t)(((uint32_t)(value - from_value) * 255U) /
+                     (uint32_t)(to_value - from_value));
+}
+
+static uint32_t ui_HomePage_temperature_color(int16_t temperature_x10)
+{
+    if (temperature_x10 <= HOME_TEMP_COLD_END_X10)
+    {
+        return HOME_ENV_COLD_RGB;
+    }
+    if (temperature_x10 < HOME_TEMP_NORMAL_START_X10)
+    {
+        return ui_HomePage_mix_rgb(HOME_ENV_COLD_RGB,
+                                   HOME_ENV_NORMAL_RGB,
+                                   ui_HomePage_value_mix_amount(temperature_x10,
+                                                                HOME_TEMP_COLD_END_X10,
+                                                                HOME_TEMP_NORMAL_START_X10));
+    }
+    if (temperature_x10 <= HOME_TEMP_NORMAL_END_X10)
+    {
+        return HOME_ENV_NORMAL_RGB;
+    }
+    if (temperature_x10 < HOME_TEMP_WARNING_X10)
+    {
+        return ui_HomePage_mix_rgb(HOME_ENV_NORMAL_RGB,
+                                   HOME_ENV_WARNING_RGB,
+                                   ui_HomePage_value_mix_amount(temperature_x10,
+                                                                HOME_TEMP_NORMAL_END_X10,
+                                                                HOME_TEMP_WARNING_X10));
+    }
+    if (temperature_x10 < HOME_TEMP_DANGER_X10)
+    {
+        return ui_HomePage_mix_rgb(HOME_ENV_WARNING_RGB,
+                                   HOME_ENV_DANGER_RGB,
+                                   ui_HomePage_value_mix_amount(temperature_x10,
+                                                                HOME_TEMP_WARNING_X10,
+                                                                HOME_TEMP_DANGER_X10));
+    }
+
+    return HOME_ENV_DANGER_RGB;
+}
+
+static uint32_t ui_HomePage_humidity_color(uint8_t humidity)
+{
+    if (humidity <= HOME_HUMIDITY_DRY_DANGER)
+    {
+        return HOME_ENV_DANGER_RGB;
+    }
+    if (humidity < HOME_HUMIDITY_DRY_WARNING)
+    {
+        return ui_HomePage_mix_rgb(HOME_ENV_DANGER_RGB,
+                                   HOME_ENV_WARNING_RGB,
+                                   ui_HomePage_value_mix_amount(humidity,
+                                                                HOME_HUMIDITY_DRY_DANGER,
+                                                                HOME_HUMIDITY_DRY_WARNING));
+    }
+    if (humidity < HOME_HUMIDITY_NORMAL_START)
+    {
+        return ui_HomePage_mix_rgb(HOME_ENV_WARNING_RGB,
+                                   HOME_ENV_NORMAL_RGB,
+                                   ui_HomePage_value_mix_amount(humidity,
+                                                                HOME_HUMIDITY_DRY_WARNING,
+                                                                HOME_HUMIDITY_NORMAL_START));
+    }
+    if (humidity <= HOME_HUMIDITY_NORMAL_END)
+    {
+        return HOME_ENV_NORMAL_RGB;
+    }
+    if (humidity < HOME_HUMIDITY_WET_WARNING)
+    {
+        return ui_HomePage_mix_rgb(HOME_ENV_NORMAL_RGB,
+                                   HOME_ENV_WARNING_RGB,
+                                   ui_HomePage_value_mix_amount(humidity,
+                                                                HOME_HUMIDITY_NORMAL_END,
+                                                                HOME_HUMIDITY_WET_WARNING));
+    }
+    if (humidity < HOME_HUMIDITY_WET_DANGER)
+    {
+        return ui_HomePage_mix_rgb(HOME_ENV_WARNING_RGB,
+                                   HOME_ENV_DANGER_RGB,
+                                   ui_HomePage_value_mix_amount(humidity,
+                                                                HOME_HUMIDITY_WET_WARNING,
+                                                                HOME_HUMIDITY_WET_DANGER));
+    }
+
+    return HOME_ENV_DANGER_RGB;
+}
+
+static void ui_HomePage_draw_humidity_icon(egui_canvas_t *canvas,
+                                            egui_dim_t x,
+                                            egui_dim_t y,
+                                            uint32_t rgb,
+                                            egui_alpha_t alpha)
+{
+    egui_canvas_draw_line(canvas, x + 5, y, x + 1, y + 7, 3,
+                          ui_color(rgb), alpha);
+    egui_canvas_draw_line(canvas, x + 5, y, x + 9, y + 7, 3,
+                          ui_color(rgb), alpha);
+    egui_canvas_draw_circle_fill_basic(canvas, x + 5, y + 9, 4,
+                                       ui_color(rgb), alpha);
+}
+
+static void ui_HomePage_draw_temperature_icon(egui_canvas_t *canvas,
+                                               egui_dim_t x,
+                                               egui_dim_t y,
+                                               uint32_t rgb,
+                                               egui_alpha_t alpha)
+{
+    egui_canvas_draw_round_rectangle(canvas, x + 3, y, 5, 13, 2, 1,
+                                     ui_color(rgb), alpha);
+    egui_canvas_draw_line(canvas, x + 5, y + 3, x + 5, y + 12, 2,
+                          ui_color(rgb), alpha);
+    egui_canvas_draw_circle_fill_basic(canvas, x + 5, y + 13, 4,
+                                       ui_color(rgb), alpha);
+}
+
 static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
                                         const DataApp_HomeStatus_t *status,
                                         uint32_t ground_text_rgb)
 {
     const egui_font_t *small_font = EGUI_FONT_OF(&egui_res_font_montserrat_16_4);
     const egui_font_t *heiti_font;
+    uint32_t humidity_rgb = ground_text_rgb;
+    uint32_t temperature_rgb = ground_text_rgb;
+    egui_alpha_t icon_alpha = EGUI_ALPHA_60;
+    egui_dim_t temperature_text_width = 0;
+    egui_dim_t temperature_text_height = 0;
+    egui_dim_t temperature_icon_x;
+    int32_t temperature_abs;
+    char humidity_text[6];
+    char temperature_text[12];
 
     if ((status == NULL) ||
         !ui_HomePage_canvas_intersects(canvas, HOME_STATUS_ENV_X, HOME_STATUS_ENV_Y, HOME_STATUS_ENV_W, HOME_STATUS_ENV_H))
@@ -2438,12 +2597,68 @@ static void ui_HomePage_draw_env_status(egui_canvas_t *canvas,
     }
     heiti_font = (s_home_heiti_16 != NULL) ? s_home_heiti_16 : small_font;
 
+    if (status->environment_valid != 0U)
+    {
+        humidity_rgb = ui_HomePage_humidity_color(status->environment_humidity);
+        temperature_rgb = ui_HomePage_temperature_color(status->environment_temp_x10);
+        icon_alpha = (status->environment_stale != 0U) ? EGUI_ALPHA_70 : EGUI_ALPHA_100;
+        temperature_abs = (status->environment_temp_x10 < 0) ?
+                              -(int32_t)status->environment_temp_x10 :
+                              (int32_t)status->environment_temp_x10;
+        (void)snprintf(humidity_text, sizeof(humidity_text), "%u%%",
+                       (unsigned int)status->environment_humidity);
+        (void)snprintf(temperature_text,
+                       sizeof(temperature_text),
+                       "%s%s%ld.%ldC",
+                       (status->environment_stale != 0U) ? "*" : "",
+                       (status->environment_temp_x10 < 0) ? "-" : "",
+                       (long)(temperature_abs / 10),
+                       (long)(temperature_abs % 10));
+    }
+    else
+    {
+        (void)snprintf(humidity_text, sizeof(humidity_text), "--%%");
+        (void)snprintf(temperature_text, sizeof(temperature_text), "--C");
+    }
+
+    (void)egui_font_get_str_size_with_canvas(heiti_font,
+                                             canvas,
+                                             temperature_text,
+                                             0U,
+                                             0,
+                                             &temperature_text_width,
+                                             &temperature_text_height);
+    temperature_icon_x = (egui_dim_t)(HOME_ENV_TEMPERATURE_TEXT_X +
+                                      HOME_ENV_TEMPERATURE_TEXT_W -
+                                      temperature_text_width -
+                                      HOME_ENV_ICON_TEXT_GAP -
+                                      HOME_ENV_TEMPERATURE_ICON_W);
+
+    ui_HomePage_draw_humidity_icon(canvas,
+                                   HOME_ENV_HUMIDITY_ICON_X,
+                                   HOME_ENV_ICON_Y,
+                                   humidity_rgb,
+                                   icon_alpha);
     ui_draw_text(canvas,
                  heiti_font,
-                 status->env_text,
-                 HOME_STATUS_ENV_TEXT_X,
+                 humidity_text,
+                 HOME_ENV_HUMIDITY_TEXT_X,
                  HOME_STATUS_ENV_TEXT_Y,
-                 HOME_STATUS_ENV_TEXT_W,
+                 HOME_ENV_HUMIDITY_TEXT_W,
+                 HOME_STATUS_ENV_TEXT_H,
+                 EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER,
+                 ground_text_rgb);
+    ui_HomePage_draw_temperature_icon(canvas,
+                                      temperature_icon_x,
+                                      HOME_ENV_ICON_Y,
+                                      temperature_rgb,
+                                      icon_alpha);
+    ui_draw_text(canvas,
+                 heiti_font,
+                 temperature_text,
+                 HOME_ENV_TEMPERATURE_TEXT_X,
+                 HOME_STATUS_ENV_TEXT_Y,
+                 HOME_ENV_TEMPERATURE_TEXT_W,
                  HOME_STATUS_ENV_TEXT_H,
                  EGUI_ALIGN_RIGHT | EGUI_ALIGN_VCENTER,
                  ground_text_rgb);

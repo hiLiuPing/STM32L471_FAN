@@ -204,16 +204,21 @@ static bool FanApp_SaveSettings(const FanApp_PersistedSettings_t *settings)
     return AppConfig_Save(OFF_FAN_SETTINGS, &storage, (uint16_t)sizeof(storage));
 }
 
-static bool FanApp_LoadSettings(void)
+static AppConfig_LoadResult_t FanApp_LoadSettings(void)
 {
     FanApp_Storage_t storage;
     FanApp_PersistedSettings_t loaded;
     FanApp_PersistedSettings_t normalized;
+    AppConfig_LoadResult_t load_result;
 
-    if (!AppConfig_Load(OFF_FAN_SETTINGS, &storage, (uint16_t)sizeof(storage)) ||
-        (storage.version != FAN_APP_STORAGE_VERSION))
+    load_result = AppConfig_Load(OFF_FAN_SETTINGS, &storage, (uint16_t)sizeof(storage));
+    if (load_result != APP_CONFIG_LOAD_OK)
     {
-        return false;
+        return load_result;
+    }
+    if (storage.version != FAN_APP_STORAGE_VERSION)
+    {
+        return APP_CONFIG_LOAD_INVALID_DATA;
     }
 
     memset(&loaded, 0, sizeof(loaded));
@@ -231,7 +236,7 @@ static bool FanApp_LoadSettings(void)
     {
         FanApp_MarkSettingsDirty(xTaskGetTickCount());
     }
-    return true;
+    return APP_CONFIG_LOAD_OK;
 }
 
 static void FanApp_MarkSettingsDirty(TickType_t now)
@@ -691,6 +696,7 @@ static void FanApp_UpdateAutoOff(TickType_t now)
 void FanApp_Init(void)
 {
     FanApp_PersistedSettings_t settings;
+    AppConfig_LoadResult_t load_result;
 
     FanApp_SetDefaults();
     FanApp_ResetTachState();
@@ -700,22 +706,28 @@ void FanApp_Init(void)
     s_save_dirty = 0U;
     s_save_deadline_tick = 0U;
 
-    if (FanApp_LoadSettings())
+    load_result = FanApp_LoadSettings();
+    if (load_result == APP_CONFIG_LOAD_OK)
     {
         log_printf("[Fan] settings load ok");
     }
-    else
+    else if (load_result == APP_CONFIG_LOAD_INVALID_DATA)
     {
         FanApp_GetPersistedSettings(&settings);
         if (FanApp_SaveSettings(&settings))
         {
-            log_printf("[Fan] settings defaults saved");
+            log_printf("[Fan] invalid settings, defaults saved");
         }
         else
         {
             FanApp_MarkSettingsDirty(xTaskGetTickCount());
-            log_printf("[Fan] settings use defaults");
+            log_printf("[Fan] invalid settings, defaults save pending");
         }
+    }
+    else
+    {
+        log_printf("[Fan] storage unavailable result=%d, defaults not persisted",
+                   (int)load_result);
     }
 
     __HAL_TIM_SET_COUNTER(&htim2, 0U);

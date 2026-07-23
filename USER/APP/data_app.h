@@ -38,7 +38,9 @@ typedef struct
     char temp_range_text[DATA_APP_HOME_TEXT_LEN];
     char pm25_text[DATA_APP_HOME_TEXT_LEN];
     char env_text[DATA_APP_HOME_TEXT_LEN];
+    int16_t environment_temp_x10;
     uint16_t weather_icon_id;
+    uint8_t environment_humidity;
     uint8_t weather_scene;
     uint8_t is_day;
     uint8_t battery_percent;

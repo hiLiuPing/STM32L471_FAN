@@ -116,6 +116,8 @@ static uint8_t DataApp_HomeStatusEquals(const DataApp_HomeStatus_t *a, const Dat
     }
 
     return (uint8_t)((a->weather_icon_id == b->weather_icon_id) &&
+                     (a->environment_temp_x10 == b->environment_temp_x10) &&
+                     (a->environment_humidity == b->environment_humidity) &&
                      (a->weather_scene == b->weather_scene) &&
                      (a->is_day == b->is_day) &&
                      (a->battery_percent == b->battery_percent) &&
@@ -245,6 +247,11 @@ void DataApp_HomeStatus_Update(void)
         (void)snprintf(next.pm25_text, sizeof(next.pm25_text), "PM2.5 --");
     }
     DataApp_FormatEnv(next.env_text, sizeof(next.env_text), &sensors);
+    if (sensors.environment.health.valid != 0U)
+    {
+        next.environment_temp_x10 = (int16_t)DataApp_FloatToX10(sensors.environment.value.temp);
+        next.environment_humidity = (uint8_t)DataApp_HumidityToInt(sensors.environment.value.hum);
+    }
     next.weather_icon_id = Weather_GetDisplayIcon();
     next.weather_scene = (uint8_t)Weather_GetScene();
     next.is_day = Time_IsDaytime();

@@ -14,6 +14,8 @@ SemaphoreHandle_t g_lfs_lock = NULL;
 static uint8_t read_buf[LFS_CACHE_SIZE];
 static uint8_t prog_buf[LFS_CACHE_SIZE];
 static uint8_t lookahead_buf[LFS_LOOKAHEAD_SIZE];
+static uint8_t s_lfs_configured = 0U;
+static uint8_t s_lfs_mounted = 0U;
 
 /* =========================================================
  * ⭐ 关键：统一地址映射（修复核心）
@@ -118,7 +120,22 @@ void lfs_port_unlock(void) {}
 /* ================= INIT ================= */
 int lfs_port_init(spi_flash_t *flash)
 {
+    int ret;
+
+    if (flash == NULL)
+    {
+        log_printf("[LFS] invalid flash context");
+        return LFS_ERR_INVAL;
+    }
+
+    if (s_lfs_mounted != 0U)
+    {
+        return 0;
+    }
+
     memset(&g_cfg, 0, sizeof(g_cfg));
+    s_lfs_configured = 0U;
+    s_lfs_mounted = 0U;
 
 #if FLASH_USE_FREERTOS
     if (g_lfs_lock == NULL)
@@ -155,35 +172,59 @@ int lfs_port_init(spi_flash_t *flash)
     g_cfg.read_buffer = read_buf;
     g_cfg.prog_buffer = prog_buf;
     g_cfg.lookahead_buffer = lookahead_buf;
-//   lfs_format(&g_lfs, &g_cfg);
+    s_lfs_configured = 1U;
+
     log_printf("[LFS] mount start");
-    int ret = lfs_mount(&g_lfs, &g_cfg);
+    ret = lfs_mount(&g_lfs, &g_cfg);
     log_printf("[LFS] mount ret=%d", ret);
-
-    if (ret != 0)
-    {
-        /* 诊断：读 LFS 区域前 8 字节 */
-        uint8_t diag[8];
-        spi_flash_read(flash, LFS_FLASH_OFFSET, diag, sizeof(diag));
-        log_printf("[LFS] diag@1M=%02x%02x%02x%02x%02x%02x%02x%02x",
-                   diag[0],diag[1],diag[2],diag[3],
-                   diag[4],diag[5],diag[6],diag[7]);
-
-        log_printf("[LFS] format...");
-        ret = lfs_format(&g_lfs, &g_cfg);
-        log_printf("[LFS] format ret=%d", ret);
-
-        ret = lfs_mount(&g_lfs, &g_cfg);
-        log_printf("[LFS] remount ret=%d", ret);
-    }
 
     if (ret == 0)
     {
+        s_lfs_mounted = 1U;
         log_printf("[LFS] mount OK\r\n");
     }
     else
     {
-        log_printf("[LFS] mount FAIL\r\n");
+        log_printf("[LFS] mount FAIL ret=%d, filesystem preserved\r\n", ret);
+    }
+
+    return ret;
+}
+
+int lfs_port_format_and_mount(void)
+{
+    int ret;
+
+    if ((s_lfs_configured == 0U) || (g_cfg.context == NULL))
+    {
+        log_printf("[LFS] format rejected: port not configured");
+        return LFS_ERR_INVAL;
+    }
+
+    if (s_lfs_mounted != 0U)
+    {
+        ret = lfs_unmount(&g_lfs);
+        if (ret != 0)
+        {
+            log_printf("[LFS] unmount before format FAIL ret=%d", ret);
+            return ret;
+        }
+        s_lfs_mounted = 0U;
+    }
+
+    log_printf("[LFS] explicit format start: all filesystem data will be erased");
+    ret = lfs_format(&g_lfs, &g_cfg);
+    log_printf("[LFS] explicit format ret=%d", ret);
+    if (ret != 0)
+    {
+        return ret;
+    }
+
+    ret = lfs_mount(&g_lfs, &g_cfg);
+    log_printf("[LFS] mount after format ret=%d", ret);
+    if (ret == 0)
+    {
+        s_lfs_mounted = 1U;
     }
 
     return ret;
@@ -192,5 +233,5 @@ int lfs_port_init(spi_flash_t *flash)
 /* ================= handle ================= */
 lfs_t* lfs_port_get(void)
 {
-    return &g_lfs;
+    return (s_lfs_mounted != 0U) ? &g_lfs : NULL;
 }

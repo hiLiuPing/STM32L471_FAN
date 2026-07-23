@@ -17,6 +17,15 @@ typedef struct
     uint8_t initialized;
 } eeprom_ctx_t;
 
+typedef enum
+{
+    APP_CONFIG_LOAD_OK = 0,
+    APP_CONFIG_LOAD_INVALID_DATA,
+    APP_CONFIG_LOAD_IO_ERROR,
+    APP_CONFIG_LOAD_NOT_READY,
+    APP_CONFIG_LOAD_INVALID_ARGUMENT
+} AppConfig_LoadResult_t;
+
 extern eeprom_ctx_t g_ee_ctx;
 
 #define EE_BLOCK_SIZE       256U
@@ -46,7 +55,7 @@ typedef struct
 #pragma pack(pop)
 
 bool AppConfig_Init(eeprom_ctx_t *ctx, I2C_Bus_t *bus, uint8_t dev_addr);
-bool AppConfig_Load(uint32_t offset, void *data, uint16_t size);
+AppConfig_LoadResult_t AppConfig_Load(uint32_t offset, void *data, uint16_t size);
 bool AppConfig_Save(uint32_t offset, void *data, uint16_t size);
 uint16_t AppConfig_CRC16(uint8_t *ptr, uint16_t len);
 

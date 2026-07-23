@@ -235,22 +235,32 @@ static bool SettingsApp_SaveCurrent(void)
 void SettingsApp_Init(void)
 {
     SettingsApp_Storage_t storage;
+    AppConfig_LoadResult_t load_result;
     bool need_save = false;
 
     SettingsApp_LoadDefaults(&s_settings);
+    load_result = AppConfig_Load(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage));
 
-    if (AppConfig_Load(OFF_APP_SETTINGS, &storage, (uint16_t)sizeof(storage)) &&
+    if ((load_result == APP_CONFIG_LOAD_OK) &&
         (storage.version == SETTINGS_APP_STORAGE_VERSION))
     {
         SettingsApp_FromStorage(&storage, &s_settings);
         need_save = !SettingsApp_StorageIsCanonical(&storage, &s_settings);
         log_printf("[Settings] load ok");
     }
-    else
+    else if ((load_result == APP_CONFIG_LOAD_INVALID_DATA) ||
+             ((load_result == APP_CONFIG_LOAD_OK) &&
+              (storage.version != SETTINGS_APP_STORAGE_VERSION)))
     {
         SettingsApp_Normalize(&s_settings);
         need_save = true;
-        log_printf("[Settings] use defaults");
+        log_printf("[Settings] invalid data, reset to defaults");
+    }
+    else
+    {
+        SettingsApp_Normalize(&s_settings);
+        log_printf("[Settings] storage unavailable result=%d, defaults not persisted",
+                   (int)load_result);
     }
 
     s_settings_initialized = 1U;

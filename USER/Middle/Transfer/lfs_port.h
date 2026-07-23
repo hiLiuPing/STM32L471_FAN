@@ -41,6 +41,11 @@ extern SemaphoreHandle_t g_lfs_lock;
 
 /* ================= API ================= */
 int lfs_port_init(spi_flash_t *flash);
+/*
+ * Destructive maintenance API: erases the entire LittleFS partition.
+ * Call only after all filesystem users have been stopped.
+ */
+int lfs_port_format_and_mount(void);
 lfs_t* lfs_port_get(void);
 void lfs_port_lock(void);
 void lfs_port_unlock(void);
